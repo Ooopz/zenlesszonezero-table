@@ -1,0 +1,6700 @@
+[
+  {
+    "name": "蕾米埃尔·丹",
+    "id": "1581",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1581.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1581.png",
+    "rarity": "S",
+    "faction": "达识结社",
+    "panel": {
+      "生命值": {
+        "base": 7482,
+        "bonus": 2986,
+        "final": 10468
+      },
+      "攻击力": {
+        "base": 1566,
+        "bonus": 2554,
+        "final": 4120
+      },
+      "防御力": {
+        "base": 600,
+        "bonus": 259,
+        "final": 859
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.146
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.6920000000000001
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 115
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 421
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      }
+    },
+    "wengine": {
+      "name": "空羽复归之诗",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/26892155360c9aee08d162f6a5a1f0c7.png",
+      "specialEffect": "异常精通提升<color=#2BAD00>96</color>点；装备者触发<color=#FFA9DD>[异化]</color>反应时，自身获得属性异常伤害提升<color=#2BAD00>20%</color>的效果，并为全队角色施加造成的伤害提升<color=#2BAD00>30%</color>效果，效果均持续30秒，重复触发时刷新持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 743
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.36
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "谶羽之誓",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          }
+        ]
+      },
+      {
+        "set": "谶羽之誓",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          }
+        ]
+      },
+      {
+        "set": "谶羽之誓",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          }
+        ]
+      },
+      {
+        "set": "谶羽之誓",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 112
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 57
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "叶瞬光",
+    "id": "1431",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1431.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1431.png",
+    "rarity": "S",
+    "faction": "云岿山",
+    "panel": {
+      "生命值": {
+        "base": 7673,
+        "bonus": 3911,
+        "final": 11584
+      },
+      "攻击力": {
+        "base": 1681,
+        "bonus": 1223,
+        "final": 2904
+      },
+      "防御力": {
+        "base": 606,
+        "bonus": 331,
+        "final": 937
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.45799999999999996
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 2.148
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 102
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.4
+      }
+    },
+    "wengine": {
+      "name": "云霓孤光",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/76f348ae58870830f1ec0242ac43aaa4.png",
+      "specialEffect": "装备者造成的伤害无视目标<color=#2BAD00>20%</color><color=#F0D12B>物理属性伤害抗性</color>；装备者开启<color=#FFFFFF>[以太帷幕]</color>时，自身造成的伤害提升<color=#2BAD00>25%</color>，暴击伤害提升<color=#2BAD00>25%</color>，持续40秒，重复触发时刷新持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 743
+        }
+      ],
+      "subStats": [
+        {
+          "name": "暴击伤害",
+          "value": 0.48
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "沧浪行歌",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/0328899a17c744bf626565326cca529f.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.192
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "沧浪行歌",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/0328899a17c744bf626565326cca529f.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "暴击率",
+            "value": 0.096
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          }
+        ]
+      },
+      {
+        "set": "沧浪行歌",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/0328899a17c744bf626565326cca529f.png",
+        "mainStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.48
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "防御力",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "生命值",
+            "value": 112
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "物理伤害加成",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "沧浪行歌",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/0328899a17c744bf626565326cca529f.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "仪玄",
+    "id": "1371",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1371.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1371.png",
+    "rarity": "S",
+    "faction": "云岿山",
+    "panel": {
+      "生命值": {
+        "base": 8373,
+        "bonus": 9514,
+        "final": 17887
+      },
+      "攻击力": {
+        "base": 1615,
+        "bonus": 935,
+        "final": 2550
+      },
+      "防御力": {
+        "base": 441,
+        "bonus": 277,
+        "final": 718
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5539999999999999
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 1.38
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 108
+      },
+      "贯穿力": {
+        "base": null,
+        "bonus": null,
+        "final": 2553
+      },
+      "闪能自动累积": {
+        "base": null,
+        "bonus": null,
+        "final": 2
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.3
+      }
+    },
+    "wengine": {
+      "name": "青溟笼舍",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/0c187fabc7006aa99aa07352bbc6819e.png",
+      "specialEffect": "暴击率提升<color=#2BAD00>20%</color>；装备者释放<color=#FFFFFF>[强化特殊技]</color>时角色获得1层<color=#FFFFFF>[青溟同行]</color>效果，最多叠加2层，持续15秒，进入接战状态时直接获得2层，重复触发时刷新持续时间；每层<color=#FFFFFF>[青溟同行]</color>效果使装备者造成的<color=#FE437E>以太伤害</color>提升<color=#2BAD00>8%</color>，[终结技]或[强化特殊技]造成的<color=#FE437E>以太贯穿伤害</color>提升<color=#2BAD00>10%</color>。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 743
+        }
+      ],
+      "subStats": [
+        {
+          "name": "生命值",
+          "value": 0.3
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "云岿如我",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "云岿如我",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "云岿如我",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "暴击率",
+            "value": 0.12
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.48
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "以太伤害加成",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "云岿如我",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "照",
+    "id": "1341",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1341.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1341.png",
+    "rarity": "S",
+    "faction": "坎卜斯黑枝",
+    "panel": {
+      "生命值": {
+        "base": 9117,
+        "bonus": 16407,
+        "final": 25524
+      },
+      "攻击力": {
+        "base": 1359,
+        "bonus": 552,
+        "final": 1911
+      },
+      "防御力": {
+        "base": 701,
+        "bonus": 412,
+        "final": 1113
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.242
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.7879999999999999
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 114
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.2,
+        "bonus": 0.72,
+        "final": 1.92
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 9
+      },
+      "冰属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "正版变身器",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/2330c4e357c00c356a1516132779e652.png",
+      "specialEffect": "生命值上限提升<color=#2BAD00>12.5%</color>；受到敌方攻击时，装备者的冲击力提升<color=#2BAD00>16%</color>，持续12秒。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 594
+        }
+      ],
+      "subStats": [
+        {
+          "name": "生命值",
+          "value": 0.25
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "静听嘉音",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "云岿如我",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "生命值",
+            "value": 336
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "云岿如我",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b9f42251eb7ec15b2edc2ed7ca62d4f7.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 336
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "薇薇安·班希",
+    "id": "1331",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1331.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1331.png",
+    "rarity": "S",
+    "faction": "反舌鸟",
+    "panel": {
+      "生命值": {
+        "base": 7673,
+        "bonus": 3345,
+        "final": 11018
+      },
+      "攻击力": {
+        "base": 1504,
+        "bonus": 1703,
+        "final": 3207
+      },
+      "防御力": {
+        "base": 606,
+        "bonus": 419,
+        "final": 1025
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.19399999999999998
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.836
+      },
+      "异常掌控": {
+        "base": 144,
+        "bonus": 54,
+        "final": 198
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 246
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 27
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "轰鸣座驾",
+      "level": 60,
+      "refinement": 4,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/782287df95167991d2403bf5f91ac5b2.png",
+      "specialEffect": "<color=#FFFFFF>[强化特殊技]</color>命中敌人时，随机触发以下三种效果中的一种，持续5秒，0.3秒内最多触发一次，同类效果不可叠加，重复触发时刷新持续时间，多个效果可以同时存在：装备者的攻击力提升<color=#2BAD00>11.6%</color>；装备者的异常精通提升<color=#2BAD00>58</color>点；装备者的属性异常积蓄效率提升<color=#2BAD00>36%</color>。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 624
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.25
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "法厄同之歌",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.192
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "獠牙重金属",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6fb6e32826882c3150f424939f4dfd3f.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "异常掌控",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.192
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "伊芙琳·舒瓦利耶",
+    "id": "1321",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1321.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1321.png",
+    "rarity": "S",
+    "faction": "天琴座",
+    "panel": {
+      "生命值": {
+        "base": 7788,
+        "bonus": 2892,
+        "final": 10680
+      },
+      "攻击力": {
+        "base": 1642,
+        "bonus": 1248,
+        "final": 2890
+      },
+      "防御力": {
+        "base": 612,
+        "bonus": 302,
+        "final": 914
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.778
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 1.62
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 72
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.4
+      }
+    },
+    "wengine": {
+      "name": "心弦夜响",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/eaf96dd055a9014c8711a548efc44ec1.png",
+      "specialEffect": "暴击伤害提升<color=#2BAD00>50%</color>；装备者进入接战状态、发动<color=#FFFFFF>[连携技]</color>、<color=#FFFFFF>[终结技]</color>时，获得1层<color=#FFFFFF>[心弦]</color>，每层<color=#FFFFFF>[心弦]</color>会使装备者的<color=#FFFFFF>[连携技]</color>和<color=#FFFFFF>[终结技]</color>无视目标<color=#2BAD00>12.5%</color><color=#FF5521>火属性伤害抗性</color>，最多叠加2层，持续30秒，重复触发时刷新持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 713
+        }
+      ],
+      "subStats": [
+        {
+          "name": "暴击率",
+          "value": 0.24
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "折枝剑歌",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.192
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "炎狱重金属",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9143c4288a38f06a33a65f963d0a3e6e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "防御力",
+            "value": 0.14400000000000002
+          }
+        ]
+      },
+      {
+        "set": "啄木鸟电音",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7d1d3131af40614972b7f9f72f1ba63b.png",
+        "mainStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.48
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "暴击率",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "啄木鸟电音",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7d1d3131af40614972b7f9f72f1ba63b.png",
+        "mainStats": [
+          {
+            "name": "火属性伤害加成",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "炎狱重金属",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9143c4288a38f06a33a65f963d0a3e6e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 57
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "耀嘉音",
+    "id": "1311",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1311.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1311.png",
+    "rarity": "S",
+    "faction": "天琴座",
+    "panel": {
+      "生命值": {
+        "base": 8609,
+        "bonus": 4344,
+        "final": 12953
+      },
+      "攻击力": {
+        "base": 1428,
+        "bonus": 2519,
+        "final": 3947
+      },
+      "防御力": {
+        "base": 600,
+        "bonus": 403,
+        "final": 1003
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.122
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5479999999999999
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 128
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.56,
+        "bonus": 1.24,
+        "final": 2.8
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 18
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "玲珑妆匣",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9097dcb857658071ac31cdc34088370c.png",
+      "specialEffect": "队伍中任意角色通过<color=#FFFFFF>[快速支援]</color>、<color=#FFFFFF>[连携技]</color>、<color=#FFFFFF>[招架支援]</color>、<color=#FFFFFF>[回避支援]</color>入场时，为装备者回复<color=#2BAD00>5</color>点能量，5秒内最多触发一次；装备者消耗25点或以上能量时，全队角色造成的伤害提升<color=#2BAD00>10%</color>，最多叠加2层，持续20秒，重复触发时刷新持续时间，该效果全队唯一。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 713
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.3
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "静听嘉音",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 336
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "亚历山德丽娜·莎芭丝缇安",
+    "id": "1211",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1211.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1211.png",
+    "rarity": "S",
+    "faction": "维多利亚家政",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 8609
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 1311
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 600
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.344
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "时光切片",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/ce15f9ebc0a9904af555a96e2adac1ed.png",
+      "specialEffect": "队伍中任意角色发动<color=#FFFFFF>[闪避反击]</color>/<color=#FFFFFF>[强化特殊技]</color>/<color=#FFFFFF>[支援攻击]</color>/<color=#FFFFFF>[连携技]</color>时，额外获得<color=#2BAD00>32</color>/<color=#2BAD00>40</color>/<color=#2BAD00>48</color>/<color=#2BAD00>55</color>点喧响值，并为装备者回复<color=#2BAD00>1.1</color>点能量，12秒内最多触发一次，不同招式分别结算冷却时间，同名被动效果之间不可叠加。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 594
+        }
+      ],
+      "subStats": [
+        {
+          "name": "穿透率",
+          "value": 0.2
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "艾莲·乔",
+    "id": "1191",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1191.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1191.png",
+    "rarity": "S",
+    "faction": "维多利亚家政",
+    "panel": {
+      "生命值": {
+        "base": 7673,
+        "bonus": 4154,
+        "final": 11827
+      },
+      "攻击力": {
+        "base": 1651,
+        "bonus": 1592,
+        "final": 3243
+      },
+      "防御力": {
+        "base": 606,
+        "bonus": 316,
+        "final": 922
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.946
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 1.22
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 36
+      },
+      "冰属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.1
+      }
+    },
+    "wengine": {
+      "name": "深海访客",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b5fb0c90bb3a327d24fa6e4c571125ae.png",
+      "specialEffect": "<color=#98EFF0>冰属性伤害</color>提升<color=#2BAD00>25%</color>；<color=#FFFFFF>[普通攻击]</color>命中敌人时，装备者的暴击率提升<color=#2BAD00>10%</color>，持续8秒；<color=#FFFFFF>[冲刺攻击]</color>造成<color=#98EFF0>冰属性伤害</color>时，装备者的暴击率额外提升<color=#2BAD00>10%</color>，持续15秒，每种增益效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 713
+        }
+      ],
+      "subStats": [
+        {
+          "name": "暴击率",
+          "value": 0.24
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "极地重金属",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "极地重金属",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "生命值",
+            "value": 0.06
+          }
+        ]
+      },
+      {
+        "set": "啄木鸟电音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7d1d3131af40614972b7f9f72f1ba63b.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "啄木鸟电音",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7d1d3131af40614972b7f9f72f1ba63b.png",
+        "mainStats": [
+          {
+            "name": "暴击率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "生命值",
+            "value": 112
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "极地重金属",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "极地重金属",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "柏妮思·怀特",
+    "id": "1171",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1171.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1171.png",
+    "rarity": "S",
+    "faction": "卡吕冬之子",
+    "panel": {
+      "生命值": {
+        "base": 7368,
+        "bonus": 2643,
+        "final": 10011
+      },
+      "攻击力": {
+        "base": 1547,
+        "bonus": 801,
+        "final": 2348
+      },
+      "防御力": {
+        "base": 600,
+        "bonus": 317,
+        "final": 917
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.122
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.932
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 118
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 380
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.48
+      },
+      "能量自动回复": {
+        "base": 1.56,
+        "bonus": 0.93,
+        "final": 2.49
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 18
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "嵌合编译器",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/ef71f223fd2eea73ecab5c0ba3b3ffc4.png",
+      "specialEffect": "攻击力提升<color=#2BAD00>12%</color>；发动<color=#FFFFFF>[特殊技]</color>或<color=#FFFFFF>[强化特殊技]</color>时，装备者的异常精通提升<color=#2BAD00>25</color>点，最多叠加3层，持续8秒，每层效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 684
+        }
+      ],
+      "subStats": [
+        {
+          "name": "穿透率",
+          "value": 0.24
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "混沌爵士",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/14f0ab4ccfce8ffb975f5b7b9ad3c374.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "混沌爵士",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/14f0ab4ccfce8ffb975f5b7b9ad3c374.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          }
+        ]
+      },
+      {
+        "set": "混沌爵士",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/14f0ab4ccfce8ffb975f5b7b9ad3c374.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "异常精通",
+            "value": 36
+          },
+          {
+            "name": "攻击力",
+            "value": 57
+          }
+        ]
+      },
+      {
+        "set": "混沌爵士",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/14f0ab4ccfce8ffb975f5b7b9ad3c374.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "谶羽之誓",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "穿透率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 57
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "谶羽之誓",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/23e67cbfd9f7d5b31723db710f75bd92.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "冯·莱卡恩",
+    "id": "1141",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1141.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1141.png",
+    "rarity": "S",
+    "faction": "维多利亚家政",
+    "panel": {
+      "生命值": {
+        "base": 8416,
+        "bonus": 4921,
+        "final": 13337
+      },
+      "攻击力": {
+        "base": 1322,
+        "bonus": 1695,
+        "final": 3017
+      },
+      "防御力": {
+        "base": 606,
+        "bonus": 244,
+        "final": 850
+      },
+      "冲击力": {
+        "base": 137,
+        "bonus": 20,
+        "final": 157
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.146
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.932
+      },
+      "异常掌控": {
+        "base": 91,
+        "bonus": 7,
+        "final": 98
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 99
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.2,
+        "bonus": 0.72,
+        "final": 1.92
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 45
+      },
+      "冰属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "贵重骨核",
+      "level": 60,
+      "refinement": 2,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b14880f6ec3d3a1b8958dbda8f351f3b.png",
+      "specialEffect": "敌方生命值大于等于50%时，装备者对目标造成的失衡值提升<color=#2BAD00>11.5%</color>，敌方生命值大于等于75%时，该增益效果额外提升<color=#2BAD00>11.5%</color>。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 594
+        }
+      ],
+      "subStats": [
+        {
+          "name": "冲击力",
+          "value": 0.15
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "静听嘉音",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "珂蕾妲·贝洛伯格",
+    "id": "1101",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1101.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1101.png",
+    "rarity": "S",
+    "faction": "白祇重工",
+    "panel": {
+      "生命值": {
+        "base": 8127,
+        "bonus": 3420,
+        "final": 11547
+      },
+      "攻击力": {
+        "base": 1329,
+        "bonus": 1088,
+        "final": 2417
+      },
+      "防御力": {
+        "base": 594,
+        "bonus": 299,
+        "final": 893
+      },
+      "冲击力": {
+        "base": 134,
+        "bonus": 32,
+        "final": 166
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.53
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.884
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 97
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 96
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.2,
+        "bonus": 0.84,
+        "final": 2.04
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 81
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "人为刀俎",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/305e7f195b96eb4062518ce65b42fd9a.png",
+      "specialEffect": "每拥有10点能量值，装备者的冲击力提升<color=#2BAD00>3.2%</color>，最多叠加8层，能量消耗后该增益效果仍然保留，持续8秒，每层效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 594
+        }
+      ],
+      "subStats": [
+        {
+          "name": "能量自动回复",
+          "value": 0.5
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "震星迪斯科",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/78a747b4f1ddc2ad0442581f2a34c33f.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "set": "震星迪斯科",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/78a747b4f1ddc2ad0442581f2a34c33f.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "暴击率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 27
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "震星迪斯科",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/78a747b4f1ddc2ad0442581f2a34c33f.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "穿透值",
+            "value": 36
+          }
+        ]
+      },
+      {
+        "set": "震星迪斯科",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/78a747b4f1ddc2ad0442581f2a34c33f.png",
+        "mainStats": [
+          {
+            "name": "冲击力",
+            "value": 0.18
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "星见雅",
+    "id": "1091",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1091.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1091.png",
+    "rarity": "S",
+    "faction": "对空洞特别行动部第六课",
+    "panel": {
+      "生命值": {
+        "base": 7673,
+        "bonus": 2424,
+        "final": 10097
+      },
+      "攻击力": {
+        "base": 1623,
+        "bonus": 1403,
+        "final": 3026
+      },
+      "防御力": {
+        "base": 606,
+        "bonus": 229,
+        "final": 835
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.818
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 1.236
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 116
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 274
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.32
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 9
+      },
+      "冰属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "霰落星殿",
+      "level": 60,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6045796650a6d95a8b48a76d4c919680.png",
+      "specialEffect": "暴击伤害提升<color=#2BAD00>50%</color>；发动<color=#FFFFFF>[强化特殊技]</color>或队伍中任意角色对敌人施加属性异常效果时，装备者造成的<color=#98EFF0>冰属性伤害</color>提升<color=#2BAD00>20%</color>，最多叠加2层，持续15秒，每层效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 743
+        }
+      ],
+      "subStats": [
+        {
+          "name": "暴击率",
+          "value": 0.24
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "河豚电音",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6b31624ee2f1d51533aed1778b92454c.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "暴击率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "折枝剑歌",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/939d3ae16d0407e853798fae3e5060fb.png",
+        "mainStats": [
+          {
+            "name": "穿透率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.192
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "河豚电音",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6b31624ee2f1d51533aed1778b92454c.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "「11号」",
+    "id": "1041",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1041.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1041.png",
+    "rarity": "S",
+    "faction": "防卫军·奥波勒斯小队",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 7673
+      },
+      "攻击力": {
+        "base": 1006,
+        "bonus": 120,
+        "final": 1126
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 612
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.19399999999999998
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "硫磺石",
+      "level": 10,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/a98a3d2439c22ada7f2c18130f62758d.png",
+      "specialEffect": "<color=#FFFFFF>[普通攻击]</color>、<color=#FFFFFF>[冲刺攻击]</color>或<color=#FFFFFF>[闪避反击]</color>命中敌人时，装备者的攻击力提升<color=#2BAD00>3.5%</color>，最多叠加8层，持续8秒，0.5秒内最多触发一次，每层效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 118
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.12
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "潘引壶",
+    "id": "1421",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1421.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1421.png",
+    "rarity": "A",
+    "faction": "云岿山",
+    "panel": {
+      "生命值": {
+        "base": 8453,
+        "bonus": 3297,
+        "final": 11750
+      },
+      "攻击力": {
+        "base": 1285,
+        "bonus": 1921,
+        "final": 3206
+      },
+      "防御力": {
+        "base": 712,
+        "bonus": 434,
+        "final": 1146
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.17
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 1.0759999999999998
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 91
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 108
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.56,
+        "bonus": 1.24,
+        "final": 2.8
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 27
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "震元奇枢",
+      "level": 60,
+      "refinement": 4,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/4b13a41c9955eb3b83d8aa0a99ebca3f.png",
+      "specialEffect": "装备者的<color=#FFFFFF>[强化特殊技]</color>和<color=#FFFFFF>[终结技]</color>造成的伤害增加<color=#2BAD00>36.2%</color>；队伍中任意角色受到伤害或回复生命时，为装备者回复<color=#2BAD00>2.9</color>点能量，5秒内最多触发一次；",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 624
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.25
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "摇摆爵士",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 18
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 0.24
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "生命值",
+            "value": 336
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "波可娜·费雷尼",
+    "id": "1351",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1351.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1351.png",
+    "rarity": "A",
+    "faction": "卡吕冬之子",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 7612
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 707
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 606
+      },
+      "冲击力": {
+        "base": 136,
+        "bonus": 8,
+        "final": 144
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "裁纸刀",
+      "level": 0,
+      "refinement": 3,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/2c783874d2dc15e0722ddf64a0a5adc2.png",
+      "specialEffect": "发动<color=#FFFFFF>[追加攻击]</color>时，装备者造成的<color=#F0D12B>物理伤害</color>提升<color=#2BAD00>19.5%</color>，造成的失衡值提升<color=#2BAD00>13%</color>，持续10秒。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "冲击力",
+          "value": 0.06
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "派派·韦尔",
+    "id": "1281",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1281.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1281.png",
+    "rarity": "A",
+    "faction": "卡吕冬之子",
+    "panel": {
+      "生命值": {
+        "base": 6976,
+        "bonus": 2731,
+        "final": 9707
+      },
+      "攻击力": {
+        "base": 1352,
+        "bonus": 1338,
+        "final": 2690
+      },
+      "防御力": {
+        "base": 612,
+        "bonus": 390,
+        "final": 1002
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.242
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.74
+      },
+      "异常掌控": {
+        "base": 116,
+        "bonus": 44,
+        "final": 160
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 264
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.24
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.56
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 9
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.1
+      }
+    },
+    "wengine": {
+      "name": "双生泣星",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/f9ec5d20816026a7f2fe266d59438d1c.png",
+      "specialEffect": "队伍中任意角色对敌人施加属性异常效果时，为装备者提供1层增益效果，每层增益效果使装备者的异常精通提升<color=#2BAD00>48</color>点，最多叠加4层，目标从失衡状态恢复或死亡时，对应增益效果结束，每层效果单独结算持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 594
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.25
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "獠牙重金属",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6fb6e32826882c3150f424939f4dfd3f.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "生命值",
+            "value": 0.06
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          }
+        ]
+      },
+      {
+        "set": "獠牙重金属",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6fb6e32826882c3150f424939f4dfd3f.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          }
+        ]
+      },
+      {
+        "set": "法厄同之歌",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/5a90151794ece8b73084547a63066456.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 112
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "set": "獠牙重金属",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6fb6e32826882c3150f424939f4dfd3f.png",
+        "mainStats": [
+          {
+            "name": "穿透率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "穿透值",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "獠牙重金属",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6fb6e32826882c3150f424939f4dfd3f.png",
+        "mainStats": [
+          {
+            "name": "异常掌控",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "露西亚娜·德·蒙特夫",
+    "id": "1151",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1151.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1151.png",
+    "rarity": "A",
+    "faction": "卡吕冬之子",
+    "panel": {
+      "生命值": {
+        "base": 8025,
+        "bonus": 3225,
+        "final": 11250
+      },
+      "攻击力": {
+        "base": 1232,
+        "bonus": 1848,
+        "final": 3080
+      },
+      "防御力": {
+        "base": 612,
+        "bonus": 405,
+        "final": 1017
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.314
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.836
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.44,
+        "bonus": 1,
+        "final": 2.44
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "好斗的阿炮",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9d6be6f1eb25cc537cc718b616758dbe.png",
+      "specialEffect": "队伍中任意友方单位攻击命中敌人时，队伍中所有友方单位的攻击力提升<color=#2BAD00>4%</color>，最多叠加4层，持续8秒，每层效果单独结算持续时间，每名友方单位最多提供1层增益效果，同名被动效果之间不可叠加。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 624
+        }
+      ],
+      "subStats": [
+        {
+          "name": "能量自动回复",
+          "value": 0.5
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "摇摆爵士",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "生命值",
+            "value": 0.03
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 57
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.192
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          },
+          {
+            "name": "生命值",
+            "value": 112
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          }
+        ]
+      },
+      {
+        "set": "静听嘉音",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/9a3e20c9e6a52b4ce92666a7b8b8329e.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "攻击力",
+            "value": 57
+          },
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "苍角",
+    "id": "1131",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1131.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1131.png",
+    "rarity": "A",
+    "faction": "对空洞特别行动部第六课",
+    "panel": {
+      "生命值": {
+        "base": 8025,
+        "bonus": 3483,
+        "final": 11508
+      },
+      "攻击力": {
+        "base": 1289,
+        "bonus": 1333,
+        "final": 2622
+      },
+      "防御力": {
+        "base": 597,
+        "bonus": 314,
+        "final": 911
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.266
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.644
+      },
+      "异常掌控": {
+        "base": 93,
+        "bonus": 27,
+        "final": 120
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 299
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.56
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 45
+      },
+      "冰属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.1
+      }
+    },
+    "wengine": {
+      "name": "含羞恶面",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/4d76afd61d066310c840e12c8037482f.png",
+      "specialEffect": "<color=#98EFF0>冰属性伤害</color>提升<color=#2BAD00>24%</color>；发动<color=#FFFFFF>[强化特殊技]</color>时，全队角色攻击力提升<color=#2BAD00>3.2%</color>，最多叠加4层，持续12秒，重复触发时刷新持续时间，同名被动效果之间不可叠加。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 624
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.25
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "自由蓝调",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          },
+          {
+            "name": "攻击力",
+            "value": 0.12
+          },
+          {
+            "name": "穿透值",
+            "value": 18
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 9
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "穿透值",
+            "value": 27
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "防御力",
+            "value": 0.048
+          },
+          {
+            "name": "暴击率",
+            "value": 0.024
+          },
+          {
+            "name": "生命值",
+            "value": 336
+          }
+        ]
+      },
+      {
+        "set": "极地重金属",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "生命值",
+            "value": 0.09
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          }
+        ]
+      },
+      {
+        "set": "自由蓝调",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/7ad28dcaa3fc64f8499d0a1226252f32.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "攻击力",
+            "value": 19
+          }
+        ]
+      },
+      {
+        "set": "极地重金属",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/da5b6bc4a6bb0725faf53e67c2dfa89b.png",
+        "mainStats": [
+          {
+            "name": "异常掌控",
+            "value": 0.3
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 224
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "妮可·德玛拉",
+    "id": "1031",
+    "level": 60,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1031_3110311.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1031_3110311.png",
+    "rarity": "A",
+    "faction": "狡兔屋",
+    "panel": {
+      "生命值": {
+        "base": 8145,
+        "bonus": 2312,
+        "final": 10457
+      },
+      "攻击力": {
+        "base": 1273,
+        "bonus": 583,
+        "final": 1856
+      },
+      "防御力": {
+        "base": 622,
+        "bonus": 542,
+        "final": 1164
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 88
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.266
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.932
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 239
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.24
+      },
+      "能量自动回复": {
+        "base": 1.56,
+        "bonus": 2.02,
+        "final": 3.58
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0.1
+      }
+    },
+    "wengine": {
+      "name": "聚宝箱",
+      "level": 60,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/cf6e3c65c9f66c7bfd793a2bf92eb975.png",
+      "specialEffect": "<color=#FFFFFF>[强化特殊技]</color>、<color=#FFFFFF>[连携技]</color>或<color=#FFFFFF>[终结技]</color>造成<color=#FE437E>以太伤害</color>时，所有单位对目标造成的伤害提升<color=#2BAD00>24%</color>，装备者的能量自动回复提升<color=#2BAD00>0.8</color>点/秒，持续2秒，同名被动效果之间不可叠加。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 624
+        }
+      ],
+      "subStats": [
+        {
+          "name": "能量自动回复",
+          "value": 0.5
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "摇摆爵士",
+        "slot": 1,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "生命值",
+            "value": 2200
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 0.096
+          },
+          {
+            "name": "异常精通",
+            "value": 27
+          },
+          {
+            "name": "防御力",
+            "value": 15
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 2,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "攻击力",
+            "value": 316
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 45
+          },
+          {
+            "name": "暴击率",
+            "value": 0.07200000000000001
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "异常精通",
+            "value": 9
+          }
+        ]
+      },
+      {
+        "set": "混沌重金属",
+        "slot": 3,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/72e68ec838adda2096b3a540473d9eaa.png",
+        "mainStats": [
+          {
+            "name": "防御力",
+            "value": 184
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "攻击力",
+            "value": 0.03
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "防御力",
+            "value": 0.14400000000000002
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 4,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "异常精通",
+            "value": 92
+          }
+        ],
+        "subStats": [
+          {
+            "name": "暴击伤害",
+            "value": 0.14400000000000002
+          },
+          {
+            "name": "暴击率",
+            "value": 0.048
+          },
+          {
+            "name": "攻击力",
+            "value": 0.06
+          },
+          {
+            "name": "攻击力",
+            "value": 38
+          }
+        ]
+      },
+      {
+        "set": "混沌重金属",
+        "slot": 5,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/72e68ec838adda2096b3a540473d9eaa.png",
+        "mainStats": [
+          {
+            "name": "穿透率",
+            "value": 0.24
+          }
+        ],
+        "subStats": [
+          {
+            "name": "生命值",
+            "value": 112
+          },
+          {
+            "name": "攻击力",
+            "value": 0.09
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.096
+          },
+          {
+            "name": "防御力",
+            "value": 30
+          }
+        ]
+      },
+      {
+        "set": "摇摆爵士",
+        "slot": 6,
+        "level": 15,
+        "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/1e7e76388ccdf1515309e93b35da073a.png",
+        "mainStats": [
+          {
+            "name": "能量自动回复",
+            "value": 0.6
+          }
+        ],
+        "subStats": [
+          {
+            "name": "防御力",
+            "value": 30
+          },
+          {
+            "name": "暴击伤害",
+            "value": 0.048
+          },
+          {
+            "name": "异常精通",
+            "value": 18
+          },
+          {
+            "name": "防御力",
+            "value": 0.14400000000000002
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "name": "卢西娅·艾洛温",
+    "id": "1451",
+    "level": 59,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1451.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1451.png",
+    "rarity": "S",
+    "faction": "怪啖屋",
+    "panel": {
+      "生命值": {
+        "base": 8384,
+        "bonus": 1308,
+        "final": 9692
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 917
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 588
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 96
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 95
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.32
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "铸梦炉歌",
+      "level": 20,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/6cc54d606a52e5ef1d8204eb46e8d193.png",
+      "specialEffect": "装备者的能量自动回复提升<color=#2BAD00>0.4</color>点/秒；当装备者开启<color=#FFFFFF>[以太帷幕]</color>或延长<color=#FFFFFF>[以太帷幕]</color>的持续时间时，全队角色造成伤害提升<color=#2BAD00>25%</color>，生命值上限提升<color=#2BAD00>15%</color>，效果持续45秒，重复触发时刷新持续时间，该效果全队唯一。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 241
+        }
+      ],
+      "subStats": [
+        {
+          "name": "生命值",
+          "value": 0.156
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "格莉丝·霍华德",
+    "id": "1181",
+    "level": 40,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1181.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1181.png",
+    "rarity": "S",
+    "faction": "白祇重工",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 5436
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 566
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 436
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 83
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 115
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 116
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "未佩戴音擎",
+      "level": null,
+      "refinement": 1,
+      "icon": "",
+      "specialEffect": "",
+      "mainStats": [],
+      "subStats": []
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "浅羽悠真",
+    "id": "1201",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1201.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1201.png",
+    "rarity": "S",
+    "faction": "对空洞特别行动部第六课",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4164
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 505
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 337
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 80
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 95
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "未佩戴音擎",
+      "level": null,
+      "refinement": 1,
+      "icon": "",
+      "specialEffect": "",
+      "mainStats": [],
+      "subStats": []
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "猫宫又奈",
+    "id": "1021",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1021.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1021.png",
+    "rarity": "S",
+    "faction": "狡兔屋",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4250
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 548
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 330
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.146
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 97
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 96
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "钢铁肉垫",
+      "level": 0,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/3ff22df938fc9641525f37a4db95beb9.png",
+      "specialEffect": "<color=#F0D12B>物理伤害</color>提升<color=#2BAD00>20%</color>；从背后攻击命中敌人时，装备者造成的伤害提升<color=#2BAD00>25%</color>。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 46
+        }
+      ],
+      "subStats": [
+        {
+          "name": "暴击率",
+          "value": 0.096
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "狛野真斗",
+    "id": "1441",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1441.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1441.png",
+    "rarity": "A",
+    "faction": "怪啖屋",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4344
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 410
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 249
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 95
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 87
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "贯穿力": {
+        "base": null,
+        "bonus": null,
+        "final": 557
+      },
+      "闪能自动累积": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "未佩戴音擎",
+      "level": null,
+      "refinement": 1,
+      "icon": "",
+      "specialEffect": "",
+      "mainStats": [],
+      "subStats": []
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "赛斯·洛威尔",
+    "id": "1271",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1271.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1271.png",
+    "rarity": "A",
+    "faction": "治安局·刑侦特勤组",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4892
+      },
+      "攻击力": {
+        "base": 386,
+        "bonus": 38,
+        "final": 424
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 418
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "维序者-特化型",
+      "level": 0,
+      "refinement": 4,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/e7466dcdfa3063af0bd80558f26ccf3b.png",
+      "specialEffect": "拥有护盾时，装备者的能量自动回复提升<color=#2BAD00>0.58</color>点/秒；<color=#FFFFFF>[强化特殊技]</color>和<color=#FFFFFF>[支援突击]</color>累积的属性异常积蓄值提升<color=#2BAD00>50%</color>。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.1
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "本·比格",
+    "id": "1121",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1121.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1121.png",
+    "rarity": "A",
+    "faction": "白祇重工",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4823
+      },
+      "攻击力": {
+        "base": 392,
+        "bonus": 188,
+        "final": 580
+      },
+      "防御力": {
+        "base": 407,
+        "bonus": 65,
+        "final": 472
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 95
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "火属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "比格气缸",
+      "level": 0,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/fe0b6bb1bb64e0bc7fdaacfb4cb81f5d.png",
+      "specialEffect": "受到的伤害降低<color=#2BAD00>7.5%</color>；受到敌方攻击后，下一次攻击命中敌人时，额外造成装备者<color=#2BAD00>600%</color>防御力的伤害，且必定触发暴击，7.5秒内最多触发一次。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "防御力",
+          "value": 0.16
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "安东·伊万诺夫",
+    "id": "1111",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1111.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1111.png",
+    "rarity": "A",
+    "faction": "白祇重工",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4059
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 474
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 349
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 95
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 86
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": 1.2,
+        "bonus": 0.24,
+        "final": 1.44
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "旋钻机-赤轴",
+      "level": 0,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/b4b989ad2951dc41a94b4276f62e1e14.png",
+      "specialEffect": "发动<color=#FFFFFF>[强化特殊技]</color>或<color=#FFFFFF>[连携技]</color>时，<color=#FFFFFF>[普通攻击]</color>和<color=#FFFFFF>[冲刺攻击]</color>造成的<color=#2EB6FF>电属性伤害</color>提升<color=#2BAD00>80%</color>，持续10秒，15秒内最多触发一次。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "能量自动回复",
+          "value": 0.2
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "比利·奇德",
+    "id": "1081",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1081.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1081.png",
+    "rarity": "A",
+    "faction": "狡兔屋",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 3883
+      },
+      "攻击力": {
+        "base": 471,
+        "bonus": 47,
+        "final": 518
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 340
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 91
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.098
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 92
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 91
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "仿制星徽引擎",
+      "level": 0,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/99226c18fae3af1806fb096384370f0a.png",
+      "specialEffect": "<color=#FFFFFF>[普通攻击]</color>或<color=#FFFFFF>[冲刺攻击]</color>命中6米外的敌人时，装备者对目标造成的<color=#F0D12B>物理伤害</color>提升<color=#2BAD00>57.5%</color>，持续8秒。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.1
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "可琳·威克斯",
+    "id": "1061",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1061.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1061.png",
+    "rarity": "A",
+    "faction": "维多利亚家政",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 3923
+      },
+      "攻击力": {
+        "base": 483,
+        "bonus": 48,
+        "final": 531
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 340
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 96
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "家政员",
+      "level": 0,
+      "refinement": 1,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/a65a23d575a4e34c43dc1df48e8f51f9.png",
+      "specialEffect": "位于后场时，装备者的能量自动回复提升<color=#2BAD00>0.45</color>点/秒；<color=#FFFFFF>[强化特殊技]</color>命中敌人时，装备者造成的<color=#F0D12B>物理伤害</color>提升<color=#2BAD00>3%</color>，最多叠加15层，持续1秒，重复触发时刷新持续时间。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 42
+        }
+      ],
+      "subStats": [
+        {
+          "name": "攻击力",
+          "value": 0.1
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "安比·德玛拉",
+    "id": "1011",
+    "level": 30,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1011.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1011.png",
+    "rarity": "A",
+    "faction": "狡兔屋",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 4218
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 693
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 343
+      },
+      "冲击力": {
+        "base": 124,
+        "bonus": 11,
+        "final": 135
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "电属性伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "德玛拉电池Ⅱ型",
+      "level": 30,
+      "refinement": 5,
+      "icon": "https://act-webstatic.mihoyo.com/darkmatter/nap/prod_gf_cn/item_icon_ue005d/75c4f6864e861013d38477c28ef1d70c.png",
+      "specialEffect": "<color=#2EB6FF>电属性伤害</color>提升<color=#2BAD00>24%</color>；<color=#FFFFFF>[闪避反击]</color>或<color=#FFFFFF>[支援攻击]</color>命中敌人时，装备者的能量获得效率提升<color=#2BAD00>27.5%</color>，持续8秒。",
+      "mainStats": [
+        {
+          "name": "基础攻击力",
+          "value": 314
+        }
+      ],
+      "subStats": [
+        {
+          "name": "冲击力",
+          "value": 0.096
+        }
+      ]
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "佩洛伊斯",
+    "id": "1551",
+    "level": 1,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1551.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1551.png",
+    "rarity": "S",
+    "faction": "法厄同",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 617
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 133
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 49
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 94
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 93
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "以太伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "未佩戴音擎",
+      "level": null,
+      "refinement": 1,
+      "icon": "",
+      "specialEffect": "",
+      "mainStats": [],
+      "subStats": []
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  },
+  {
+    "name": "凯撒·金",
+    "id": "1071",
+    "level": 1,
+    "icon": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_square_avatar/role_square_avatar_1071.png",
+    "portrait": "https://act-webstatic.mihoyo.com/game_record/zzzv2/role_vertical_painting/role_vertical_painting_1071.png",
+    "rarity": "S",
+    "faction": "卡吕冬之子",
+    "panel": {
+      "生命值": {
+        "base": null,
+        "bonus": null,
+        "final": 766
+      },
+      "攻击力": {
+        "base": null,
+        "bonus": null,
+        "final": 101
+      },
+      "防御力": {
+        "base": null,
+        "bonus": null,
+        "final": 61
+      },
+      "冲击力": {
+        "base": null,
+        "bonus": null,
+        "final": 105
+      },
+      "暴击率": {
+        "base": null,
+        "bonus": null,
+        "final": 0.05
+      },
+      "暴击伤害": {
+        "base": null,
+        "bonus": null,
+        "final": 0.5
+      },
+      "异常掌控": {
+        "base": null,
+        "bonus": null,
+        "final": 87
+      },
+      "异常精通": {
+        "base": null,
+        "bonus": null,
+        "final": 90
+      },
+      "穿透率": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "能量自动回复": {
+        "base": null,
+        "bonus": null,
+        "final": 1.2
+      },
+      "穿透值": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      },
+      "物理伤害加成": {
+        "base": null,
+        "bonus": null,
+        "final": 0
+      }
+    },
+    "wengine": {
+      "name": "未佩戴音擎",
+      "level": null,
+      "refinement": 1,
+      "icon": "",
+      "specialEffect": "",
+      "mainStats": [],
+      "subStats": []
+    },
+    "discs": [
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 1,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 2,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 3,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 4,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 5,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      },
+      {
+        "set": "未佩戴驱动盘",
+        "slot": 6,
+        "level": null,
+        "mainStats": {},
+        "subStats": {}
+      }
+    ]
+  }
+]

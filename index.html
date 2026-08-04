@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>绝区零 · 配装面板</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>绝区零 · 配装面板</h1>
+      <span class="sub" id="counts"></span>
+      <div class="spacer"></div>
+      <select id="filterElement" title="按属性筛选">
+        <option value="">属性</option>
+      </select>
+      <select id="filterTrait" title="按特性筛选">
+        <option value="">特性</option>
+      </select>
+      <button id="syncBtn">同步属性库</button>
+      <button id="rolesyncBtn">同步我的角色</button>
+      <button id="viewBtn">统计表格</button>
+      <button id="helpBtn">使用说明</button>
+    </header>
+
+    <div id="status"></div>
+
+    <main id="grid"></main>
+
+    <div class="modal" id="helpModal">
+      <div class="modal-box">
+        <button class="close" id="helpClose">✕</button>
+        <h2>使用说明</h2>
+        <p>
+          <b>推荐用法：</b>运行 <code>npm start</code> 启动本地服务器（自动打开页面），然后就能在网页上<b>一键更新</b>：
+          点「同步属性库」更新基础数据，「同步我的角色」拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
+          <code>.cookie.json</code>）。
+        </p>
+        <p>
+          <b>数据来源：</b>所有数据存于 <code>data/</code> 目录（<code>library.json</code> /
+          <code>characters.json</code>），由本地服务器经 <code>/api/data</code> 提供，需
+          <code>npm start</code> 后才能访问页面。
+        </p>
+        <p>
+          <b>目标设置：</b>卡片头部「目标」按钮为该角色单独填写目标属性值（百分比填整数，如暴击率 60 表示 60%），
+          卡片显示各项「当前/目标」的达成率进度条与总体达成率。每个角色各自保存。
+        </p>
+        <p>
+          <b>统计表格：</b>点「统计表格」切换到一览视图，每个角色一行（角色/音擎/驱动盘/各属性值），
+          属性值下方有小进度条显示该角色的达成率；再点「卡片视图」切回。表头/行可拖动排序。
+        </p>
+        <p>
+          <b>副词条命中：</b>卡片头部「有效」按钮为该角色勾选视为有效的副词条属性； 驱动盘词条旁标注
+          <b>×n</b>（该词条强化次数，按 B 站 wiki 成长规则由词条数值推算）， 副词条命中次数 =
+          六个盘落在有效属性上的词条次数之和（每个词条本身算 1，每强化一次再 +1）。
+        </p>
+        <p>
+          <b>最终面板数值：</b>优先显示账号接口返回的真实值（和游戏内一致）；「计算明细」是用属性库基础值 + 装备推算的，
+          4 件套条件效果等未计入，可能与实际略有出入。
+        </p>
+        <p>
+          <b>命令行方式（可选）：</b><code>npm run sync:library</code> /
+          <code>npm run sync:characters</code>，效果与网页一键更新相同。
+        </p>
+      </div>
+    </div>
+
+    <div class="modal" id="rolesyncModal">
+      <div class="modal-box">
+        <button class="close" id="rolesyncClose">✕</button>
+        <h2>同步我的角色</h2>
+        <p id="cookieInfo" style="color: var(--dim)"></p>
+        <p>在 <code>user.mihoyo.com</code>（登录后 F12 → Console）执行下面这段脚本复制 cookie：</p>
+        <textarea id="cookieSnippet" rows="3" readonly></textarea>
+        <div class="row">
+          <button id="rolesyncNow">粘贴后：缓存并同步</button>
+          <button id="rolesyncCached">用缓存的 cookie 同步</button>
+        </div>
+        <textarea id="cookieInput" rows="3" placeholder="在此粘贴 cookie"></textarea>
+        <p style="font-size: 12px; color: var(--dim)">
+          cookie 只保存到本地服务器的 <code>.cookie.json</code>，不会发送给任何外部服务器；同步完成后页面自动刷新。
+        </p>
+      </div>
+    </div>
+
+    <div class="modal" id="targetModal">
+      <div class="modal-box">
+        <button class="close" id="targetClose">✕</button>
+        <h2>目标属性设置 · <span id="targetChar" style="color: var(--acc)"></span></h2>
+        <p style="color: var(--dim); font-size: 13px">
+          为该角色填写目标属性值（留空 = 不考核）。百分比属性填整数（如暴击率填 60 表示
+          60%），其余填实际数值。每个角色单独保存。
+        </p>
+        <div id="targetGrid" class="tgrid"></div>
+        <div class="row">
+          <button id="targetSave">保存</button>
+          <button id="targetClear">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="effModal">
+      <div class="modal-box">
+        <button class="close" id="effClose">✕</button>
+        <h2>有效副词条设置 · <span id="effChar" style="color: var(--acc)"></span></h2>
+        <p style="color: var(--dim); font-size: 13px">
+          勾选该角色视为「有效」的副词条属性。副词条命中次数 = 六个盘落在有效属性上的词条次数之和（每个词条本身算
+          1，每强化一次再 +1）。
+        </p>
+        <div id="effGrid" class="tgrid"></div>
+        <div class="row">
+          <button id="effSave">保存</button>
+          <button id="effClear">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="noteModal">
+      <div class="modal-box">
+        <button class="close" id="noteClose">✕</button>
+        <h2>角色备注 · <span id="noteChar" style="color: var(--acc)"></span></h2>
+        <textarea
+          id="noteInput"
+          rows="4"
+          style="min-height: 80px"
+          placeholder="为这个角色添加备注…（留空可清除）"
+        ></textarea>
+        <div class="row">
+          <button id="noteSave">保存</button>
+          <button id="noteClear">清空</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据块：由同步脚本写回 -->
+
+    <script type="module" src="/src/web/main.js"></script>
+  </body>
+</html>

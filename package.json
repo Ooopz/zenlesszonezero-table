@@ -1,0 +1,25 @@
+{
+  "name": "zzz-build-panel",
+  "version": "0.1.0",
+  "description": "绝区零配装面板 —— 本地服务器 + 米游社 wiki/账号数据同步 + 前端配装分析",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "sync:library": "node src/sync/library.js",
+    "sync:characters": "node src/sync/characters.js",
+    "test": "node --test test/",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{js,md,json}\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6"
+  }
+}

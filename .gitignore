@@ -1,0 +1,20 @@
+# 依赖
+node_modules/
+
+# 隐私：cookie 与个人配置（不会提交）
+.cookie.json
+data/user-config.json
+
+# 运行时生成的大文件 / 调试数据
+data/raw-library.json
+data/debug-response.json
+
+# 本地工具配置
+.claude/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
