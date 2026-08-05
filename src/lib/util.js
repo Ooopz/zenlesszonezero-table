@@ -64,3 +64,16 @@ export function statEntries(data) {
   if (Array.isArray(data)) return data.filter((t) => t && t.name != null && t.value != null);
   return Object.entries(data || {}).map(([name, value]) => ({ name, value }));
 }
+
+/** 游戏富文本 → 可渲染 HTML：把游戏标记 <color=#HEX> 转成 <span style="color">，
+ *  把字面 \n 转成 <br>，保留标准 <span style>，移除 <script> 与事件属性（on*）。 */
+export function renderRichText(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\\n/g, '<br>') // 字面反斜杠+n（游戏数据的换行）
+    .replace(/\n/g, '<br>') // 真实换行符（兜底）
+    .replace(/<color=([#\w]+)>/gi, (_m, color) => `<span style="color:${color}">`)
+    .replace(/<\/color>/gi, '</span>')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+}

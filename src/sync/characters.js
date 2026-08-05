@@ -163,8 +163,10 @@ function collectStats(arr) {
   return out;
 }
 
-/** 属性代码 → 名称（元素/职业接口给的是 code，wiki 属性库里有名称，这里仅兜底存） */
-function extractCharacter(response) {
+/** 从 avatar/info 响应提取角色的全部可获取数据。
+ *  除面板/装备外，还包括当前影画(rank/ranks)、技能等级(skills)、皮肤、元素/职业代码、
+ *  立绘主色、音擎特效标题、技能觉醒与装备规划等。 */
+export function extractCharacter(response) {
   const a = response?.data?.avatar_list?.[0];
   if (!a) return null;
   const panel = {};
@@ -179,6 +181,7 @@ function extractCharacter(response) {
     level: w.level ?? null,
     refinement: w.star ?? w.refine_level ?? w.refine ?? 1,
     icon: w.icon || '',
+    specialEffectTitle: w.talent_title || '',
     specialEffect: w.talent_content || '',
     mainStats: collectStats(w.main_properties),
     subStats: collectStats(w.properties),
@@ -206,6 +209,51 @@ function extractCharacter(response) {
     panel,
     wengine,
     discs: discs.slice(0, 6),
+    // ---------- 全量附加数据 ----------
+    elementType: a.element_type ?? null, // 元素代码
+    profession: a.avatar_profession ?? null, // 职业代码
+    subElementType: a.sub_element_type ?? null, // 副元素代码
+    verticalPaintingColor: a.vertical_painting_color || '', // 立绘主色
+    usName: a.us_full_name || '', // 英文名
+    skins: (a.skin_list || []).map((s) => ({
+      id: s.skin_id,
+      name: s.skin_name || '',
+      portrait: s.skin_vertical_painting_url || '',
+      square: s.skin_square_url || '',
+      icon: s.skin_hollow_icon_path || '',
+      color: s.skin_vertical_painting_color || '',
+      unlocked: !!s.unlocked,
+      rarity: s.rarity || '',
+      isOriginal: !!s.is_original,
+    })),
+    mindscape: {
+      rank: a.rank ?? 0, // 当前影画等级
+      ranks: (a.ranks || []).map((r) => ({
+        id: r.id,
+        name: r.name || '',
+        pos: r.pos,
+        isUnlocked: !!r.is_unlocked,
+        desc: r.desc || '', // 影画完整描述
+      })),
+    },
+    skills: (a.skills || []).map((s) => ({
+      type: s.skill_type, // 0普攻 1特殊技 2闪避 3连携 5核心被动 6支援
+      level: s.level,
+      items: (s.items || []).map((it) => ({
+        title: it.title || '',
+        text: it.text || '', // 技能完整描述
+        awaken: !!it.awaken,
+      })),
+    })),
+    skillAwaken: a.skill_awaken
+      ? {
+          hasSystem: !!a.skill_awaken.has_awaken_system,
+          level: a.skill_awaken.awaken_level ?? 0,
+          maxLevel: a.skill_awaken.awaken_max_level ?? 0,
+          items: a.skill_awaken.skill_awaken_items || [],
+        }
+      : null,
+    equipPlan: a.equip_plan_info || null, // 装备规划/配装评分
   };
 }
 

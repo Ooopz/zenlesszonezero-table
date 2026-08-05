@@ -31,7 +31,7 @@ import {
   targetStats,
   targetPercents,
 } from '../lib/calc.js';
-import { escapeHtml, formatValue } from '../lib/util.js';
+import { escapeHtml, formatValue, renderRichText } from '../lib/util.js';
 
 // ---------- 悬浮提示 ----------
 const tipEl = document.createElement('div');
@@ -204,67 +204,120 @@ function characterCard(character) {
   }
   const totalProgress = rateCount ? Math.round((rateSum / rateCount) * 100) : null;
 
-  // 驱动盘：三行两列，第一列 1/2/3 号、第二列 4/5/6 号
+  // 技能等级：类型图标 + 等级，悬浮图标显示完整详情（兼容旧数据：无 skills 时隐藏）
+  // 技能类型 → 静态图标（src/img/）
+  const skillTypeIcon = {
+    0: '/src/img/normal.png',
+    1: '/src/img/special.png',
+    2: '/src/img/dodge.png',
+    3: '/src/img/ultimate.png',
+    5: '/src/img/passive.png',
+    6: '/src/img/support.png',
+  };
+  const skillsHtml = (character.skills || [])
+    .map((s) => {
+      const icon = skillTypeIcon[s.type] || '/src/img/被动.png';
+      const detail = (s.items || [])
+        .map((it) => `<b>${escapeHtml(it.title)}</b><br>${renderRichText(it.text)}`)
+        .join('<div class="tip-hr"></div>');
+      return `<span class="skill-cell"><img class="skill-icon" src="${icon}" alt="技能" data-detail="${escapeHtml(detail)}"><b class="slv">Lv.${s.level}</b></span>`;
+    })
+    .join('');
+
+  // 影画：点阵悬浮显示富文本描述（兼容旧数据：无 mindscape 时隐藏）
+  const msRanks = character.mindscape?.ranks || [];
+  const msUnlocked = msRanks.filter((r) => r.isUnlocked).length;
+  const mindscapeHtml = msRanks
+    .map((r) => {
+      const nm = r.name || `影画${r.pos}`;
+      const st = r.isUnlocked ? '已解锁' : '未解锁';
+      const tip = `<b>${escapeHtml(nm)}</b>（${st}）${r.desc ? `<br>${renderRichText(r.desc)}` : ''}`;
+      return `<span class="ms-dot ${r.isUnlocked ? 'on' : ''}" data-detail="${escapeHtml(tip)}">${r.pos}</span>`;
+    })
+    .join('');
+
+  // 潜能觉醒（部分角色有）：6 级点阵，悬浮显示觉醒名与各技能强化说明
+  const sa = character.skillAwaken;
+  const awakenItems = sa?.items || [];
+  const awakenHtml =
+    sa && sa.hasSystem && awakenItems.length
+      ? Array.from({ length: 6 }, (_, i) => {
+          const lv = i + 1;
+          const it = awakenItems[i];
+          const on = lv <= (sa.level ?? 0);
+          const tip = it
+            ? `<b>${escapeHtml(it.level_show_name || `觉醒 ${lv}`)}</b>${on ? '（已觉醒）' : ''}` +
+              (it.awaken_skill_items || [])
+                .map((asi) => {
+                  const simple = asi.awaken_simple_info ? renderRichText(asi.awaken_simple_info) : '';
+                  const detail = (asi.skill_items || [])
+                    .map((si) => `<b>${escapeHtml(si.title)}</b><br>${renderRichText(si.text)}`)
+                    .join('<div class="tip-hr"></div>');
+                  return simple + (simple && detail ? '<br>' : '') + detail;
+                })
+                .join('<div class="tip-hr"></div>')
+            : `<b>觉醒 ${lv}</b>（未解锁）`;
+          return `<span class="ms-dot ${on ? 'on' : ''}" data-detail="${escapeHtml(tip)}">${lv}</span>`;
+        }).join('')
+      : '';
+
+  // 驱动盘：按槽位顺序排列（第一行 1/2/3 号、第二行 4/5/6 号）
   const discs = (character.discs || []).slice(0, 6);
   const hits = hitCount(character);
-  const discsHtml = discOrder
-    .map((i) => discs[i])
+  const discsHtml = discs
     .filter(Boolean)
     .map((d) => discTile(d, charValidSet))
     .join('');
 
-  // 计算明细
-  const detailRows = [];
-  for (const s of ['攻击力', '生命值', '防御力', '暴击率', '暴击伤害', '异常精通', '穿透率']) {
-    const computed = R.final[s];
-    if (computed == null) continue;
-    const actualFinal = R.actual?.[s]?.final;
-    const annotation =
-      actualFinal != null && Math.abs(actualFinal - computed) > 0.001 ? `　实际 ${formatValue(s, actualFinal)}` : '';
-    const srcs = (R.sources[s] || []).join('；');
-    detailRows.push(
-      `<tr><td class="src">${s}</td><td class="val">${formatValue(s, computed)}${annotation}</td><td class="src">${srcs || '—'}</td></tr>`
-    );
-  }
-
   const card = document.createElement('div');
   card.className = 'card';
   card.innerHTML = `
-    <div class="card-head">
-      ${portrait ? `<img class="portrait" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${character.name.replace(/'/g, "\\'")}')" onerror="this.style.display='none'">` : ''}
-      <div class="who">
-        <div class="name">${character.name || ''}
-          <button class="mini" title="设置/编辑该角色的目标属性" onclick="openTargetSettings('${character.name.replace(/'/g, "\\'")}')">目标</button>
-          <button class="mini" title="设置该角色视为「有效」的副词条属性" onclick="openValidStats('${character.name.replace(/'/g, "\\'")}')">有效</button>
+    <div class="upper">
+      <div class="upper-left">
+        <div class="basic">
+          ${portrait ? `<img class="portrait" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${character.name.replace(/'/g, "\\'")}')" onerror="this.style.display='none'">` : ''}
+          <div class="who">
+            <div class="name">${character.name || ''}
+              <button class="mini" title="设置/编辑该角色的目标属性" onclick="openTargetSettings('${character.name.replace(/'/g, "\\'")}')">目标</button>
+              <button class="mini" title="设置该角色视为「有效」的副词条属性" onclick="openValidStats('${character.name.replace(/'/g, "\\'")}')">有效</button>
+            </div>
+            ${readNote(character.name) ? `<div class="note">${escapeHtml(readNote(character.name))}</div>` : ''}
+            <div class="tags">
+              ${rarity ? `<span class="tag ${rarity}">${rarity}</span>` : ''}
+              ${element ? `<span class="tag e" style="color:${color};border-color:${color}66">● ${element}</span>` : ''}
+              ${trait ? `<span class="tag">${trait}</span>` : ''}
+              ${faction ? `<span class="tag">${faction}</span>` : ''}
+            </div>
+          </div>
         </div>
-        ${readNote(character.name) ? `<div class="note">${escapeHtml(readNote(character.name))}</div>` : ''}
-        <div class="tags">
-          ${rarity ? `<span class="tag ${rarity}">${rarity}</span>` : ''}
-          ${element ? `<span class="tag e" style="color:${color};border-color:${color}66">● ${element}</span>` : ''}
-          ${trait ? `<span class="tag">${trait}</span>` : ''}
-          ${faction ? `<span class="tag">${faction}</span>` : ''}
+        ${skillsHtml ? `<div class="block"><div class="col-title"><b>技能等级</b></div><div class="skill-grid">${skillsHtml}</div></div>` : ''}
+        ${
+          mindscapeHtml || awakenHtml
+            ? `<div class="block"><div class="col-title"><b>影画 · 潜能觉醒</b></div><div class="ms-row">
+              ${mindscapeHtml ? `<div class="ms-col"><span class="ms-label">影画 ${msUnlocked}/${msRanks.length}</span><div class="ms-dots">${mindscapeHtml}</div></div>` : ''}
+              ${awakenHtml ? `<div class="ms-col"><span class="ms-label">觉醒 ${sa?.level ?? 0}/${sa?.maxLevel ?? 6}</span><div class="ms-dots">${awakenHtml}</div></div>` : ''}
+            </div></div>`
+            : ''
+        }
+        <div class="block">
+          <div class="col-title"><b>音擎</b></div>
+          <div class="wengine">
+            ${wengineIcon ? `<img src="${wengineIcon}" alt="" onerror="this.style.display='none'"${wengineEffect ? ` data-detail="${escapeHtml(wengineEffect)}" title="悬浮查看音擎特效"` : ''}>` : ''}
+            <div class="wmain">
+              <div class="wname">${wengine.name || '未佩戴'}<span style="color:var(--acc)">${'★'.repeat(wengine.refinement || 0)}</span></div>
+              <div class="wmeta">${wengineBaseAtk != null ? `基础攻击 ${formatValue('攻击力', wengineBaseAtk)}` : ''}${wengineSubStats.length ? `　${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}` : ''}</div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="section"><b>音擎</b></div>
-    <div class="wengine">
-      ${wengineIcon ? `<img src="${wengineIcon}" alt="" onerror="this.style.display='none'">` : ''}
-      <div class="wmain">
-        <div class="wname">${wengine.name || '未佩戴'}<span style="color:var(--acc)">${'★'.repeat(wengine.refinement || 0)}</span></div>
-        <div class="wmeta">${wengineBaseAtk != null ? `基础攻击 ${formatValue('攻击力', wengineBaseAtk)}` : ''}${wengineSubStats.length ? `　${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}` : ''}</div>
-      </div>
-      ${wengineEffect ? `<div class="wfx" title="点击展开/收起" onclick="this.classList.toggle('open')">${wengineEffect}</div>` : ''}
-    </div>
-    <div class="midlayout">
-      <div class="col-left">
-        <div class="col-title"><b>驱动盘</b>${hits != null ? `<span>命中 ${hits}</span>` : ''}</div>
-        <div class="discs-vert">${discsHtml}</div>
-      </div>
-      <div class="col-right">
-        <div class="col-title"><span>最终面板 / 达成率</span>${totalProgress != null ? `<span class="${rateClass(totalProgress / 100)}">总 ${totalProgress}%</span>` : ''}</div>
+      <div class="upper-right">
+        <div class="col-title"><span>最终面板</span>${totalProgress != null ? `<span class="${rateClass(totalProgress / 100)}">总 ${totalProgress}%</span>` : ''}</div>
         <table class="cs"><tr><th>属性</th><th>数值</th><th>达成率</th></tr>${mergedRows.join('')}</table>
-        ${detailRows.length ? `<details class="detail" style="margin:4px 0 0"><summary>计算明细</summary><table>${detailRows.join('')}</table><div class="footnote">推算值按基础+装备汇总，未计 4 件套条件效果/核心被动，可能与实际面板有出入；实际值以游戏为准。</div></details>` : ''}
       </div>
+    </div>
+    <div class="lower">
+      <div class="col-title"><b>驱动盘</b>${hits != null ? `<span>命中 ${hits}</span>` : ''}</div>
+      <div class="discs-vert wide">${discsHtml}</div>
     </div>
   `;
   return card;
@@ -339,7 +392,7 @@ function renderTable(list) {
           ? `<br>${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}`
           : '') +
         (wengineEffect
-          ? `<br><span style="color:var(--dim);font-size:11px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
+          ? `<br><span style="color:var(--dim);font-size:12px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
           : '');
       cell['音擎'] =
         `<td class="twe">${wengineIcon ? `<img class="t-ico" src="${wengineIcon}" data-detail="${escapeHtml(wengineDetail)}">` : wengine.name || '未佩戴'}</td>`;

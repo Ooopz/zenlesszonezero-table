@@ -26,6 +26,18 @@ export const KEYS = Object.freeze({
   DISCS: 'discs',
   SET: 'set',
   SLOT: 'slot',
+  // 角色附加（账号接口全量）
+  SPECIAL_EFFECT_TITLE: 'specialEffectTitle',
+  ELEMENT_TYPE: 'elementType',
+  PROFESSION: 'profession',
+  SUB_ELEMENT_TYPE: 'subElementType',
+  VERTICAL_PAINTING_COLOR: 'verticalPaintingColor',
+  US_NAME: 'usName',
+  SKINS: 'skins',
+  MINDSCAPE: 'mindscape',
+  SKILLS: 'skills',
+  SKILL_AWAKEN: 'skillAwaken',
+  EQUIP_PLAN: 'equipPlan',
   // 属性库（library.json）
   ELEMENT: 'element',
   TRAIT: 'trait',
@@ -75,6 +87,12 @@ export function validateCharacter(c) {
       if (!isEntryList(d.subStats)) errors.push(`discs[${i}].subStats 词条格式异常`);
     });
   }
+  // 附加字段（可选，存在时才校验类型；旧数据可缺省）
+  if (c.mindscape !== undefined && (typeof c.mindscape !== 'object' || typeof c.mindscape.rank !== 'number')) {
+    errors.push('mindscape 应为 { rank: number, ranks: [] }');
+  }
+  if (c.skills !== undefined && !Array.isArray(c.skills)) errors.push('skills 应为数组');
+  if (c.skins !== undefined && !Array.isArray(c.skins)) errors.push('skins 应为数组');
   return errors;
 }
 
