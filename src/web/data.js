@@ -48,8 +48,29 @@ export function saveCharTarget(name, target) {
   userConfig.charTargets[name] = target;
   saveUserConfig();
 }
+// 合法有效副词条类型（与 calc.validStatOptions 的 type 一致）
+const VALID_STAT_TYPES = new Set([
+  '攻击力',
+  '攻击力%',
+  '暴击率',
+  '暴击伤害',
+  '穿透值',
+  '异常精通',
+  '生命值',
+  '生命值%',
+  '防御力',
+  '防御力%',
+]);
+
 export function readValidStats(name) {
-  return userConfig.validStats[name] || [];
+  // 手动配置过（含清空）→ 覆盖默认
+  if (name in userConfig.validStats) return userConfig.validStats[name] || [];
+  // 否则用角色默认：游戏推荐的有效属性（equipPlan.plan_effective_property_list）
+  const character = myCharacters.find((c) => c.name === name);
+  if (!character) return [];
+  return (character.equipPlan?.plan_effective_property_list || [])
+    .map((p) => (p.full_name && p.full_name.includes('百分比') ? `${p.name}%` : p.name))
+    .filter((t) => VALID_STAT_TYPES.has(t));
 }
 export function saveValidStats(name, list) {
   userConfig.validStats[name] = list;

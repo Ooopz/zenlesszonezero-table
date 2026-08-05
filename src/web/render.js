@@ -214,14 +214,19 @@ function characterCard(character) {
     5: '/src/img/passive.png',
     6: '/src/img/support.png',
   };
-  const skillsHtml = (character.skills || [])
-    .map((s) => {
-      const icon = skillTypeIcon[s.type] || '/src/img/被动.png';
+  // 技能显示顺序：普攻, 闪避, 特殊技, 支援, 大招, 被动
+  const skillOrder = [0, 2, 1, 6, 3, 5];
+  const skillsHtml = skillOrder
+    .map((type) => {
+      const s = (character.skills || []).find((x) => x.type === type);
+      if (!s) return '';
+      const icon = skillTypeIcon[type] || '/src/img/passive.png';
       const detail = (s.items || [])
         .map((it) => `<b>${escapeHtml(it.title)}</b><br>${renderRichText(it.text)}`)
         .join('<div class="tip-hr"></div>');
       return `<span class="skill-cell"><img class="skill-icon" src="${icon}" alt="技能" data-detail="${escapeHtml(detail)}"><b class="slv">Lv.${s.level}</b></span>`;
     })
+    .filter(Boolean)
     .join('');
 
   // 影画：点阵悬浮显示富文本描述（兼容旧数据：无 mindscape 时隐藏）

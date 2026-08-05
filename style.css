@@ -425,7 +425,7 @@ main {
 }
 .cs .cs-name {
   color: var(--dim);
-  width: 32%;
+  width: 24%;
   white-space: nowrap;
 }
 .cs tr.hl .cs-name {
@@ -434,7 +434,8 @@ main {
 }
 .cs .cs-val {
   font-weight: 800;
-  text-align: center;
+  text-align: left;
+  white-space: nowrap;
 }
 .cs .cs-val .break {
   font-size: 11px;
@@ -443,7 +444,8 @@ main {
   margin-left: 3px;
 }
 .cs .cs-rate {
-  width: 34%;
+  min-width: 92px;
+  width: 26%;
   text-align: center;
   font-size: 12px;
   white-space: nowrap;
