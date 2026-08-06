@@ -386,6 +386,61 @@ function fetchSkills(page, { requireChildren = false } = {}) {
     }));
 }
 
+/** 核心技基础面板提升的属性名 → 规范名（含 基础X 与 百分比X 两类） */
+const coreStatAlias = {
+  基础攻击力: '攻击力',
+  基础生命值: '生命值',
+  基础防御力: '防御力',
+  基础冲击力: '冲击力',
+  基础能量自动回复: '能量自动回复',
+  攻击力百分比: '攻击力%',
+  生命值百分比: '生命值%',
+  防御力百分比: '防御力%',
+  冲击力百分比: '冲击力%',
+  // 数字档（核心被动增强）可能用不带「基础」的属性名，如「[围猎]状态时冲击力提升5%」
+  攻击力: '攻击力',
+  生命值: '生命值',
+  防御力: '防御力',
+  冲击力: '冲击力',
+  能量自动回复: '能量自动回复',
+  暴击率: '暴击率',
+  暴击伤害: '暴击伤害',
+  异常精通: '异常精通',
+  异常掌控: '异常掌控',
+  穿透率: '穿透率',
+};
+
+/** 核心技 A-F 档位开头的基础面板提升（如「暴击率提升4.8%」「基础攻击力提升25点」），
+ *  汇总为 { 属性: 满级累计提升 }。基础提升固定位于档位文本开头，仅匹配开头（^）与白名单属性名，
+ *  天然跳过条件性/招式增强（如「猫又处于[肉球突袭]状态时暴击伤害提升20%」开头即不匹配）。
+ *  数字档（2-6）是核心被动增强而非基础面板提升，不在此列。百分比值除以 100 归一化。 */
+function fetchCoreSkill(page) {
+  const boost = {};
+  const reAlpha = /^([一-鿿A-Za-z]+)提升(-?[\d.]+)(%|点)?/;
+  for (const m of page.modules || []) {
+    for (const comp of m.components || []) {
+      const data = parseComponentData(comp);
+      for (const it of data?.list || []) {
+        if (it.tab_name !== '核心技') continue;
+        for (const ch of it.children || []) {
+          for (const g of ch.growth || []) {
+            if (!/^[A-F]$/.test(g.name)) continue; // 仅 A-F 档
+            const txt = stripHtml(g.children?.[0]?.row?.[0]?.[0] || '');
+            const mm = txt.match(reAlpha);
+            if (!mm) continue;
+            const key = coreStatAlias[mm[1]];
+            if (!key) continue;
+            let v = parseFloat(mm[2]);
+            if (mm[3] === '%') v /= 100;
+            boost[key] = Math.round(((boost[key] || 0) + v) * 1e6) / 1e6; // 消除百分比累加的浮点误差
+          }
+        }
+      }
+    }
+  }
+  return Object.keys(boost).length ? boost : null;
+}
+
 /** 外观图：tab 列表里带 image 且无 children 的条目（角色/音擎共用） */
 function fetchAppearance(page) {
   const appearanceData = findModule(
@@ -404,6 +459,8 @@ function fetchCharacterExtended(page) {
   if (cvData) out.cv = stripHtml(cvData.rich_text).replace(/\s+/g, ' ');
   const skills = fetchSkills(page);
   if (skills.length) out.skills = skills;
+  const coreBoost = fetchCoreSkill(page);
+  if (coreBoost) out.coreSkillBoost = coreBoost;
   const cinemaData = findModule(
     page,
     (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).some((h) => h.includes('影画')))

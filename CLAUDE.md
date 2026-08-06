@@ -45,7 +45,7 @@ server.js /api/data →  读 data/*.json →  前端 fetch
   - `models.js`：领域模型基类 `Character` / `Wengine` / `Disc`。构造时归一化数据、自动算派生属性（如副词条成长次数 `growth`）、组合关系（角色装备音擎+驱动盘）。浏览器把 wiki 与账号数据都实例化成这些基类。
   - `node.js`：Node 专属（`openBrowser`）。
 - **`src/sync/`（可执行脚本，也被 server.js 复用导出函数）**
-  - `library.js`：并发池（6 worker）抓 180+ 个 wiki 详情页，解析出 `library.json`，同时把每个 entry_page 原始响应存 `raw-library.json` 快照。解析器对 wiki 页面结构高度脆弱，改动需谨慎。
+  - `library.js`：并发池（6 worker）抓 180+ 个 wiki 详情页，解析出 `library.json`，同时把每个 entry_page 原始响应存 `raw-library.json` 快照。解析器对 wiki 页面结构高度脆弱，改动需谨慎。角色数据含 `coreSkillBoost`（核心技 A-F 档基础面板提升，如「暴击率提升4.8%」→ `{暴击率:0.144}`；开头锚定 + 属性名白名单过滤「额外/最多/造成的伤害」等，百分比攻击/生命归 `X%` 键；数字档核心被动增强不计入），供 wiki 核心技悬浮展示与 calc 百分比词条基准计入。
   - `characters.js`：串行拉取账号角色详情，`extractCharacter()` 做全量提取（面板/装备/技能/影画/皮肤/潜能觉醒/`equipPlan` 等）。含 cookie 缓存（`data/.cookie.json`）。
 - **`src/web/`（浏览器端 ESM，无构建）**
   - `main.js`：入口，`fetch('/api/data')` → `setData()` → `setCalcContext(dataCtx)` → `initUi()`。

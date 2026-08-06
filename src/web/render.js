@@ -25,6 +25,7 @@ import {
   isDamageBonus,
   targetStats,
   targetPercents,
+  targetGap,
 } from '../lib/calc.js';
 import { escapeHtml, escapeJsAttr, formatValue, renderRichText, compareValues } from '../lib/util.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
@@ -132,6 +133,29 @@ function discTile(d, validSet) {
 
 /** 三行两列盘序：第一列 1/2/3 号、第二列 4/5/6 号 */
 const discOrder = [0, 3, 1, 4, 2, 5];
+
+/** 目标副词条缺口悬浮提示（卡片/表格「副词条命中」共用）。
+ *  未配置目标时返回空串（不加悬浮）；已全部达成时提示无需额外副词条。 */
+function gapAdviceHtml(character, R) {
+  const g = targetGap(character, R);
+  if (!g) return '';
+  if (!g.items.length) return `<b>${escapeHtml(character.name)}</b><br>目标属性已全部达成，无需额外副词条`;
+  const rows = g.items
+    .map((it) => {
+      const label = it.type || it.name;
+      let count;
+      if (it.count != null) {
+        count = `约 ${it.count} 个`;
+        // 攻击/生命/防御有固定值词条形态，作为备选提示（与百分比词条数量不同时才展示）
+        if (it.countFlat != null && it.countFlat !== it.count) count += `（固定值约 ${it.countFlat} 个）`;
+      } else {
+        count = '副词条不可达成';
+      }
+      return `<span style="color:var(--acc)">${label}</span> ${count}<br><span style="color:var(--dim)">${formatValue(it.name, it.current)} → ${formatValue(it.name, it.target)}</span>`;
+    })
+    .join('<br>');
+  return `<b>${escapeHtml(character.name)}</b><br>还差 <b>${g.total}</b> 个副词条达成目标<br>${rows}`;
+}
 
 // ---------- 卡片视图 ----------
 function characterCard(character) {
@@ -261,6 +285,7 @@ function characterCard(character) {
   // 驱动盘：按槽位顺序排列（第一行 1/2/3 号、第二行 4/5/6 号）
   const discs = (character.discs || []).slice(0, 6);
   const hits = character.hitCount();
+  const hitTip = gapAdviceHtml(character, R);
   const discsHtml = discs
     .filter(Boolean)
     .map((d) => discTile(d, charValidSet))
@@ -313,7 +338,7 @@ function characterCard(character) {
       </div>
     </div>
     <div class="lower">
-      <div class="col-title"><b>驱动盘</b>${hits != null ? `<span>命中 ${hits}</span>` : ''}</div>
+      <div class="col-title"><b>驱动盘</b>${hits != null ? (hitTip ? `<span class="d-hit" data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口">命中 ${hits}</span>` : `<span>命中 ${hits}</span>`) : ''}</div>
       <div class="discs-vert wide">${discsHtml}</div>
     </div>
   `;
@@ -431,7 +456,10 @@ function renderTable(list) {
 
       // 副词条命中
       const hits = character.hitCount();
-      cell['副词条命中'] = `<td class="thit">${hits != null ? `<span class="tv">${hits}</span>` : '—'}</td>`;
+      const hitTip = gapAdviceHtml(character, R);
+      cell['副词条命中'] = `<td class="thit">${
+        hits != null ? `<span class="tv"${hitTip ? ` data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口"` : ''}>${hits}</span>` : '—'
+      }</td>`;
 
       // 属性列
       for (const s of targetStats) cell[s] = cellStats(R, target, s);

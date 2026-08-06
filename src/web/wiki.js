@@ -74,6 +74,28 @@ function fmt(v) {
 function statCells(obj, keys) {
   return keys.map((k) => `<td>${fmt(obj?.[k])}</td>`).join('');
 }
+/** 核心技满级提升说明（悬浮在核心技图标上，取自 coreSkillBoost；X% 键为攻击/生命等百分比提升） */
+function coreBoostHtml(c) {
+  const labels = {
+    攻击力: '基础攻击力',
+    生命值: '基础生命值',
+    防御力: '基础防御力',
+    冲击力: '基础冲击力',
+    能量自动回复: '基础能量自动回复',
+    '攻击力%': '攻击力',
+    '生命值%': '生命值',
+    '防御力%': '防御力',
+    '冲击力%': '冲击力',
+    暴击率: '暴击率',
+    暴击伤害: '暴击伤害',
+    穿透率: '穿透率',
+    异常掌控: '异常掌控',
+    异常精通: '异常精通',
+  };
+  const parts = Object.entries(c.coreSkillBoost || {}).map(([k, v]) => `${labels[k] || k}+${formatValue(k, v)}`);
+  return parts.length ? `<div style="color:var(--green)">核心技满级提升：${parts.join('、')}</div>` : '';
+}
+
 /** 技能 items → HTML（角色/邦布共用）：name + 富文本 desc；wrap 时每条包一层，否则按 sep 连接 */
 function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } = {}) {
   return s && s.items?.length
@@ -142,7 +164,11 @@ function renderCharacters() {
     ];
     const skillsHtml = skillDefs
       .map(({ key, label, icon }) => {
-        const tip = skillItemsHtml(byType[key]) || `<b>${label}</b>（无数据）`;
+        let tip = skillItemsHtml(byType[key]) || `<b>${label}</b>（无数据）`;
+        if (key === 'core') {
+          const boost = coreBoostHtml(c);
+          if (boost) tip += `<div class="tip-hr"></div>${boost}`;
+        }
         return `<span class="wiki-icon" data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
       })
       .join('');

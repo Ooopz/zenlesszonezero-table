@@ -279,3 +279,74 @@ export function progressCell(rate) {
   const width = Math.min(100, rate * 100).toFixed(0);
   return `<span class="rpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><span class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></span>`;
 }
+
+// ---------- 目标副词条缺口 ----------
+/** 攻击/生命/防御百分比词条的收益基准。
+ *  攻击力公式：攻击力 = (角色满级攻击力 + 装备武器攻击力) × (1 + %词条) + 固定值词条，
+ *  因此百分比词条收益基于「满级角色值 + 武器攻击（仅攻击力）」，并计入核心技提升的基础面板
+ *  （coreSkillBoost，如「基础攻击力提升25点」），满级数据缺失时回退当前基础值。 */
+function fullBase(R, name) {
+  const libVal = R.libCharacter?.maxLevel?.[name];
+  const core = R.libCharacter?.coreSkillBoost?.[name] || 0;
+  if (libVal == null) return (R.base?.[name] || 0) + core;
+  return (name === '攻击力' ? libVal + (R.libWengine?.baseAtk ?? 0) : libVal) + core;
+}
+
+/** 目标属性 → 副词条类型与每词条收益（S 级成长值）。
+ *  gain 为百分比词条收益，gainFlat 为固定值词条收益（攻击/生命/防御有 % 与固定值两种形态）；
+ *  其余属性（冲击力/穿透率/能量自动回复/伤害加成等）无法通过副词条补足，不在表中。 */
+const GAP_ADVICE = {
+  攻击力: (R) => ({
+    type: '攻击力%',
+    gain: fullBase(R, '攻击力') * substatGrowthTable.S['攻击力%'],
+    gainFlat: substatGrowthTable.S['攻击力'],
+  }),
+  生命值: (R) => ({
+    type: '生命值%',
+    gain: fullBase(R, '生命值') * substatGrowthTable.S['生命值%'],
+    gainFlat: substatGrowthTable.S['生命值'],
+  }),
+  防御力: (R) => ({
+    type: '防御力%',
+    gain: fullBase(R, '防御力') * substatGrowthTable.S['防御力%'],
+    gainFlat: substatGrowthTable.S['防御力'],
+  }),
+  暴击率: () => ({ type: '暴击率', gain: substatGrowthTable.S['暴击率'] }),
+  暴击伤害: () => ({ type: '暴击伤害', gain: substatGrowthTable.S['暴击伤害'] }),
+  异常精通: () => ({ type: '异常精通', gain: substatGrowthTable.S['异常精通'] }),
+  穿透值: () => ({ type: '穿透值', gain: substatGrowthTable.S['穿透值'] }),
+};
+
+/** 按目标面板分析副词条缺口：逐目标属性算「当前 → 目标」差距，按每词条成长值估算还差几个副词条。
+ *  count 为 null 表示该属性无法通过副词条补足；未配置目标返回 null；全部达标时 items 为空、total 为 0。 */
+export function targetGap(character, R) {
+  const target = ctx.readCharTarget(character.name) || {};
+  const names = Object.keys(target).filter((n) => {
+    const v = target[n];
+    return v != null && v !== '' && Number(v) > 0;
+  });
+  if (!names.length) return null;
+  const items = [];
+  let total = 0;
+  for (const name of names) {
+    let current = R.actual?.[name]?.final ?? R.final[name];
+    if (name === '属性伤害加成') {
+      for (const k of Object.keys(R.final))
+        if (isDamageBonus(k)) {
+          current = R.final[k];
+          break;
+        }
+    }
+    if (current == null) continue;
+    const targetInternal = targetPercents.has(name) ? Number(target[name]) / 100 : Number(target[name]);
+    const gap = targetInternal - current;
+    if (gap <= 0) continue; // 该属性已达标
+    const advice = GAP_ADVICE[name] ? GAP_ADVICE[name](R) : null;
+    const gain = advice?.gain || 0;
+    const count = gain > 0 ? Math.ceil(gap / gain) : null;
+    const countFlat = advice?.gainFlat ? Math.ceil(gap / advice.gainFlat) : null;
+    items.push({ name, current, target: targetInternal, gap, type: advice?.type || null, count, countFlat });
+    if (count != null) total += count;
+  }
+  return { total, items };
+}
