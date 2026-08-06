@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { validateLibrary, validateCharacters, validateCharacter, KEYS } from '../src/lib/schema.js';
+import { loadDataFile } from './helpers.js';
 
 function readData(name) {
-  return JSON.parse(readFileSync(new URL(`../data/${name}`, import.meta.url), 'utf-8'));
+  const hint =
+    name === 'library.json'
+      ? 'npm run sync:library（或网页「更新数据库」）'
+      : 'npm run sync:characters（或网页「更新我的角色」）';
+  return loadDataFile(name, hint);
 }
 
 test('KEYS 键名定义完整', () => {

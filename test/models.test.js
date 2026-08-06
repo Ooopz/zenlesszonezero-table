@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { Character, Wengine, Disc, toInstances } from '../src/lib/models.js';
 import { buildIndex } from '../src/lib/util.js';
 import { setCalcContext } from '../src/lib/calc.js';
+import { loadDataFile } from './helpers.js';
 
-const libraryData = JSON.parse(readFileSync(new URL('../data/library.json', import.meta.url), 'utf-8'));
-const charactersData = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf-8'));
+const libraryData = loadDataFile('library.json', 'npm run sync:library（或网页「更新数据库」）');
+const charactersData = loadDataFile('characters.json', 'npm run sync:characters（或网页「更新我的角色」）');
 
 const library = {
   characters: toInstances(libraryData.characters, Character),

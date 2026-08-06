@@ -2,9 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extractCharacter } from '../src/sync/characters.js';
 import { validateCharacter } from '../src/lib/schema.js';
+import { loadDataFile } from './helpers.js';
 
-// 最小化的账号接口 avatar/info 响应 fixture（结构对齐 api-takumi-record.mihoyo.com 真实响应，
-// 字段为构造值）。此前从 data/debug-response.json（已被 gitignore）读取，现内联自足，fresh clone 亦可运行。
+// 数据就绪检查：测试依赖 data/ 已同步的原始数据，缺失时提示先更新。
+// extractCharacter 的输入是账号接口响应（data/debug-response.json，不入库），其结构不存在于
+// raw-library.json / library.json 中，因此提取逻辑用下方内联的最小账号响应 fixture（结构对齐真实响应）。
+loadDataFile('raw-library.json', 'npm run sync:library（或网页「更新数据库」）');
 const AVATAR_INFO = {
   data: {
     avatar_list: [

@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm start                    # 启动本地服务器（端口 8718，自动开浏览器）；页面数据来自 /api/data，必须经服务器访问
 npm run sync:library         # 抓取米游社 wiki 属性库 → data/library.json + data/raw-library.json
 npm run sync:characters      # 用 cookie 拉取账号角色 → data/characters.json（需粘贴 cookie，交互式）
-npm test                     # 全部单元测试（node:test）
+npm test                     # 全部单元测试（node:test；依赖 data/ 数据文件，缺失时提示先更新）
 node --test test/calc.test.js   # 跑单个测试文件
 npm run lint                 # ESLint（扁平配置，按文件区分 Node/浏览器全局）
 npm run format               # Prettier 格式化
@@ -63,7 +63,7 @@ server.js /api/data →  读 data/*.json →  前端 fetch
 - **最终面板**：账号接口真实值（`panel`）优先显示；缺失时用「wiki 基础值 + 装备」推算补齐。推算未计 4 件套条件效果/核心被动，与实际可能有出入——这是刻意设计。
 - **游戏富文本**：`renderRichText()` 把游戏标记 `<color=#HEX>` 转 `<span style="color">`、字面 `\n` 转 `<br>`，并清除 `<script>` 与 `on*` 属性。所有来自数据的悬浮内容先过 `escapeHtml()` 再放 `data-detail`。
 - **有效副词条默认值**：未手动配置时用游戏推荐 `equipPlan.plan_effective_property_list`（`web/data.js` 的 `readValidStats`）；手动保存（含清空）后覆盖默认。
-- **测试依赖真实数据文件**：`calc.test.js` / `models.test.js` 直接读 `data/library.json`、`data/characters.json`；`extract.test.js` 读 `data/debug-response.json` 作为提取 fixture。**测试假设这些文件存在且结构合理**。
+- **测试依赖真实数据文件**：`data/` 不入版本库，测试通过 `test/helpers.js` 的 `loadDataFile()` 读取；数据缺失/损坏时打印「请先更新数据」提示并正常结束（`node --test` 每文件独立子进程，`process.exit(0)` 不影响其他文件）。`extract.test.js` 用 `raw-library.json` 做数据就绪检查，提取逻辑用内联账号响应 fixture。**新增测试文件记得加进 package.json 的 test 脚本**（Node 20 的 `--test` 不支持 glob，且会把 `test/` 下所有 JS 当测试文件）。
 
 ## 已知说明
 

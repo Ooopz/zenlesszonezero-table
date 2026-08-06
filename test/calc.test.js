@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { setCalcContext, calculateCharacter, hitCount, discGrowth } from '../src/lib/calc.js';
 import { buildIndex } from '../src/lib/util.js';
+import { loadDataFile } from './helpers.js';
 
-const library = JSON.parse(readFileSync(new URL('../data/library.json', import.meta.url), 'utf-8'));
-const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf-8'));
+const library = loadDataFile('library.json', 'npm run sync:library（或网页「更新数据库」）');
+const characters = loadDataFile('characters.json', 'npm run sync:characters（或网页「更新我的角色」）');
 
 setCalcContext({
   library,
