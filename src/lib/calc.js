@@ -13,9 +13,12 @@ let ctx = {
   readCharTarget: () => ({}),
   readValidStats: () => [],
 };
+/** 上下文版本号：数据源变化（setCalcContext）时递增，Character.calculate 据此作废缓存 */
+export let ctxVersion = 0;
 /** 注入/更新计算所需的数据上下文（浏览器在数据加载后、测试在断言前调用） */
 export function setCalcContext(c) {
   ctx = { ...ctx, ...c };
+  ctxVersion++;
 }
 
 // ---------- 属性常量 ----------
@@ -43,6 +46,8 @@ export const panelStatMap = {
   异常精通: ['异常精通'],
 };
 export const multStats = new Set(['攻击力', '生命值', '防御力', '冲击力']); // 百分比加成按 基础×(1+Σ%)
+/** 满级行仅含的基础属性（wiki 成长表「满级」只有这三项），wiki 视图的「满级X」列与此对齐 */
+export const maxLevelStats = ['生命值', '攻击力', '防御力'];
 export const isDamageBonus = (name) => name.endsWith('伤害加成') || name.endsWith('伤害提升');
 
 export const targetStats = [
@@ -132,7 +137,8 @@ export function hitCount(character) {
   if (!valid.size) return null;
   let hits = 0;
   for (const d of character.discs || []) {
-    for (const g of discGrowth(d, d.rarity)) if (valid.has(g.type)) hits += 1 + g.growthCount;
+    // Disc 实例在构造时已缓存 growth，无需按盘重算
+    for (const g of d.growth || discGrowth(d, d.rarity)) if (valid.has(g.type)) hits += 1 + g.growthCount;
   }
   return hits;
 }
@@ -141,8 +147,12 @@ export function hitCount(character) {
 export function calculateCharacter(character) {
   const { library, charIndex, wengineIndex, discIndex } = ctx;
   const libCharacter = lookup(library.characters, charIndex, character.name) || {};
-  // wiki 基础值 = 初始 ∪ 满级（满级只含生命/攻击/防御，其余在初始里）
-  const baseSource = { ...(libCharacter.initial || {}), ...libCharacter, ...(libCharacter.maxLevel || {}) };
+  // wiki 基础值 = 初始 ∪ 满级（满级只含生命/攻击/防御，其余在初始里）。
+  // Character 实例构造时已把扁平初始属性归一化到实例，纯对象亦可直接取。
+  const baseSource = {};
+  for (const s of panelOrder) if (libCharacter[s] != null) baseSource[s] = libCharacter[s];
+  if (libCharacter['基础攻击力'] != null) baseSource['基础攻击力'] = libCharacter['基础攻击力'];
+  for (const [k, v] of Object.entries(libCharacter.maxLevel || {})) baseSource[k] = v;
   const libWengine = lookup(library.wengines, wengineIndex, character.wengine?.name);
   const wengine = character.wengine || {};
 

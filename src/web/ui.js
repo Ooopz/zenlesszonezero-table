@@ -12,10 +12,9 @@ import {
   userConfig,
   saveUserConfig,
   loadUserConfig,
-  filterState,
-  populateFilters,
 } from './data.js';
 import { render } from './render.js';
+import { setWikiTab } from './wiki.js';
 
 // ---------- 提示条 ----------
 const statusEl = document.getElementById('status');
@@ -46,18 +45,19 @@ function startSyncPolling(kind) {
     if (p.step === 'characters') msg = `正在同步角色 ${p.done}/${p.total}…`;
     else if (p.step === 'wengines') msg = `正在同步音擎 ${p.done}/${p.total}…`;
     else if (p.step === 'discs') msg = `正在同步驱动盘 ${p.done}/${p.total}…`;
+    else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
     notify(msg, 60);
-  }, 800);
+  }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
 }
 
-/** 同步属性库（需本地服务器） */
+/** 更新数据库（需本地服务器） */
 async function syncLibrary() {
-  notify('正在同步属性库…（约 1 分钟，请稍候）', 60);
+  notify('正在更新数据库…（约 1 分钟，请稍候）', 60);
   startSyncPolling('library');
   const j = await apiRequest('/api/sync-base', { method: 'POST' });
   stopSyncPolling();
   if (j && j.ok) {
-    notify(`属性库同步完成：角色${j.stats.characters} / 音擎${j.stats.wengines} / 驱动盘${j.stats.discs}，即将刷新`);
+    notify(`属性库同步完成：角色${j.stats.characters} / 音擎${j.stats.wengines} / 驱动盘${j.stats.discs} / 邦布${j.stats.bangboos}，即将刷新`);
     setTimeout(() => location.reload(), 900);
   } else {
     notify('同步失败：' + (j && j.error ? j.error : '未检测到本地服务器，请先运行 npm start'), 10);
@@ -205,11 +205,21 @@ export function initUi() {
   });
   document.getElementById('syncBtn').addEventListener('click', syncLibrary);
   document.getElementById('rolesyncBtn').addEventListener('click', openRoleSync);
-  document.getElementById('viewBtn').addEventListener('click', () => {
-    userConfig.view = userConfig.view === 'card' ? 'table' : 'card';
-    saveUserConfig();
+  // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
+  document.querySelectorAll('.view-tab').forEach((b) =>
+    b.addEventListener('click', () => {
+      userConfig.view = b.dataset.view;
+      saveUserConfig();
+      history.replaceState(null, '', b.dataset.view === 'card' ? location.pathname : `?view=${b.dataset.view}`);
+      render();
+    })
+  );
+  // wiki 子面板切换（wiki.js 渲染的 tab 内联引用）
+  window.ZZZ = window.ZZZ || {};
+  window.ZZZ.wikiTab = (key) => {
+    setWikiTab(key);
     render();
-  });
+  };
   document
     .getElementById('rolesyncClose')
     .addEventListener('click', () => document.getElementById('rolesyncModal').classList.remove('show'));
@@ -229,19 +239,6 @@ export function initUi() {
   document
     .getElementById('helpClose')
     .addEventListener('click', () => document.getElementById('helpModal').classList.remove('show'));
-
-  // ---------- 筛选事件 ----------
-  document.getElementById('filterElement').addEventListener('change', (e) => {
-    filterState.element = e.target.value;
-    render();
-  });
-  document.getElementById('filterTrait').addEventListener('change', (e) => {
-    filterState.trait = e.target.value;
-    render();
-  });
-
-  // 填充筛选下拉选项
-  populateFilters();
 
   // 先加载用户配置（目标/有效词条），再渲染
   loadUserConfig().then(() => render());

@@ -1,14 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { extractCharacter } from '../src/sync/characters.js';
 import { validateCharacter } from '../src/lib/schema.js';
 
-// 用第一个角色的原始 avatar/info 响应（接口原始数据）作为提取 fixture
-const debug = JSON.parse(readFileSync(new URL('../data/debug-response.json', import.meta.url), 'utf-8'));
+// 最小化的账号接口 avatar/info 响应 fixture（结构对齐 api-takumi-record.mihoyo.com 真实响应，
+// 字段为构造值）。此前从 data/debug-response.json（已被 gitignore）读取，现内联自足，fresh clone 亦可运行。
+const AVATAR_INFO = {
+  data: {
+    avatar_list: [
+      {
+        id: 1001,
+        full_name_mi18n: '测试角色',
+        level: 60,
+        role_square_url: 'https://example.com/icon.png',
+        role_vertical_painting_url: 'https://example.com/portrait.png',
+        rarity: 'S',
+        camp_name_mi18n: '测试阵营',
+        element_type: 1,
+        avatar_profession: 2,
+        sub_element_type: 0,
+        vertical_painting_color: '#FFFFFF',
+        us_full_name: 'TestChar',
+        skin_list: [
+          {
+            skin_id: 1,
+            skin_name: '初始',
+            skin_vertical_painting_url: '',
+            skin_square_url: '',
+            skin_hollow_icon_path: '',
+            skin_vertical_painting_color: '',
+            unlocked: true,
+            rarity: 'S',
+            is_original: true,
+          },
+        ],
+        rank: 1,
+        ranks: [
+          { id: 1, name: '影画·一', pos: 1, is_unlocked: true, desc: '第一层效果说明' },
+          { id: 2, name: '影画·二', pos: 2, is_unlocked: false, desc: '第二层效果说明' },
+        ],
+        properties: [
+          { property_name: '攻击力', base: '100', add: '20', final: '120' },
+          { property_name: '生命值', base: '8000', add: '200', final: '8200' },
+          { property_name: '暴击率', base: '0.05', add: '0.1', final: '0.15' },
+        ],
+        weapon: {
+          name: '测试音擎',
+          level: 60,
+          star: 2,
+          icon: 'https://example.com/w.png',
+          talent_title: '失乐园',
+          talent_content: '提升全队攻击力 10%',
+          main_properties: [{ property_name: '基础攻击力', base: '714' }],
+          properties: [{ property_name: '攻击力%', base: '0.24' }],
+        },
+        // 只放一个真实盘，extractCharacter 会把缺槽补到 6
+        equip: [
+          {
+            equip_suit: { name: '测试盘', icon: '' },
+            name: '测试盘',
+            level: 15,
+            rarity: 'S',
+            main_properties: [{ property_name: '攻击力%', base: '0.09' }],
+            properties: [{ property_name: '暴击率', base: '0.024' }],
+          },
+        ],
+        skills: [
+          { skill_type: 0, level: 6, items: [{ title: '普通攻击', text: '普通攻击描述', awaken: false }] },
+          { skill_type: 1, level: 6, items: [{ title: '特殊技', text: '特殊技描述', awaken: true }] },
+        ],
+        skill_awaken: {
+          has_awaken_system: true,
+          awaken_level: 2,
+          awaken_max_level: 6,
+          skill_awaken_items: [],
+        },
+        equip_plan_info: null,
+      },
+    ],
+  },
+};
 
 test('extractCharacter 提取当前影画等级与列表', () => {
-  const c = extractCharacter(debug);
+  const c = extractCharacter(AVATAR_INFO);
   assert.ok(c);
   assert.equal(typeof c.mindscape.rank, 'number');
   assert.ok(Array.isArray(c.mindscape.ranks) && c.mindscape.ranks.length >= 1);
@@ -18,7 +92,7 @@ test('extractCharacter 提取当前影画等级与列表', () => {
 });
 
 test('extractCharacter 提取技能等级与标题', () => {
-  const c = extractCharacter(debug);
+  const c = extractCharacter(AVATAR_INFO);
   assert.ok(Array.isArray(c.skills) && c.skills.length > 0, '应有技能列表');
   const types = c.skills.map((s) => s.type);
   assert.ok(types.includes(0), '应含普攻(skill_type=0)');
@@ -32,7 +106,7 @@ test('extractCharacter 提取技能等级与标题', () => {
 });
 
 test('extractCharacter 提取皮肤 / 元素代码 / 音擎特效标题', () => {
-  const c = extractCharacter(debug);
+  const c = extractCharacter(AVATAR_INFO);
   assert.ok(Array.isArray(c.skins));
   assert.equal(typeof c.elementType, 'number');
   assert.equal(typeof c.profession, 'number');
@@ -45,6 +119,6 @@ test('extractCharacter 提取皮肤 / 元素代码 / 音擎特效标题', () => 
 });
 
 test('全量提取结果能通过 schema 校验', () => {
-  const c = extractCharacter(debug);
+  const c = extractCharacter(AVATAR_INFO);
   assert.deepEqual(validateCharacter(c), []);
 });

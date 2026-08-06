@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { stripHtml } from '../lib/util.js';
+import { stripHtml, normalizeStatKeys } from '../lib/util.js';
 import { validateLibrary, warnIfInvalid } from '../lib/schema.js';
 
 // 项目根目录（本文件位于 src/sync/ 下，向上两级）
@@ -41,8 +41,9 @@ async function fetchJSON(url, retries = 3) {
   }
 }
 
-/** 并发池：最多同时 limit 个，结果按下标对齐；onProgress 在每个任务结束后回调 (done, total) */
-async function pool(items, limit, fn, onProgress) {
+/** 并发池：最多同时 limit 个，结果按下标对齐；onProgress 在每个任务结束后回调 (done, total)。
+ *  导出供 characters.js 复用（角色详情抓取同样有网络往返，可并发提速）。 */
+export async function pool(items, limit, fn, onProgress) {
   const ret = new Array(items.length);
   let i = 0,
     done = 0;
@@ -76,7 +77,8 @@ function parseComponentData(comp) {
   return data || null;
 }
 
-/** 从 HTML 文本里抽出「名称：值」对，返回 {名称: 数值}。值带 % 转成小数 */
+/** 从 HTML 文本里抽出「名称：值」对，返回 {规范名: 数值}。值带 % 转成小数；
+ *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力） */
 function parseStatPairs(html) {
   const text = stripHtml(html);
   const out = {};
@@ -86,7 +88,7 @@ function parseStatPairs(html) {
     const v = m[2].includes('%') ? parseFloat(m[2]) / 100 : parseFloat(m[2]);
     out[m[1]] = v;
   }
-  return out;
+  return normalizeStatKeys(out);
 }
 
 /** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值} */
@@ -109,6 +111,7 @@ async function fetchContentList() {
   const groups = [
     { label: '角色', key: 'characters', idx: 0 },
     { label: '音擎', key: 'wengines', idx: 1 },
+    { label: '邦布', key: 'bangboos', idx: 2 },
     { label: '驱动盘', key: 'discs', idx: 3 },
   ];
   const result = {};
@@ -150,6 +153,15 @@ function parseFe(page) {
   }
 }
 
+/** 解析 fe_ext 某字段的 filter.text（形如 ["稀有度/S","属性/冰"] 的 JSON 数组）；失败返回空数组 */
+function parseTagList(fe, field) {
+  try {
+    return JSON.parse(fe?.[field]?.filter?.text || '[]');
+  } catch {
+    return [];
+  }
+}
+
 /** 角色：初始/满级基础属性（modules 里成长表的 growth 项） */
 function fetchCharacterBaseStats(page) {
   const out = {};
@@ -164,7 +176,8 @@ function fetchCharacterBaseStats(page) {
           for (const g of ch.growth) {
             const txt = stripHtml(g.children?.[0]?.row?.[0]?.[0] || '');
             if (g.name === '初始') out.initial = parseStatPairs(txt);
-            if (g.name === '满级') out.maxLevel = parseStatPairs(txt);
+            // 满级行名称不统一：多数角色为「满级」，个别（如柏妮思·怀特）为「满级数据」
+            if (String(g.name).includes('满级')) out.maxLevel = parseStatPairs(txt);
           }
         }
       }
@@ -178,23 +191,24 @@ const TAG_KEY_MAP = { 稀有度: 'rarity', 属性: 'element', 特性: 'trait', �
 
 /** 角色：fe_ext.c_43 的 稀有度/属性/特性/阵营 */
 function fetchCharacterTags(page) {
-  const fe = parseFe(page);
-  const text = fe.c_43?.filter?.text;
-  if (!text) return {};
   const out = {};
-  try {
-    for (const item of JSON.parse(text)) {
-      const [k, v] = item.split('/');
-      out[TAG_KEY_MAP[k] || k] = v;
-    }
-  } catch {
-    /* 标签文本解析失败时忽略 */
+  for (const item of parseTagList(parseFe(page), 'c_43')) {
+    const [k, v] = item.split('/');
+    out[TAG_KEY_MAP[k] || k] = v;
   }
   return out;
 }
 
 /** 音擎：特效效果说明（含各精炼档位数值）。
  *  结构不统一：有的「音擎效果」表单独一行是特效，有的特效与「满级面板」挤在同一格。 */
+/** 在 HTML 里定位特效段落的起点（含特效关键词的 <p>/<div> 标签位置） */
+function findEffectStart(html) {
+  const m = /(对于|装备者|自身|队伍|触发|发动|获得|进入|造成的)/.exec(html);
+  if (!m) return null;
+  const before = html.lastIndexOf('<p', m.index);
+  return before >= 0 ? before : m.index;
+}
+
 function fetchWengineEffect(page) {
   for (const m of page.modules || []) {
     for (const c of m.components || []) {
@@ -204,18 +218,24 @@ function fetchWengineEffect(page) {
       for (const t of tables) {
         for (const row of t.row || []) {
           for (const cell of row) {
-            const txt = stripHtml(cell);
+            const html = String(cell || '');
+            const txt = stripHtml(html);
             if (!txt || txt.length < 20) continue;
-            // 情形①：同一格同时有「满级面板」和特效 → 取面板数值之后的部分
-            const panelMatch = txt.match(/满级面板：[^满]*?(?=(对于|装备者|自身|队伍|触发|发动|获得|进入|造成的|其))/);
-            if (panelMatch) return txt.slice(panelMatch.index + panelMatch[0].length);
-            // 情形②：纯特效格（含斜杠档位数值 + 效果关键词）
+            // 情形①：同一格同时有「满级面板」和特效 → 返回特效段落的原始 HTML（保留富文本）
+            if (txt.includes('满级面板')) {
+              const hr = html.indexOf('<hr');
+              if (hr >= 0) return html.slice(hr + 4);
+              const fxStart = findEffectStart(html);
+              if (fxStart != null) return html.slice(fxStart);
+              continue;
+            }
+            // 情形②：纯特效格（含斜杠档位数值 + 效果关键词）→ 返回原始 HTML
             if (
               /\//.test(txt) &&
               /(提升|触发|造成|伤害|精通|暴击|防御|冲击|异常)/.test(txt) &&
               !/(初始面板|满级面板|获取途径)/.test(txt)
             )
-              return txt;
+              return html;
           }
         }
       }
@@ -303,22 +323,159 @@ function fetchDiscSet(page) {
       }
     }
     if (item.key === '4') {
-      out.set4Text = stripHtml(item.value);
+      out.set4Text = item.value;
     }
   }
+  // 二/四件套说明优先取模块套装表格（含富文本 HTML，如 <span style="color">、<color=>），由前端 renderRichText 渲染
+  const setTable = findModule(
+    page,
+    (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).join(',') === '二件套,四件套')
+  );
+  if (setTable) {
+    const row = setTable.tables.find((t) => t.header?.join(',') === '二件套,四件套')?.row?.[0];
+    if (row?.[0]) out.set2Text = row[0];
+    if (row?.[1]) out.set4Text = row[1];
+  }
+  return out;
+}
+
+// ---------------- 全量扩展解析 ----------------
+
+/** 提取推荐角色/代理人：tables 中 header 含"推荐"的表，row 里取 data-entry-name 或首格文本 */
+function fetchRecommend(page) {
+  const rec = findModule(
+    page,
+    (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).some((h) => h.includes('推荐')))
+  );
+  if (!rec) return [];
+  return rec.tables
+    .flatMap((t) => t.row || [])
+    .map((row) => ({
+      name: String(row?.[0] || '').match(/data-entry-name="([^"]+)"/)?.[1] || stripHtml(row?.[0] || ''),
+      reason: stripHtml(row?.[1] || ''),
+    }))
+    .filter((r) => r.name && r.name !== '暂无');
+}
+
+/** 提取突破材料：attr 表所在模块的 materials */
+function fetchMaterials(page) {
+  const found = findModule(
+    page,
+    (d) => Array.isArray(d.list) && d.list.some((it) => Array.isArray(it.materials) && it.materials.length)
+  );
+  if (!found) return [];
+  return found.list
+    .flatMap((it) => (it.materials || []).map((m) => ({ name: m.nickname || '', amount: m.amount ?? null })))
+    .filter((m) => m.name);
+}
+
+/** 技能：按 tab_name 分类的条目（children 含 title + 富文本 desc）；requireChildren 时要求 children 非空 */
+function fetchSkills(page, { requireChildren = false } = {}) {
+  const skillData = findModule(
+    page,
+    (d) =>
+      Array.isArray(d.list) &&
+      d.list.some((it) => Array.isArray(it.children) && it.tab_name && (!requireChildren || it.children.length))
+  );
+  if (!skillData) return [];
+  return skillData.list
+    .filter((it) => it.tab_name && (!requireChildren || (Array.isArray(it.children) && it.children.length)))
+    .map((it) => ({
+      type: stripHtml(it.tab_name),
+      items: (it.children || []).map((ch) => ({ name: stripHtml(ch.title), desc: ch.desc || '' })),
+    }));
+}
+
+/** 外观图：tab 列表里带 image 且无 children 的条目（角色/音擎共用） */
+function fetchAppearance(page) {
+  const appearanceData = findModule(
+    page,
+    (d) => Array.isArray(d.list) && d.list.some((it) => it.image && it.tab_name && !it.children)
+  );
+  return appearanceData ? appearanceData.list.map((it) => ({ name: it.tab_name, image: it.image })) : null;
+}
+
+/** 角色扩展：介绍/技能/影画/外观图/CV */
+function fetchCharacterExtended(page) {
+  const out = {};
+  const intro = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.trim().length > 0);
+  if (intro) out.description = intro.rich_text;
+  const cvData = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.includes('中配'));
+  if (cvData) out.cv = stripHtml(cvData.rich_text).replace(/\s+/g, ' ');
+  const skills = fetchSkills(page);
+  if (skills.length) out.skills = skills;
+  const cinemaData = findModule(
+    page,
+    (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).some((h) => h.includes('影画')))
+  );
+  if (cinemaData) {
+    const t = cinemaData.tables.find((tt) => (tt.header || []).some((h) => h.includes('影画')));
+    out.cinemas = (t?.row || []).map((row) => ({ name: stripHtml(row?.[0] || ''), desc: row?.[1] || '' }));
+  }
+  const appearance = fetchAppearance(page);
+  if (appearance) out.appearance = appearance;
+  return out;
+}
+
+/** 音擎扩展：外观图/突破材料/推荐代理人/背景故事 */
+function fetchWengineExtended(page) {
+  const out = {};
+  const appearance = fetchAppearance(page);
+  if (appearance) out.appearance = appearance;
+  out.materials = fetchMaterials(page);
+  out.recommend = fetchRecommend(page);
+  const lore = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.trim().length > 50);
+  if (lore) out.lore = lore.rich_text;
+  return out;
+}
+
+/** 驱动盘扩展：套装故事/推荐角色/副词条推荐/部位主词条 */
+function fetchDiscExtended(page) {
+  const out = {};
+  const loreData = findModule(page, (d) => Array.isArray(d.tables) && (d.tables?.[0]?.row || []).length >= 3);
+  if (loreData) {
+    out.setLore = loreData.tables
+      .flatMap((t) => t.row || [])
+      .map((row) => stripHtml(row?.[0] || ''))
+      .filter((s) => s);
+  }
+  out.recommend = fetchRecommend(page);
+  const advice = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.includes('副词条'));
+  if (advice) out.substatAdvice = stripHtml(advice.rich_text).replace(/\s+/g, ' ');
+  const slots = findModule(page, (d) => Array.isArray(d.disks_name));
+  if (slots) {
+    out.slotMainStats = (slots.disks_name || []).map((n, i) => ({
+      name: n,
+      advice: stripHtml(slots.disks_desc?.[i] || ''),
+      icon: slots.disks_icon?.[i] || '',
+    }));
+  }
+  return out;
+}
+
+/** 邦布：技能（分类型）/属性成长/突破材料/推荐配队（英雄卡字段由调用方从顶层+fe_ext 取） */
+function fetchBangboo(page) {
+  const out = {};
+  // 技能内容在 children 里（title + 富文本 desc），按 tab_name 分类（主动技/被动技/连携技）
+  const skills = fetchSkills(page, { requireChildren: true });
+  if (skills.length) out.skills = skills;
+  out.baseStats = fetchCharacterBaseStats(page);
+  out.materials = fetchMaterials(page);
+  out.recommend = fetchRecommend(page);
   return out;
 }
 
 // ---------------- 主流程 ----------------
 
 /** 抓取并组装属性库，写入 data/library.json 与 data/raw-library.json。
- *  onProgress 可选回调，上报 { step, done, total } 供同步进度展示。 */
-export async function fetchLibrary(onProgress) {
+ *  onProgress 可选回调，上报 { step, done, total } 供同步进度展示。
+ *  opts.strict 为 true 时校验异常直接抛错（命令行 STRICT=1 开启）。 */
+export async function fetchLibrary(onProgress, { strict = false } = {}) {
   console.log('① 获取内容列表…');
   const list = await fetchContentList();
 
   // 原始响应快照：{ characters: {名字: page}, wengines: {...}, discs: {...} }
-  const raw = { characters: {}, wengines: {}, discs: {} };
+  const raw = { characters: {}, wengines: {}, discs: {}, bangboos: {} };
 
   console.log('② 抓取角色详情…');
   const characters = await pool(
@@ -338,6 +495,7 @@ export async function fetchLibrary(onProgress) {
         })(),
         tags: fetchCharacterTags(page),
         baseStats: fetchCharacterBaseStats(page),
+        ...fetchCharacterExtended(page),
       };
     },
     (done, total) => onProgress?.({ step: 'characters', done, total })
@@ -355,14 +513,13 @@ export async function fetchLibrary(onProgress) {
         key: x.key,
         id: x.id,
         icon: page.icon_url,
-        tags: parseFe(page).c_45?.filter?.text
-          ? JSON.parse(parseFe(page).c_45.filter.text).reduce((o, s) => {
-              const [k, v] = s.split('/');
-              o[TAG_KEY_MAP[k] || k] = v;
-              return o;
-            }, {})
-          : {},
+        tags: parseTagList(parseFe(page), 'c_45').reduce((o, s) => {
+          const [k, v] = s.split('/');
+          o[TAG_KEY_MAP[k] || k] = v;
+          return o;
+        }, {}),
         stats: fetchWengineStats(page),
+        ...fetchWengineExtended(page),
       };
     },
     (done, total) => onProgress?.({ step: 'wengines', done, total })
@@ -381,56 +538,86 @@ export async function fetchLibrary(onProgress) {
         id: x.id,
         icon: page.icon_url,
         setEffects: fetchDiscSet(page),
+        ...fetchDiscExtended(page),
       };
     },
     (done, total) => onProgress?.({ step: 'discs', done, total })
+  );
+
+  console.log('⑤ 抓取邦布详情…');
+  const bangboos = await pool(
+    list.bangboos.map((x) => x),
+    6,
+    async (x) => {
+      const page = await fetchDetail(x.id);
+      raw.bangboos[x.key] = page;
+      // 稀有度取自 fe_ext.c_44（仅稀有度）
+      const rarity =
+        parseTagList(parseFe(page), 'c_44').find((t) => t.startsWith('稀有度'))?.split('/')[1] || '';
+      return {
+        name: stripHtml(page.name || x.key),
+        key: x.key,
+        id: x.id,
+        icon: page.icon_url,
+        rarity,
+        ...fetchBangboo(page),
+      };
+    },
+    (done, total) => onProgress?.({ step: 'bangboos', done, total })
   );
 
   // ---------------- 组装 ----------------
 
   const charLib = {};
   for (const r of characters.filter(Boolean)) {
-    charLib[r.key] = {
-      name: r.name,
-      id: r.id,
-      icon: r.icon,
-      portrait: r.portrait,
-      ...r.tags,
-      ...(r.baseStats.initial || {}),
-      maxLevel: r.baseStats.maxLevel || {},
+    const { key, tags, baseStats, ...rest } = r;
+    charLib[key] = {
+      ...rest,
+      ...tags,
+      ...(baseStats?.initial || {}),
+      maxLevel: baseStats?.maxLevel || {},
     };
   }
 
   const wengineLib = {};
   for (const w of wengines.filter(Boolean)) {
-    wengineLib[w.key] = {
-      name: w.name,
-      id: w.id,
-      icon: w.icon,
-      ...w.tags,
-      ...(w.stats || {}),
+    const { key, tags, stats, ...rest } = w;
+    wengineLib[key] = {
+      ...rest,
+      ...tags,
+      ...(stats || {}),
     };
   }
 
   const discLib = {};
   for (const s of discs.filter(Boolean)) {
-    discLib[s.key] = {
-      name: s.name,
-      id: s.id,
-      icon: s.icon,
-      ...s.setEffects,
+    const { key, setEffects, ...rest } = s;
+    discLib[key] = {
+      ...rest,
+      ...setEffects,
     };
   }
 
-  const library = { characters: charLib, wengines: wengineLib, discs: discLib };
+  const bangbooLib = {};
+  for (const b of bangboos.filter(Boolean)) {
+    const { key, baseStats, ...rest } = b;
+    bangbooLib[key] = {
+      ...rest,
+      ...(baseStats?.initial || {}),
+      maxLevel: baseStats?.maxLevel || {},
+    };
+  }
+
+  const library = { characters: charLib, wengines: wengineLib, discs: discLib, bangboos: bangbooLib };
   const stats = {
     characters: Object.keys(charLib).length,
     wengines: Object.keys(wengineLib).length,
     discs: Object.keys(discLib).length,
+    bangboos: Object.keys(bangbooLib).length,
   };
 
   // 校验 + 写入 data/
-  warnIfInvalid('属性库', validateLibrary(library));
+  warnIfInvalid('属性库', validateLibrary(library), { strict });
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(path.join(DATA_DIR, 'library.json'), JSON.stringify(library, null, 2), 'utf-8');
   // 原始响应快照（含全部未解析字段：介绍/技能/影画/CV/推荐角色等），日后备用
@@ -440,10 +627,12 @@ export async function fetchLibrary(onProgress) {
 }
 
 async function main() {
-  const { stats } = await fetchLibrary();
+  const { stats } = await fetchLibrary(null, { strict: !!process.env.STRICT });
   console.log('\n完成！');
-  console.log(`  角色 ${stats.characters} 个，音擎 ${stats.wengines} 个，驱动盘 ${stats.discs} 个`);
-  console.log('  data/library.json 已生成');
+  console.log(
+    `  角色 ${stats.characters} 个，音擎 ${stats.wengines} 个，驱动盘 ${stats.discs} 个，邦布 ${stats.bangboos} 个`
+  );
+  console.log('  data/library.json 已生成（含介绍/技能/影画/推荐等扩展字段）');
   console.log('  data/raw-library.json 已生成（原始响应快照）');
 }
 

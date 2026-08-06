@@ -38,18 +38,6 @@ header {
   flex-wrap: wrap;
   row-gap: 8px;
 }
-header select {
-  background: #0a0a0a;
-  border: 1px solid var(--line);
-  color: var(--txt);
-  padding: 6px 8px;
-  font-size: 13px;
-  border-radius: 3px;
-  max-width: 110px;
-}
-header select:hover {
-  border-color: var(--acc);
-}
 header h1 {
   font-size: 21px;
   font-weight: 900;
@@ -62,6 +50,35 @@ header .sub {
 }
 .spacer {
   flex: 1;
+}
+/* 视图切换：卡片 / 统计 / 数据库（一组分段控件，独立于操作按钮） */
+.view-switch {
+  display: flex;
+  background: #0a0a0a;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-right: 8px;
+}
+.view-tab {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--dim);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 16px;
+}
+.view-tab + .view-tab {
+  border-left: 1px solid var(--line);
+}
+.view-tab:hover {
+  background: var(--card2);
+  color: var(--txt);
+}
+.view-tab.on {
+  background: var(--acc);
+  color: #111;
 }
 button {
   cursor: pointer;
@@ -104,6 +121,12 @@ main {
   padding: 14px 18px;
   max-height: calc(100vh - var(--head-h, 56px));
   overflow: auto;
+  /* 隐藏滚动条（仍可滚动）：Firefox / IE / WebKit */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+main::-webkit-scrollbar {
+  display: none;
 }
 @media (max-width: 1100px) {
   main {
@@ -767,4 +790,155 @@ table.tbl {
 }
 .tbl tr:hover td {
   background: #1d1d1d;
+}
+
+/* ---------- Wiki 数据库视图 ---------- */
+.wiki {
+  grid-column: 1/-1;
+  /* 允许网格项收缩，宽表格的横向溢出收进 .wiki-wrap 滚动，而不是把 main 撑出横向滚动条 */
+  min-width: 0;
+}
+.wiki-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.wiki-tab {
+  padding: 5px 18px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.wiki-tab.on {
+  background: var(--acc);
+  color: #111;
+}
+.wiki-wrap {
+  overflow: auto;
+  max-height: calc(100vh - var(--head-h, 56px) - 90px);
+  /* 隐藏滚动条（仍可滚动）：Firefox / IE / WebKit */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.wiki-wrap::-webkit-scrollbar {
+  display: none;
+}
+.wiki-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 1300px;
+}
+.wiki-table th,
+.wiki-table td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.wiki-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 800;
+  font-size: 12px;
+}
+/* 表头点击排序：指针 + 当前排序列高亮 */
+.wiki-table th[data-sort],
+table.tbl th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+.wiki-table th.sorted,
+table.tbl th.sorted {
+  color: var(--txt);
+}
+.wiki-table td.wiki-name {
+  font-weight: 800;
+  color: var(--txt);
+}
+.wiki-table td.wiki-long {
+  white-space: normal;
+  min-width: 180px;
+  max-width: 300px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--txt);
+  line-height: 1.5;
+}
+.wiki-table td.wiki-sub {
+  min-width: 100px;
+  max-width: 140px;
+  text-align: left;
+  font-size: 12px;
+  color: var(--txt);
+}
+.wiki-table td.wiki-tight {
+  padding: 4px 6px;
+  white-space: nowrap;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wiki-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 4px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--card2);
+}
+.wiki-list {
+  margin: 1px 0;
+}
+/* wiki 表格内 技能/影画 横排图标（各 6 个一行），悬浮看详情
+   注意：td 不能用 display:flex，否则破坏表格列布局（单元格被挤到下一行）；
+   改用 table-cell + 内联 flex 子元素横排 */
+.wiki-table td.wiki-icons {
+  white-space: nowrap;
+}
+.wiki-icons {
+  padding: 2px 0;
+}
+.wiki-icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0 3px;
+  cursor: help;
+  vertical-align: middle;
+}
+.wiki-icon .s-ico {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  object-fit: cover;
+}
+.wiki-icon .s-ico:hover {
+  border-color: var(--acc);
+}
+.wiki-icon .s-lbl {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--dim);
+}
+.wiki-ms-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 3px;
+  cursor: help;
+  vertical-align: middle;
+}
+.wiki-ms-dot:hover {
+  border-color: var(--acc);
 }

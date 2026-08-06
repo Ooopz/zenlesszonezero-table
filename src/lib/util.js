@@ -37,6 +37,18 @@ export function escapeHtml(s) {
     .replace(/</g, '&lt;');
 }
 
+/** 把用户数据安全嵌入 HTML 属性内的 JS 字符串（onclick="fn('...')"）。
+ *  先 JS 转义 \ 与 '（防止提前终止字符串），再 HTML 转义 & " <（防止闭合属性或实体注入）；
+ *  HTML 解码发生在 JS 执行前，故两层缺一不可。 */
+export function escapeJsAttr(s) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
 /** 数值格式化展示（百分比 / 大数 / 特殊属性） */
 export function formatValue(name, value) {
   if (value == null || !Number.isFinite(value)) return '—';
@@ -63,6 +75,46 @@ export function lookup(lib, index, name) {
 export function statEntries(data) {
   if (Array.isArray(data)) return data.filter((t) => t && t.name != null && t.value != null);
   return Object.entries(data || {}).map(([name, value]) => ({ name, value }));
+}
+
+/** 表头排序通用比较：数字按数值、其余按中文 locale；null 排最后 */
+export function compareValues(a, b) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), 'zh');
+}
+
+// ---------- 属性名归一化 ----------
+/** 属性名别名 → 规范名（wiki 来源页面对不同角色用词不一：生命/生命力→生命值、攻击→攻击力、防御→防御力；
+ *  部分页面用短名：暴击→暴击率、暴伤→暴击伤害；
+ *  命破角色把标准面板后两项换成专属名：穿透率→贯穿力（或贯穿率）、能量自动回复→闪能自动积累/累积/累计） */
+const STAT_ALIASES = {
+  生命: '生命值',
+  生命力: '生命值',
+  攻击: '攻击力',
+  防御: '防御力',
+  暴击: '暴击率',
+  暴伤: '暴击伤害',
+  贯穿力: '穿透率',
+  贯穿率: '穿透率',
+  闪能自动积累: '能量自动回复',
+  闪能自动累积: '能量自动回复',
+  闪能自动累计: '能量自动回复',
+};
+/** 单个属性名归一化为规范名（未知名原样返回） */
+export function normalizeStatKey(k) {
+  return STAT_ALIASES[k] || k;
+}
+/** 把对象的键按属性别名归一化为规范名（未知键原样保留，别名与规范名并存时规范名优先） */
+export function normalizeStatKeys(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const name = normalizeStatKey(k);
+    if (k === name || !(name in out)) out[name] = v; // 规范键直接采用；别名仅在规范键缺席时采用
+  }
+  return out;
 }
 
 /** 游戏富文本 → 可渲染 HTML：把游戏标记 <color=#HEX> 转成 <span style="color">，

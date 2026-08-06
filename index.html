@@ -9,17 +9,14 @@
   <body>
     <header>
       <h1>绝区零 · 配装面板</h1>
-      <span class="sub" id="counts"></span>
       <div class="spacer"></div>
-      <select id="filterElement" title="按属性筛选">
-        <option value="">属性</option>
-      </select>
-      <select id="filterTrait" title="按特性筛选">
-        <option value="">特性</option>
-      </select>
-      <button id="syncBtn">同步属性库</button>
-      <button id="rolesyncBtn">同步我的角色</button>
-      <button id="viewBtn">统计表格</button>
+      <nav class="view-switch" role="group" aria-label="视图切换">
+        <button class="view-tab on" data-view="card">卡片</button>
+        <button class="view-tab" data-view="table">统计</button>
+        <button class="view-tab" data-view="wiki">数据库</button>
+      </nav>
+      <button id="syncBtn">更新数据库</button>
+      <button id="rolesyncBtn">更新我的角色</button>
       <button id="helpBtn">使用说明</button>
     </header>
 
@@ -33,8 +30,8 @@
         <h2>使用说明</h2>
         <p>
           <b>推荐用法：</b>运行 <code>npm start</code> 启动本地服务器（自动打开页面），然后就能在网页上<b>一键更新</b>：
-          点「同步属性库」更新基础数据，「同步我的角色」拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
-          <code>.cookie.json</code>）。
+          点「更新数据库」更新基础数据，「更新我的角色」拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
+          <code>data/.cookie.json</code>）。
         </p>
         <p>
           <b>数据来源：</b>所有数据存于 <code>data/</code> 目录（<code>library.json</code> /
@@ -68,7 +65,7 @@
     <div class="modal" id="rolesyncModal">
       <div class="modal-box">
         <button class="close" id="rolesyncClose">✕</button>
-        <h2>同步我的角色</h2>
+        <h2>更新我的角色</h2>
         <p id="cookieInfo" style="color: var(--dim)"></p>
         <p>在 <code>user.mihoyo.com</code>（登录后 F12 → Console）执行下面这段脚本复制 cookie：</p>
         <textarea id="cookieSnippet" rows="3" readonly></textarea>
@@ -78,7 +75,7 @@
         </div>
         <textarea id="cookieInput" rows="3" placeholder="在此粘贴 cookie"></textarea>
         <p style="font-size: 13px; color: var(--dim)">
-          cookie 只保存到本地服务器的 <code>.cookie.json</code>，不会发送给任何外部服务器；同步完成后页面自动刷新。
+          cookie 只保存到本地服务器的 <code>data/.cookie.json</code>，不会发送给任何外部服务器；同步完成后页面自动刷新。
         </p>
       </div>
     </div>

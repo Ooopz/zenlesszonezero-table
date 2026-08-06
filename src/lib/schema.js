@@ -104,6 +104,18 @@ export function validateCharacters(arr) {
   return errors;
 }
 
+/** 校验 {键: 实体} 集合：非对象 / 缺 name 通用检查 + 每类实体的附加检查 */
+function checkEntries(errors, lib, cat, label, extra) {
+  for (const [k, obj] of Object.entries(lib[cat] || {})) {
+    if (!obj || typeof obj !== 'object') {
+      errors.push(`${label} ${k} 非对象`);
+      continue;
+    }
+    if (typeof obj.name !== 'string' || !obj.name) errors.push(`${label} ${k} 缺 name`);
+    extra?.(k, obj, errors);
+  }
+}
+
 /** 校验属性库（library.json） */
 export function validateLibrary(lib) {
   const errors = [];
@@ -111,46 +123,38 @@ export function validateLibrary(lib) {
   for (const cat of ['characters', 'wengines', 'discs']) {
     if (!lib[cat] || typeof lib[cat] !== 'object') errors.push(`缺 ${cat}`);
   }
-  for (const [k, c] of Object.entries(lib.characters || {})) {
-    if (!c || typeof c !== 'object') {
-      errors.push(`角色 ${k} 非对象`);
-      continue;
-    }
-    if (typeof c.name !== 'string' || !c.name) errors.push(`角色 ${k} 缺 name`);
+  // 邦布可选（旧数据可能没有）；存在时校验
+  if (lib.bangboos !== undefined && (typeof lib.bangboos !== 'object' || Array.isArray(lib.bangboos)))
+    errors.push('bangboos 应为对象');
+  checkEntries(errors, lib, 'characters', '角色', (k, c, err) => {
     if (c.maxLevel !== undefined && (typeof c.maxLevel !== 'object' || Array.isArray(c.maxLevel)))
-      errors.push(`角色 ${k} maxLevel 应为对象`);
-  }
-  for (const [k, w] of Object.entries(lib.wengines || {})) {
-    if (!w || typeof w !== 'object') {
-      errors.push(`音擎 ${k} 非对象`);
-      continue;
-    }
-    if (typeof w.name !== 'string' || !w.name) errors.push(`音擎 ${k} 缺 name`);
-    if (w.baseAtk !== undefined && typeof w.baseAtk !== 'number') errors.push(`音擎 ${k} baseAtk 应为数字`);
+      err.push(`角色 ${k} maxLevel 应为对象`);
+  });
+  checkEntries(errors, lib, 'wengines', '音擎', (k, w, err) => {
+    if (w.baseAtk !== undefined && typeof w.baseAtk !== 'number') err.push(`音擎 ${k} baseAtk 应为数字`);
     if (
       w.subStats !== undefined &&
       w.subStats !== null &&
       (typeof w.subStats !== 'object' || Array.isArray(w.subStats))
     )
-      errors.push(`音擎 ${k} subStats 应为对象`);
-  }
-  for (const [k, d] of Object.entries(lib.discs || {})) {
-    if (!d || typeof d !== 'object') {
-      errors.push(`驱动盘 ${k} 非对象`);
-      continue;
-    }
-    if (typeof d.name !== 'string' || !d.name) errors.push(`驱动盘 ${k} 缺 name`);
-  }
+      err.push(`音擎 ${k} subStats 应为对象`);
+  });
+  checkEntries(errors, lib, 'discs', '驱动盘');
+  checkEntries(errors, lib, 'bangboos', '邦布', (k, b, err) => {
+    if (b.skills !== undefined && !Array.isArray(b.skills)) err.push(`邦布 ${k} skills 应为数组`);
+  });
   return errors;
 }
 
-/** 校验失败时打印 warning（不中断写入），供写入前调用 */
-export function warnIfInvalid(label, errors) {
+/** 校验失败时打印 warning（不中断写入），供写入前调用。
+ *  strict 为 true 时抛错中断——命令行同步可经 STRICT=1 开启（网页同步保持 warn，避免 wiki 解析偶发异常阻断整次同步）。 */
+export function warnIfInvalid(label, errors, { strict = false } = {}) {
   if (errors && errors.length) {
     console.warn(`[${label}] 结构校验发现 ${errors.length} 处异常:`);
     console.warn(
       '  - ' + errors.slice(0, 20).join('\n  - ') + (errors.length > 20 ? `\n  … 共 ${errors.length} 条` : '')
     );
+    if (strict) throw new Error(`[${label}] 结构校验失败（STRICT 模式），共 ${errors.length} 处异常`);
   }
   return errors;
 }

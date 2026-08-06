@@ -1,5 +1,5 @@
 // server.js —— 本地服务器
-// 作用：① 提供服务页面 index.html 与前端模块；② 提供「同步属性库」「同步我的角色」两个接口，
+// 作用：① 提供服务页面 index.html 与前端模块；② 提供「更新数据库」「更新我的角色」两个接口，
 //       供网页一键更新（账号接口 CORS 受限，浏览器直连不了，必须经本地服务器代理）；
 //       ③ 提供 /api/data 让前端读取 data/*.json 数据；
 //       ④ cookie 缓存到本地文件，更新时无需反复粘贴。
@@ -95,10 +95,10 @@ async function syncLibraryHandler(req, res) {
     const { stats } = await fetchLibrary((p) => {
       syncState = { kind: 'library', ...p };
     });
-    console.log(`[同步属性库] 完成：角色 ${stats.characters} / 音擎 ${stats.wengines} / 驱动盘 ${stats.discs}`);
+    console.log(`[更新数据库] 完成：角色 ${stats.characters} / 音擎 ${stats.wengines} / 驱动盘 ${stats.discs} / 邦布 ${stats.bangboos}`);
     respond(res, 200, { ok: true, type: 'library', stats });
   } catch (e) {
-    console.error('[同步属性库] 失败:', e.message);
+    console.error('[更新数据库] 失败:', e.message);
     respond(res, 500, { ok: false, error: e.message });
   } finally {
     busy = null;
@@ -130,10 +130,10 @@ async function syncCharactersHandler(req, res) {
       syncState = { kind: 'characters', step: 'characters', done, total };
     });
     if (body.cookie && body.cookie.trim()) cacheCookies(cookies);
-    console.log(`[同步我的角色] 完成：${stats.characters} 个角色`);
+    console.log(`[更新我的角色] 完成：${stats.characters} 个角色`);
     respond(res, 200, { ok: true, type: 'characters', stats });
   } catch (e) {
-    console.error('[同步我的角色] 失败:', e.message);
+    console.error('[更新我的角色] 失败:', e.message);
     respond(res, 500, { ok: false, error: e.message });
   } finally {
     busy = null;
@@ -189,7 +189,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`\n  绝区零配装面板 本地服务器已启动`);
   console.log(`  浏览器打开: http://localhost:${PORT}`);
-  console.log(`  网页上「同步属性库」「同步我的角色」即为一键更新；cookie 会缓存在 .cookie.json`);
+  console.log(`  网页上「更新数据库」「更新我的角色」即为一键更新；cookie 会缓存在 data/.cookie.json`);
   console.log(`  按 Ctrl+C 停止\n`);
   openBrowser(`http://localhost:${PORT}`);
 });

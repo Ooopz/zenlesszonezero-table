@@ -1,5 +1,6 @@
 // src/web/data.js —— 数据层：由 main.js 注入数据（不再从 DOM 内嵌块读取），维护索引/配置/过滤
 import { buildIndex, lookup, statEntries } from '../lib/util.js';
+import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { apiRequest } from './util.js';
 
 // ---------- 数据（由 setData 注入） ----------
@@ -9,10 +10,16 @@ export let library = { characters: {}, wengines: {}, discs: {} };
 export let myCharacters = [];
 export const grid = document.getElementById('grid');
 
-/** 注入属性库与我的角色数据，并重建索引（main.js 在 fetch /api/data 后调用） */
+/** 注入属性库与我的角色数据（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
 export function setData(lib, chars) {
-  library = lib || { characters: {}, wengines: {}, discs: {} };
-  myCharacters = chars || [];
+  lib = lib || { characters: {}, wengines: {}, discs: {}, bangboos: {} };
+  library = {
+    characters: toInstances(lib.characters, Character), // wiki 角色
+    wengines: toInstances(lib.wengines, Wengine), // wiki 音擎
+    discs: toInstances(lib.discs, Disc), // wiki 驱动盘
+    bangboos: lib.bangboos || {}, // 邦布为普通对象（基类无附加逻辑）
+  };
+  myCharacters = (chars || []).map((c) => new Character(c)); // 账号角色（含 Wengine/Disc 嵌套）
   rebuildIndex();
 }
 
@@ -134,33 +141,3 @@ export const dataCtx = {
   readValidStats,
 };
 
-// ---------- 角色过滤（属性 / 职业） ----------
-export const filterState = { element: '', trait: '' };
-/** 应用筛选，返回当前可见的角色列表 */
-export function getFilteredCharacters() {
-  return myCharacters.filter((c) => {
-    const lc = lookup(library.characters, charIndex, c.name) || {};
-    if (filterState.element && lc.element !== filterState.element) return false;
-    if (filterState.trait && lc.trait !== filterState.trait) return false;
-    return true;
-  });
-}
-/** 按我的角色数据动态填充筛选下拉的选项 */
-export function populateFilters() {
-  const elements = new Set(),
-    traits = new Set();
-  for (const c of myCharacters) {
-    const lc = lookup(library.characters, charIndex, c.name) || {};
-    if (lc.element) elements.add(lc.element);
-    if (lc.trait) traits.add(lc.trait);
-  }
-  const fill = (id, values, placeholder) => {
-    document.getElementById(id).innerHTML =
-      `<option value="">${placeholder}</option>` + values.map((v) => `<option value="${v}">${v}</option>`).join('');
-  };
-  // 已知元素按固定顺序，未收录的新元素追加在后面
-  const knownElements = Object.keys(elementColors).filter((e) => elements.has(e));
-  const newElements = [...elements].filter((e) => !(e in elementColors));
-  fill('filterElement', knownElements.concat(newElements), '全部属性');
-  fill('filterTrait', [...traits].sort(), '全部职业');
-}

@@ -1,13 +1,9 @@
 # 依赖
 node_modules/
 
-# 隐私：cookie 与个人配置（不会提交）
-.cookie.json
-data/user-config.json
-
-# 运行时生成的大文件 / 调试数据
-data/raw-library.json
-data/debug-response.json
+# data/ 下所有文件均不入库（已提交的 characters.json / library.json 保留当前版本，
+# 后续同步生成的 raw-library.json / debug-response.json / user-config.json 等不再跟踪）
+data/
 
 # 本地工具配置
 .claude/

@@ -6,7 +6,7 @@
 //        ③ 在终端粘贴 cookie 回车，自动拉取全部角色
 // 输出:  ① data/characters.json     —— 全部角色数据
 //        ② data/debug-response.json —— 第一个角色的原始响应（供排查）
-//        ③ .cookie.json             —— 缓存 cookie
+//        ③ data/.cookie.json        —— 缓存 cookie
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,11 +15,12 @@ import { fileURLToPath } from 'node:url';
 import { openBrowser } from '../lib/node.js';
 import { parseCookies, CLIPBOARD_SCRIPT } from '../lib/util.js';
 import { validateCharacters, warnIfInvalid } from '../lib/schema.js';
+import { pool } from './library.js';
 
 // 项目根目录（本文件位于 src/sync/ 下，向上两级）
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATA_DIR = path.join(ROOT, 'data');
-const COOKIE_FILE = path.join(ROOT, '.cookie.json');
+const COOKIE_FILE = path.join(DATA_DIR, '.cookie.json');
 
 // 参考 ZenlessZoneZero-Extractor/main.py 的请求头（未改动，保持原样可用）
 const baseHeaders = {
@@ -37,22 +38,28 @@ const baseHeaders = {
   'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
 };
 
+// 米游社客户端模拟头：随客户端版本变化，接口可能校验。App 升级后若接口拒绝访问，
+// 需按新客户端抓包出的实际请求头更新这几个值。
+const CLIENT = {
+  'x-rpc-app_version': '2.75.2',
+  'x-rpc-device_id': '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
+  'x-rpc-device_name': 'Redmi%2023113RKC6C',
+  'x-rpc-device_fp': '38d7fe73b1032',
+  'x-rpc-sys_version': '9',
+};
+
 const recordHeaders = {
   Host: 'api-takumi-record.mihoyo.com',
   Connection: 'keep-alive',
+  ...CLIENT,
   'x-rpc-platform': '2',
   'x-rpc-geetest_ext': '{"viewUid":"0","gameId":8,"page":"v1.1.4_#/zzz/roles/all","isHost":1}',
-  'x-rpc-app_version': '2.75.2',
   'x-rpc-language': 'zh-cn',
   'User-Agent':
     'Mozilla/5.0 (Linux; Android 9; 23113RKC6C Build/PQ3A.190605.06200901; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 miHoYoBBS/2.75.2',
-  'x-rpc-device_id': '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
   Accept: 'application/json, text/plain, */*',
-  'x-rpc-device_name': 'Redmi%2023113RKC6C',
   'x-rpc-page': 'v1.1.4_#/zzz/roles/all',
-  'x-rpc-device_fp': '38d7fe73b1032',
   'x-rpc-lang': 'zh-cn',
-  'x-rpc-sys_version': '9',
   Origin: 'https://act.mihoyo.com',
   'X-Requested-With': 'com.mihoyo.hyperion',
   'Sec-Fetch-Site': 'same-site',
@@ -261,6 +268,7 @@ export function extractCharacter(response) {
 
 /** 缓存 cookie 到本地文件（不通过命令行时也可用），gitignore 已排除 */
 export function cacheCookies(cookies) {
+  fs.mkdirSync(DATA_DIR, { recursive: true }); // data/ 目录存在性兜底
   fs.writeFileSync(COOKIE_FILE, JSON.stringify(cookies, null, 2), 'utf-8');
 }
 export function readCookieCache() {
@@ -272,39 +280,44 @@ export function readCookieCache() {
 }
 
 /** 用 cookie 抓取全部角色数据并写入 data/characters.json，供命令行与 server.js 复用。
- *  onProgress 可选回调，上报 (done, total) 供同步进度展示。 */
-export async function fetchMyCharacters(cookies, onProgress) {
+ *  onProgress 可选回调，上报 (done, total) 供同步进度展示。
+ *  opts.strict 为 true 时校验异常直接抛错（命令行 STRICT=1 开启）。 */
+export async function fetchMyCharacters(cookies, onProgress, { strict = false } = {}) {
   console.log('\n④ 获取 UID…');
   const uid = await fetchUid(cookies);
 
   console.log('⑤ 获取角色列表…');
   const charList = await fetchCharacterList(cookies, uid);
 
-  console.log('⑥ 逐个拉取角色详情…');
-  const results = [];
-  for (let i = 0; i < charList.length; i++) {
-    const it = charList[i];
-    let response = null;
-    try {
-      response = await fetchCharacterDetail(cookies, uid, it.id, `v1.1.4_#/zzz/roles/${it.id}/detail`);
-      const extracted = extractCharacter(response);
-      if (extracted) {
-        extracted.icon = extracted.icon || it.icon;
-        results.push(extracted);
-        console.log(`   ${i + 1}/${charList.length} ${extracted.name}（等级${extracted.level}）`);
-      } else {
-        console.error(`   ${i + 1}/${charList.length} ${it.name}: 提取失败`);
-      }
-    } catch (e) {
-      console.error(`   ${i + 1}/${charList.length} ${it.name}: 失败 ${e.message}`);
-    }
-    // 保留第一个角色的原始响应供排查
-    if (i === 0 && response) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-      fs.writeFileSync(path.join(DATA_DIR, 'debug-response.json'), JSON.stringify(response, null, 2), 'utf-8');
-    }
-    onProgress?.(i + 1, charList.length);
-  }
+  console.log('⑥ 并发拉取角色详情…（并发 3，避免触发接口风控）');
+  // 复用 library.js 的并发池：结果按下标对齐，顺序与角色列表一致；失败项为 null，最后过滤
+  const results = (
+    await pool(
+      charList,
+      3,
+      async (it, i) => {
+        try {
+          const response = await fetchCharacterDetail(cookies, uid, it.id, `v1.1.4_#/zzz/roles/${it.id}/detail`);
+          const extracted = extractCharacter(response);
+          if (extracted) {
+            extracted.icon = extracted.icon || it.icon;
+            // 保留第一个角色的原始响应供排查
+            if (i === 0) {
+              fs.mkdirSync(DATA_DIR, { recursive: true });
+              fs.writeFileSync(path.join(DATA_DIR, 'debug-response.json'), JSON.stringify(response, null, 2), 'utf-8');
+            }
+            console.log(`   ${i + 1}/${charList.length} ${extracted.name}（等级${extracted.level}）`);
+            return extracted;
+          }
+          console.error(`   ${i + 1}/${charList.length} ${it.name}: 提取失败`);
+        } catch (e) {
+          console.error(`   ${i + 1}/${charList.length} ${it.name}: 失败 ${e.message}`);
+        }
+        return null;
+      },
+      (done, total) => onProgress?.(done, total)
+    )
+  ).filter(Boolean);
 
   if (!results.length) throw new Error('一个角色都没拉到，请检查 cookie 是否过期');
 
@@ -312,7 +325,7 @@ export async function fetchMyCharacters(cookies, onProgress) {
   const stats = { characters: results.length };
 
   // 校验 + 写入 data/characters.json
-  warnIfInvalid('我的角色', validateCharacters(data));
+  warnIfInvalid('我的角色', validateCharacters(data), { strict });
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(path.join(DATA_DIR, 'characters.json'), JSON.stringify(data, null, 2), 'utf-8');
 
@@ -322,7 +335,7 @@ export async function fetchMyCharacters(cookies, onProgress) {
 async function main() {
   const cookies = await fetchCookie();
   cacheCookies(cookies); // 缓存，下次可直接用
-  const { stats } = await fetchMyCharacters(cookies);
+  const { stats } = await fetchMyCharacters(cookies, null, { strict: !!process.env.STRICT });
   console.log(`\n完成！共 ${stats.characters} 个角色。`);
   console.log('  data/characters.json 已生成；data/debug-response.json 保留第一个角色的原始响应');
 }
