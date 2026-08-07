@@ -150,6 +150,17 @@ export function validateLibrary(lib) {
   return errors;
 }
 
+/** 校验推荐方案数据（plans.json：{ avatarId: { name, plans: [...] } }） */
+export function validatePlans(plans) {
+  const errors = [];
+  if (!plans || typeof plans !== 'object' || Array.isArray(plans)) return ['推荐方案数据应为对象'];
+  for (const [k, v] of Object.entries(plans)) {
+    if (!v || typeof v !== 'object') errors.push(`角色 ${k} 应为对象`);
+    else if (!Array.isArray(v.plans)) errors.push(`角色 ${k} 缺 plans 数组`);
+  }
+  return errors;
+}
+
 /** 校验失败时打印 warning（不中断写入），供写入前调用。
  *  strict 为 true 时抛错中断——命令行同步可经 STRICT=1 开启（网页同步保持 warn，避免 wiki 解析偶发异常阻断整次同步）。 */
 export function warnIfInvalid(label, errors, { strict = false } = {}) {

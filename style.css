@@ -80,6 +80,41 @@ header .sub {
   background: var(--acc);
   color: #111;
 }
+/* 同步下拉：header「同步数据 ▾」触发器 + 菜单 */
+.sync-menu {
+  position: relative;
+}
+.sync-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  min-width: 170px;
+  padding: 6px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+.sync-dropdown.open {
+  display: block;
+}
+.sync-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--txt);
+  text-align: left;
+  font-size: 14px;
+}
+.sync-dropdown button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--txt);
+}
 button {
   cursor: pointer;
   border: 1px solid var(--acc);
@@ -590,6 +625,16 @@ textarea {
   border-radius: 3px;
   font-size: 14px;
 }
+.titem select {
+  flex: 1;
+  min-width: 0;
+  background: #0a0a0a;
+  border: 1px solid var(--line);
+  color: var(--txt);
+  padding: 5px 8px;
+  border-radius: 3px;
+  font-size: 14px;
+}
 .titem .unit {
   color: var(--dim);
   font-size: 13px;
@@ -613,6 +658,51 @@ textarea {
   gap: 6px;
   font-size: 14px;
   color: var(--txt);
+}
+/* 目标弹窗加宽 + 推荐方案表格 */
+.modal-box.modal-wide {
+  max-width: 1080px;
+}
+#planTable {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.plantable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.plantable th,
+.plantable td {
+  border: 1px solid var(--line);
+  padding: 5px 9px;
+  text-align: center;
+  color: var(--txt);
+}
+.plantable th {
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.plantable td.pname {
+  text-align: left;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plantable td.subs {
+  text-align: left;
+  min-width: 150px;
+  white-space: normal;
+}
+.plantable .apply-btn {
+  margin: 0;
+  vertical-align: 0;
+  white-space: nowrap;
 }
 .chk input {
   accent-color: var(--acc);

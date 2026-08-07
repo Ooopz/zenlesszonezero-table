@@ -15,8 +15,14 @@
         <button class="view-tab" data-view="table">统计</button>
         <button class="view-tab" data-view="wiki">数据库</button>
       </nav>
-      <button id="syncBtn">更新数据库</button>
-      <button id="rolesyncBtn">更新我的角色</button>
+      <div class="sync-menu">
+        <button id="syncBtn" class="sync-trigger" aria-haspopup="true">同步数据 ▾</button>
+        <div class="sync-dropdown" role="menu" aria-label="数据同步">
+          <button data-action="library" role="menuitem">更新数据库</button>
+          <button data-action="characters" role="menuitem">更新我的角色</button>
+          <button data-action="plans" role="menuitem">更新推荐方案</button>
+        </div>
+      </div>
       <button id="helpBtn">使用说明</button>
     </header>
 
@@ -29,9 +35,12 @@
         <button class="close" id="helpClose">✕</button>
         <h2>使用说明</h2>
         <p>
-          <b>推荐用法：</b>运行 <code>npm start</code> 启动本地服务器（自动打开页面），然后就能在网页上<b>一键更新</b>：
-          点「更新数据库」更新基础数据，「更新我的角色」拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
-          <code>data/.cookie.json</code>）。
+          <b>推荐用法：</b>运行 <code>npm start</code> 启动本地服务器（自动打开页面），然后点 header 的
+          <b>「同步数据」</b>下拉菜单一键更新：<br />
+          ① <b>更新数据库</b> —— 角色/音擎/驱动盘/邦布的基础数据；<br />
+          ② <b>更新我的角色</b> —— 拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
+          <code>data/.cookie.json</code>）；<br />
+          ③ <b>更新推荐方案</b> —— 米游社养成指南的推荐方案（每角色前 20 个：推荐面板、推荐音擎/驱动盘、4/5/6 号位主词条、副词条推荐）。
         </p>
         <p>
           <b>数据来源：</b>所有数据存于 <code>data/</code> 目录（<code>library.json</code> /
@@ -57,7 +66,8 @@
         </p>
         <p>
           <b>命令行方式（可选）：</b><code>npm run sync:library</code> /
-          <code>npm run sync:characters</code>，效果与网页一键更新相同。
+          <code>npm run sync:characters</code> / <code>npm run sync:plans</code>，效果与网页一键更新相同
+          （<code>sync:plans</code> 可加 <code>-- --account</code> 只同步账号已练角色）。
         </p>
       </div>
     </div>
@@ -81,17 +91,39 @@
     </div>
 
     <div class="modal" id="targetModal">
-      <div class="modal-box">
+      <div class="modal-box modal-wide">
         <button class="close" id="targetClose">✕</button>
-        <h2>目标属性设置 · <span id="targetChar" style="color: var(--acc)"></span></h2>
+        <h2>目标设置 · <span id="targetChar" style="color: var(--acc)"></span></h2>
         <p style="color: var(--dim); font-size: 14px">
-          为该角色填写目标属性值（留空 = 不考核）。百分比属性填整数（如暴击率填 60 表示
-          60%），其余填实际数值。每个角色单独保存。
+          填写目标属性值（留空 = 不考核）。百分比属性填整数（如暴击率填 60 表示 60%），其余填实际数值。
+          推荐音擎与 4/5/6 号位主词条可留空或从下方推荐方案「应用」一键填入。
         </p>
         <div id="targetGrid" class="tgrid"></div>
+        <div id="targetExtras" class="tgrid">
+          <div class="titem">
+            <label>推荐音擎</label>
+            <select id="targetWengine" title="只可选属性库中的音擎"><option value="">—</option></select>
+          </div>
+          <div class="titem">
+            <label>4号位主词条</label>
+            <select id="targetMain4"><option value="">—</option></select>
+          </div>
+          <div class="titem">
+            <label>5号位主词条</label>
+            <select id="targetMain5"><option value="">—</option></select>
+          </div>
+          <div class="titem">
+            <label>6号位主词条</label>
+            <select id="targetMain6"><option value="">—</option></select>
+          </div>
+        </div>
         <div class="row">
           <button id="targetSave">保存</button>
           <button id="targetClear">清空</button>
+        </div>
+        <div id="planTableWrap">
+          <h3 style="margin-top: 18px">推荐方案（养成指南）· 属性列为推荐最大值</h3>
+          <div id="planTable"></div>
         </div>
       </div>
     </div>

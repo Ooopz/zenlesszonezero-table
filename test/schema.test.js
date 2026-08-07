@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateLibrary, validateCharacters, validateCharacter, KEYS } from '../src/lib/schema.js';
+import { validateLibrary, validateCharacters, validateCharacter, validatePlans, KEYS } from '../src/lib/schema.js';
 import { loadDataFile } from './helpers.js';
 
 function readData(name) {
@@ -48,6 +48,15 @@ test('validateCharacter 能发现缺 name 的异常', () => {
 
 test('validateCharacters 拒绝非数组', () => {
   assert.deepEqual(validateCharacters({}), ['角色数据应为数组']);
+});
+
+test('validatePlans 校验推荐方案数据（plans.json：{ id: { name, plans: [] } }）', () => {
+  const hint = 'npm run sync:plans';
+  assert.deepEqual(validatePlans(loadDataFile('plans.json', hint)), []);
+  assert.deepEqual(validatePlans(null), ['推荐方案数据应为对象']);
+  assert.deepEqual(validatePlans({}), []);
+  assert.deepEqual(validatePlans({ '1581': { name: '蕾米埃尔' } }), ['角色 1581 缺 plans 数组']);
+  assert.deepEqual(validatePlans({ '1581': null }), ['角色 1581 应为对象']);
 });
 
 test('柏妮思·怀特 满级数据完整（wiki 满级行名为「满级数据」，解析需容错）', () => {

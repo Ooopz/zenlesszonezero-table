@@ -10,8 +10,12 @@ export let library = { characters: {}, wengines: {}, discs: {} };
 export let myCharacters = [];
 export const grid = document.getElementById('grid');
 
-/** 注入属性库与我的角色数据（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
-export function setData(lib, chars) {
+/** 养成指南推荐方案：{ avatarId: { name, plans: [...] } }，按角色名另建索引供目标弹窗表格用 */
+export let plans = {};
+export let plansByName = {};
+
+/** 注入属性库 / 我的角色 / 推荐方案数据（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
+export function setData(lib, chars, plansData) {
   lib = lib || { characters: {}, wengines: {}, discs: {}, bangboos: {} };
   library = {
     characters: toInstances(lib.characters, Character), // wiki 角色
@@ -20,6 +24,9 @@ export function setData(lib, chars) {
     bangboos: lib.bangboos || {}, // 邦布为普通对象（基类无附加逻辑）
   };
   myCharacters = (chars || []).map((c) => new Character(c)); // 账号角色（含 Wengine/Disc 嵌套）
+  plans = plansData || {};
+  plansByName = {};
+  for (const v of Object.values(plans)) if (v && v.name) plansByName[v.name] = v;
   rebuildIndex();
 }
 

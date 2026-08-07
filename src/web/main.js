@@ -12,8 +12,8 @@ if (!res.ok) {
   document.getElementById('grid').innerHTML =
     `<div class="empty">无法加载数据（HTTP ${res.status}）。<br>请先运行 <b>npm start</b> 启动本地服务器，再打开本页。</div>`;
 } else {
-  const { library, characters } = await res.json();
-  setData(library, characters);
+  const { library, characters, plans } = await res.json();
+  setData(library, characters, plans);
   setCalcContext(dataCtx);
   initUi();
 }

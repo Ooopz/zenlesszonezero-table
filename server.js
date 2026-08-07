@@ -14,6 +14,7 @@ import { openBrowser } from './src/lib/node.js';
 import { parseCookies } from './src/lib/util.js';
 import { fetchLibrary } from './src/sync/library.js';
 import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
+import { fetchAllPlans } from './src/sync/plans.js';
 
 const PORT = process.env.PORT || 8718;
 // 项目根目录（server.js 位于根目录）
@@ -141,6 +142,33 @@ async function syncCharactersHandler(req, res) {
   }
 }
 
+async function syncPlansHandler(req, res) {
+  if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
+  busy = '推荐方案';
+  syncState = { kind: 'plans', step: 'prepare', done: 0, total: 0 };
+  try {
+    // 推荐方案抓取依赖账号 cookie（养成指南接口鉴权），复用角色同步的缓存
+    const cookies = readCookieCache();
+    if (!cookies)
+      return respond(res, 400, {
+        ok: false,
+        error: '没有可用的 cookie：请先点「同步数据 → 更新我的角色」粘贴 cookie',
+      });
+    // fetchAllPlans 内部已写入 data/plans.json
+    const { stats } = await fetchAllPlans(cookies, {}, (done, total) => {
+      syncState = { kind: 'plans', step: 'plans', done, total };
+    });
+    console.log(`[更新推荐方案] 完成：${stats.characters} 角色 / ${stats.plans} 方案`);
+    respond(res, 200, { ok: true, type: 'plans', stats });
+  } catch (e) {
+    console.error('[更新推荐方案] 失败:', e.message);
+    respond(res, 500, { ok: false, error: e.message });
+  } finally {
+    busy = null;
+    syncState = null;
+  }
+}
+
 // ---------------- 路由 ----------------
 
 const server = http.createServer(async (req, res) => {
@@ -149,11 +177,13 @@ const server = http.createServer(async (req, res) => {
     // 路由统一用 ASCII，避免中文路径被浏览器百分号编码后匹配失败
     if (req.method === 'POST' && url === '/api/sync-base') return await syncLibraryHandler(req, res);
     if (req.method === 'POST' && url === '/api/sync-characters') return await syncCharactersHandler(req, res);
+    if (req.method === 'POST' && url === '/api/sync-plans') return await syncPlansHandler(req, res);
     if (req.method === 'GET' && url === '/api/data') {
       return respond(res, 200, {
         ok: true,
         library: readDataJson('library.json', { characters: {}, wengines: {}, discs: {} }),
         characters: readDataJson('characters.json', []),
+        plans: readDataJson('plans.json', {}),
       });
     }
     if (req.method === 'GET' && url === '/api/cookie-status')
