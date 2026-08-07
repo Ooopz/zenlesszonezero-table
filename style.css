@@ -1335,6 +1335,16 @@ main > .card:nth-child(7) {
 main > .card:nth-child(8) {
   animation-delay: 0.28s;
 }
+/* 弹窗指南里的链接（同步页面网址） */
+a {
+  color: var(--acc);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a:hover {
+  color: var(--acc2);
+}
+
 /* 尊重系统减少动效偏好 */
 @media (prefers-reduced-motion: reduce) {
   *,

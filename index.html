@@ -42,7 +42,7 @@
           ① <b>更新数据库</b> —— 角色/音擎/驱动盘/邦布的基础数据；<br />
           ② <b>更新我的角色</b> —— 拉取你账号的真实角色（首次需粘贴 cookie，之后自动缓存到
           <code>data/.cookie.json</code>）；<br />
-          ③ <b>更新推荐方案</b> —— 米游社养成指南的推荐方案（每角色前 20 个：推荐面板、推荐音擎/驱动盘、4/5/6 号位主词条、副词条推荐）。
+          ③ <b>更新推荐方案</b> —— 米游社养成指南的推荐方案（每角色前 50 个：推荐面板、推荐音擎/驱动盘、4/5/6 号位主词条、副词条推荐）。
         </p>
         <p>
           <b>数据来源：</b>所有数据存于 <code>data/</code> 目录（<code>library.json</code> /
@@ -80,15 +80,48 @@
         <button class="close" id="rolesyncClose">✕</button>
         <h2>更新我的角色</h2>
         <p id="cookieInfo" style="color: var(--dim)"></p>
-        <p>在 <code>user.mihoyo.com</code>（登录后 F12 → Console）执行下面这段脚本复制 cookie：</p>
+        <p>
+          在 <a href="https://user.mihoyo.com/" target="_blank" rel="noopener">user.mihoyo.com</a>（登录后
+          F12 → Console）执行下面这段脚本复制 cookie：
+        </p>
         <textarea id="cookieSnippet" rows="3" readonly></textarea>
         <div class="row">
+          <button id="rolesyncCopy">复制脚本</button>
           <button id="rolesyncNow">粘贴后：缓存并同步</button>
           <button id="rolesyncCached">用缓存的 cookie 同步</button>
         </div>
         <textarea id="cookieInput" rows="3" placeholder="在此粘贴 cookie"></textarea>
         <p style="font-size: 13px; color: var(--dim)">
           cookie 只保存到本地服务器的 <code>data/.cookie.json</code>，不会发送给任何外部服务器；同步完成后页面自动刷新。
+        </p>
+      </div>
+    </div>
+
+    <div class="modal" id="plansyncModal">
+      <div class="modal-box">
+        <button class="close" id="plansyncClose">✕</button>
+        <h2>更新推荐方案</h2>
+        <p id="plansCookieInfo" style="color: var(--dim)"></p>
+        <p>
+          推荐方案来自米游社「养成指南」，同步需要账号登录态（cookie）。在
+          <a
+            href="https://act.mihoyo.com/zzz/event/character-builder/index.html?game_biz=nap_cn&mhy_auth_required=1"
+            target="_blank"
+            rel="noopener"
+            >米游社养成指南</a
+          >
+          （需已登录）打开后，F12 → Console 执行下面这段脚本复制 cookie：
+        </p>
+        <textarea id="plansCookieSnippet" rows="3" readonly></textarea>
+        <div class="row">
+          <button id="plansyncCopy">复制脚本</button>
+          <button id="plansyncNow">粘贴后：缓存并同步</button>
+          <button id="plansyncCached">用缓存的 cookie 同步</button>
+        </div>
+        <textarea id="plansCookieInput" rows="3" placeholder="在此粘贴 cookie"></textarea>
+        <p style="font-size: 13px; color: var(--dim)">
+          养成指南的登录态 <code>e_nap_token</code> 有效期较短（几小时~一天）。若同步提示「未登录 / 0
+          个角色」，重新打开养成指南页面导出新 cookie 即可。
         </p>
       </div>
     </div>

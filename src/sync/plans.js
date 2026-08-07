@@ -6,7 +6,7 @@
 //
 // 数据源: act.mihoyo.com 的「养成指南」H5（character-builder）背后接口
 //   nap_cultivate_tool 的 user/feed（「切换方案」长列表，分页）+ avatar_simple_info /
-//   plan_detail（补齐非列表方案）。feed 每角色可返回大量方案，按顺序取前 20 个。
+//   plan_detail（补齐非列表方案）。feed 每角色可返回大量方案，按顺序取前 50 个。
 //   每个方案含：推荐面板(low/mid/high 三档)、推荐音擎(主+备)、驱动盘套装、
 //   4/5/6 号位主词条、副词条推荐、技能等级、配队。
 //
@@ -53,7 +53,7 @@ const planHeaders = {
 
 const API = 'https://api-takumi.mihoyo.com/event/nap_cultivate_tool';
 const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/user'; // feed 端点域
-const MAX_PLANS = 20; // 每个角色方案上限（「切换方案」列表前 20 个）
+const MAX_PLANS = 50; // 每个角色方案上限（「切换方案」列表前 50 个）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
 
 async function request(url, cookies) {
@@ -216,8 +216,14 @@ export async function fetchAllPlans(cookies, { onlyAccount = false, strict = fal
     (done, total) => onProgress?.(done, total)
   );
 
+  const success = results.filter(Boolean);
+  // 全部角色抓取失败（如 e_nap_token 过期 → feed 全部 -100 未登录）时明确抛错，避免静默写入空 plans.json
+  if (!success.length)
+    throw new Error(
+      '推荐方案抓取全部失败：养成指南登录态（e_nap_token）可能已过期，请从养成指南页面重新导出 cookie 后重试'
+    );
   const out = {};
-  for (const r of results.filter(Boolean)) out[r.id] = { name: r.name, plans: r.plans };
+  for (const r of success) out[r.id] = { name: r.name, plans: r.plans };
   const stats = { characters: Object.keys(out).length, plans: 0 };
   for (const r of Object.values(out)) stats.plans += r.plans.length;
 

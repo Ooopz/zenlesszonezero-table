@@ -98,22 +98,46 @@ async function syncCharacters(cookie) {
   }
 }
 
-/** 同步推荐方案（米游社养成指南「切换方案」列表，每角色前 20 个）。依赖账号 cookie，复用角色同步的缓存。 */
-async function syncPlans() {
-  const st = await apiRequest('/api/cookie-status', { method: 'GET' });
-  if (!st || !st.ok || !st.cached) {
-    notify('推荐方案同步需要 cookie：请先在「同步数据 → 更新我的角色」里粘贴一次 cookie', 10);
-    return;
-  }
-  notify('正在同步推荐方案…（每角色最多 20 个方案，约 1 分钟）', 120);
+/** 方案更新指南弹窗：提示养成指南 cookie（e_nap_token 有效期短）并给出复制脚本 */
+async function openPlansSync() {
+  document.getElementById('plansCookieSnippet').value = CLIPBOARD_SCRIPT;
+  const info = document.getElementById('plansCookieInfo');
+  const j = await apiRequest('/api/cookie-status', { method: 'GET' });
+  info.textContent =
+    j && j.ok && j.cached
+      ? '已缓存 cookie，可直接「用缓存的 cookie 同步」（注意养成指南登录态 e_nap_token 可能已过期）。'
+      : '尚未缓存 cookie：打开上方养成指南页面执行脚本，粘贴一次即可（之后会缓存）。';
+  document.getElementById('plansyncModal').classList.add('show');
+}
+
+/** 同步推荐方案（米游社养成指南「切换方案」列表，每角色前 50 个）。
+ *  cookie 传空串时用服务器缓存的 cookie；e_nap_token 过期会由服务器明确报错而非静默 0。 */
+async function syncPlans(cookie) {
+  notify('正在同步推荐方案…（每角色最多 50 个方案，约 1-2 分钟）', 120);
   startSyncPolling(SYNC_KINDS.PLANS);
-  const j = await apiRequest('/api/sync-plans', { method: 'POST' });
+  const j = await apiRequest('/api/sync-plans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cookie: cookie || '' }),
+  });
   stopSyncPolling();
   if (j && j.ok) {
     notify(`推荐方案同步完成：${j.stats.characters} 角色 / ${j.stats.plans} 个方案，即将刷新`);
     setTimeout(() => location.reload(), 900);
   } else {
-    notify('同步失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 10);
+    notify('同步失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 12);
+  }
+}
+
+/** 复制代码到剪贴板（指南脚本/命令） */
+function copyText(text, label) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => notify(`${label}已复制到剪贴板`))
+      .catch(() => notify('复制失败，请手动框选复制'));
+  } else {
+    notify('当前浏览器不支持一键复制，请手动框选复制');
   }
 }
 
@@ -326,7 +350,7 @@ export function initUi() {
       const act = b.dataset.action;
       if (act === SYNC_KINDS.LIBRARY) syncLibrary();
       else if (act === SYNC_KINDS.CHARACTERS) openRoleSync();
-      else if (act === SYNC_KINDS.PLANS) syncPlans();
+      else if (act === SYNC_KINDS.PLANS) openPlansSync();
     })
   );
   // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
@@ -347,6 +371,9 @@ export function initUi() {
   document
     .getElementById('rolesyncClose')
     .addEventListener('click', () => document.getElementById('rolesyncModal').classList.remove('show'));
+  document.getElementById('rolesyncCopy').addEventListener('click', () =>
+    copyText(document.getElementById('cookieSnippet').value, '脚本')
+  );
   document.getElementById('rolesyncNow').addEventListener('click', () => {
     const cookie = document.getElementById('cookieInput').value.trim();
     if (!cookie) return notify('请先粘贴 cookie', 6);
@@ -356,6 +383,23 @@ export function initUi() {
   document.getElementById('rolesyncCached').addEventListener('click', () => {
     document.getElementById('rolesyncModal').classList.remove('show');
     syncCharacters('');
+  });
+  // 方案同步指南弹窗
+  document
+    .getElementById('plansyncClose')
+    .addEventListener('click', () => document.getElementById('plansyncModal').classList.remove('show'));
+  document.getElementById('plansyncCopy').addEventListener('click', () =>
+    copyText(document.getElementById('plansCookieSnippet').value, '脚本')
+  );
+  document.getElementById('plansyncNow').addEventListener('click', () => {
+    const cookie = document.getElementById('plansCookieInput').value.trim();
+    if (!cookie) return notify('请先粘贴 cookie', 6);
+    document.getElementById('plansyncModal').classList.remove('show');
+    syncPlans(cookie);
+  });
+  document.getElementById('plansyncCached').addEventListener('click', () => {
+    document.getElementById('plansyncModal').classList.remove('show');
+    syncPlans('');
   });
   document
     .getElementById('helpBtn')

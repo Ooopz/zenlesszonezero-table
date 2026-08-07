@@ -146,20 +146,25 @@ async function syncCharactersHandler(req, res) {
 
 async function syncPlansHandler(req, res) {
   if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
+  let body;
+  try {
+    body = await readBody(req);
+  } catch (e) {
+    return respond(res, 400, { ok: false, error: e.message });
+  }
   busy = '推荐方案';
   syncState = { kind: SYNC_KINDS.PLANS, step: 'prepare', done: 0, total: 0 };
   try {
-    // 推荐方案抓取依赖账号 cookie（养成指南接口鉴权），复用角色同步的缓存
-    const cookies = readCookieCache();
+    // cookie 来源：请求体 > 本地缓存（养成指南登录态 e_nap_token 有效期短，允许弹窗重新粘贴）
+    let cookies = body.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
+    if (!cookies) cookies = readCookieCache();
     if (!cookies)
-      return respond(res, 400, {
-        ok: false,
-        error: '没有可用的 cookie：请先点「同步数据 → 更新我的角色」粘贴 cookie',
-      });
-    // fetchAllPlans 内部已写入 data/plans.json
+      return respond(res, 400, { ok: false, error: '没有可用的 cookie：请先在「同步数据」弹窗里粘贴 cookie' });
+    // fetchAllPlans 内部已写入 data/plans.json；全部抓取失败会抛错（含 e_nap_token 过期提示）
     const { stats } = await fetchAllPlans(cookies, {}, (done, total) => {
       syncState = { kind: SYNC_KINDS.PLANS, step: SYNC_KINDS.PLANS, done, total };
     });
+    if (body.cookie && body.cookie.trim()) cacheCookies(cookies);
     console.log(`[更新推荐方案] 完成：${stats.characters} 角色 / ${stats.plans} 方案`);
     respond(res, 200, { ok: true, type: 'plans', stats });
   } catch (e) {
