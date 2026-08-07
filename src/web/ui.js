@@ -1,7 +1,7 @@
 // src/web/ui.js —— 交互层：提示条、服务器同步、目标/有效/备注弹窗、事件绑定、初始化
 import { CLIPBOARD_SCRIPT, escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
 import { targetStats, targetUnits, validStatOptions } from '../lib/calc.js';
-import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET } from '../lib/constants.js';
+import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET, mainStatName } from '../lib/constants.js';
 import { apiRequest } from './util.js';
 import {
   readCharTarget,
@@ -263,9 +263,10 @@ function applyPlan(name, idx) {
     target[a.name] = a.percent ? Math.round(a.high * 100) : a.high;
   }
   if (p.weapon?.main) target[TARGET_KEYS.WENGINE] = p.weapon.main;
-  if (p.mainProps?.[4]) target[TARGET_KEYS.MAIN4] = p.mainProps[4];
-  if (p.mainProps?.[5]) target[TARGET_KEYS.MAIN5] = p.mainProps[5];
-  if (p.mainProps?.[6]) target[TARGET_KEYS.MAIN6] = p.mainProps[6];
+  // 456 号位主词条恒为百分比：mainStatName 兜底把旧数据/接口固定值名转百分比（攻击力→攻击力%）
+  if (p.mainProps?.[4]) target[TARGET_KEYS.MAIN4] = mainStatName(p.mainProps[4]);
+  if (p.mainProps?.[5]) target[TARGET_KEYS.MAIN5] = mainStatName(p.mainProps[5]);
+  if (p.mainProps?.[6]) target[TARGET_KEYS.MAIN6] = mainStatName(p.mainProps[6]);
   // 推荐副词条 → 有效副词条（过滤到合法副词条类型，如「攻击力%」「异常精通」）
   if (p.subStats?.length) target[TARGET_KEYS.VALID_STATS] = p.subStats.filter((s) => SUBSTAT_TYPE_SET.has(s));
   saveCharTarget(name, target);

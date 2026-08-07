@@ -118,16 +118,14 @@ export const TARGET_KEYS = {
 };
 
 // ---------- 驱动盘 4/5/6 号位主词条候选（对应各槽位推荐） ----------
-/** 4/5/6 号位主词条候选：含养成指南所用固定值名（如「攻击力」）与百分比变体、各元素伤害加成 */
+/** 4/5/6 号位主词条候选。注意：只有 1/2/3 号盘才有数值型攻击/防御/生命主词条，
+ *  4/5/6 号位的攻击/防御/生命恒为百分比——故候选只含百分比变体与各槽位特有词条。 */
 export const MAIN_STAT_OPTIONS = {
-  4: [STAT.CR, STAT.CD, STAT.ANOMALY_PROF, STAT.ATK, SUBSTAT.ATK_PCT, STAT.DEF, SUBSTAT.DEF_PCT, STAT.HP, SUBSTAT.HP_PCT],
+  4: [STAT.CR, STAT.CD, STAT.ANOMALY_PROF, SUBSTAT.ATK_PCT, SUBSTAT.DEF_PCT, SUBSTAT.HP_PCT],
   5: [
     STAT.PEN_RATE,
-    STAT.ATK,
     SUBSTAT.ATK_PCT,
-    STAT.DEF,
     SUBSTAT.DEF_PCT,
-    STAT.HP,
     SUBSTAT.HP_PCT,
     '物理伤害加成',
     '火属性伤害加成',
@@ -138,8 +136,17 @@ export const MAIN_STAT_OPTIONS = {
     '烈霜伤害加成',
     '流明伤害加成',
   ],
-  6: [STAT.IMPACT, STAT.ENERGY, STAT.ANOMALY_CTRL, STAT.ATK, SUBSTAT.ATK_PCT, STAT.DEF, SUBSTAT.DEF_PCT, STAT.HP, SUBSTAT.HP_PCT],
+  6: [STAT.IMPACT, STAT.ENERGY, STAT.ANOMALY_CTRL, SUBSTAT.ATK_PCT, SUBSTAT.DEF_PCT, SUBSTAT.HP_PCT],
 };
+
+/** 4/5/6 号位主词条名归一化：接口/旧数据可能返回固定值名（攻击力/防御力/生命值），
+ *  但 456 号位主词条恒为百分比，统一转百分比变体；其余原样返回（幂等，可安全套用）。 */
+export function mainStatName(name) {
+  if (name === STAT.ATK) return SUBSTAT.ATK_PCT;
+  if (name === STAT.HP) return SUBSTAT.HP_PCT;
+  if (name === STAT.DEF) return SUBSTAT.DEF_PCT;
+  return name;
+}
 
 // ---------- 同步类型（server 的 syncState.kind + 前端进度轮询） ----------
 export const SYNC_KINDS = {

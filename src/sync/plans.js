@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { readCookieCache } from './characters.js';
 import { pool } from './library.js';
 import { normalizeStatKey } from '../lib/util.js';
-import { PERCENT_STATS } from '../lib/constants.js';
+import { PERCENT_STATS, mainStatName } from '../lib/constants.js';
 import { validatePlans, warnIfInvalid } from '../lib/schema.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -160,11 +160,12 @@ export function extractPlan(p) {
     },
     // 驱动盘套装
     sets: (item.equip?.equip || []).map((e) => ({ name: e.name, cnt: e.cnt })),
-    // 4/5/6 号位主词条推荐（部分方案可能缺某项）
+    // 4/5/6 号位主词条推荐（部分方案可能缺某项）；456 号位恒为百分比，
+    // 接口可能返回固定值名（攻击力/防御力/生命值），用 mainStatName 统一转百分比
     mainProps: {
-      4: mainProps.main_properties_4?.[0]?.property_name || null,
-      5: mainProps.main_properties_5?.[0]?.property_name || null,
-      6: mainProps.main_properties_6?.[0]?.property_name || null,
+      4: mainStatName(mainProps.main_properties_4?.[0]?.property_name) || null,
+      5: mainStatName(mainProps.main_properties_5?.[0]?.property_name) || null,
+      6: mainStatName(mainProps.main_properties_6?.[0]?.property_name) || null,
     },
     // 副词条推荐
     subStats: (item.equip?.sub_properties || []).map((s) => substatKey(s.property_name)),
