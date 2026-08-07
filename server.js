@@ -12,6 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openBrowser } from './src/lib/node.js';
 import { parseCookies } from './src/lib/util.js';
+import { SYNC_KINDS } from './src/lib/constants.js';
 import { fetchLibrary } from './src/sync/library.js';
 import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
 import { fetchAllPlans } from './src/sync/plans.js';
@@ -90,11 +91,11 @@ function readDataJson(name, fallback) {
 async function syncLibraryHandler(req, res) {
   if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
   busy = '属性库';
-  syncState = { kind: 'library', step: 'prepare', done: 0, total: 0 };
+  syncState = { kind: SYNC_KINDS.LIBRARY, step: 'prepare', done: 0, total: 0 };
   try {
     // fetchLibrary 内部已写入 data/library.json 与 data/raw-library.json
     const { stats } = await fetchLibrary((p) => {
-      syncState = { kind: 'library', ...p };
+      syncState = { kind: SYNC_KINDS.LIBRARY, ...p };
     });
     console.log(`[更新数据库] 完成：角色 ${stats.characters} / 音擎 ${stats.wengines} / 驱动盘 ${stats.discs} / 邦布 ${stats.bangboos}`);
     respond(res, 200, { ok: true, type: 'library', stats });
@@ -116,7 +117,7 @@ async function syncCharactersHandler(req, res) {
     return respond(res, 400, { ok: false, error: e.message });
   }
   busy = '我的角色';
-  syncState = { kind: 'characters', step: 'prepare', done: 0, total: 0 };
+  syncState = { kind: SYNC_KINDS.CHARACTERS, step: 'prepare', done: 0, total: 0 };
   try {
     // cookie 来源：请求体 > 本地缓存
     let cookies = body.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
@@ -128,7 +129,7 @@ async function syncCharactersHandler(req, res) {
       });
     // fetchMyCharacters 内部已写入 data/characters.json
     const { stats } = await fetchMyCharacters(cookies, (done, total) => {
-      syncState = { kind: 'characters', step: 'characters', done, total };
+      syncState = { kind: SYNC_KINDS.CHARACTERS, step: SYNC_KINDS.CHARACTERS, done, total };
     });
     if (body.cookie && body.cookie.trim()) cacheCookies(cookies);
     console.log(`[更新我的角色] 完成：${stats.characters} 个角色`);
@@ -145,7 +146,7 @@ async function syncCharactersHandler(req, res) {
 async function syncPlansHandler(req, res) {
   if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
   busy = '推荐方案';
-  syncState = { kind: 'plans', step: 'prepare', done: 0, total: 0 };
+  syncState = { kind: SYNC_KINDS.PLANS, step: 'prepare', done: 0, total: 0 };
   try {
     // 推荐方案抓取依赖账号 cookie（养成指南接口鉴权），复用角色同步的缓存
     const cookies = readCookieCache();
@@ -156,7 +157,7 @@ async function syncPlansHandler(req, res) {
       });
     // fetchAllPlans 内部已写入 data/plans.json
     const { stats } = await fetchAllPlans(cookies, {}, (done, total) => {
-      syncState = { kind: 'plans', step: 'plans', done, total };
+      syncState = { kind: SYNC_KINDS.PLANS, step: SYNC_KINDS.PLANS, done, total };
     });
     console.log(`[更新推荐方案] 完成：${stats.characters} 角色 / ${stats.plans} 方案`);
     respond(res, 200, { ok: true, type: 'plans', stats });

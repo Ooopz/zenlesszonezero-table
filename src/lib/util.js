@@ -1,6 +1,7 @@
 // src/lib/util.js —— 环境无关的纯工具函数（Node 与浏览器共用）
 // 注意：本文件不能 import 任何 node: 模块（浏览器会直接 import 它）。
 // Node 专属函数（如 openBrowser）放在 ./node.js。
+import { STAT } from './constants.js';
 
 /** 去 HTML 标签，折叠空白 */
 export function stripHtml(html) {
@@ -53,7 +54,7 @@ export function escapeJsAttr(s) {
 export function formatValue(name, value) {
   if (value == null || !Number.isFinite(value)) return '—';
   if (value === 0) return '0';
-  if (name === '能量自动回复') return (Math.trunc(value * 100) / 100).toFixed(2);
+  if (name === STAT.ENERGY) return (Math.trunc(value * 100) / 100).toFixed(2);
   if (name.endsWith('加成') || name.includes('暴击')) return (value * 100).toFixed(1) + '%';
   if (Math.abs(value) <= 1) return (value * 100).toFixed(1) + '%';
   return (Math.round(value * 10) / 10).toLocaleString('zh-CN');
@@ -91,17 +92,17 @@ export function compareValues(a, b) {
  *  部分页面用短名：暴击→暴击率、暴伤→暴击伤害；
  *  命破角色把标准面板后两项换成专属名：穿透率→贯穿力（或贯穿率）、能量自动回复→闪能自动积累/累积/累计） */
 const STAT_ALIASES = {
-  生命: '生命值',
-  生命力: '生命值',
-  攻击: '攻击力',
-  防御: '防御力',
-  暴击: '暴击率',
-  暴伤: '暴击伤害',
+  生命: STAT.HP,
+  生命力: STAT.HP,
+  攻击: STAT.ATK,
+  防御: STAT.DEF,
+  暴击: STAT.CR,
+  暴伤: STAT.CD,
   // 贯穿力是命破角色独立面板属性（wiki 与账号均为本名），不归一化成穿透率；展示层合并
-  贯穿率: '贯穿力',
-  闪能自动积累: '能量自动回复',
-  闪能自动累积: '能量自动回复',
-  闪能自动累计: '能量自动回复',
+  贯穿率: STAT.PIERCE,
+  闪能自动积累: STAT.ENERGY,
+  闪能自动累积: STAT.ENERGY,
+  闪能自动累计: STAT.ENERGY,
 };
 /** 单个属性名归一化为规范名（未知名原样返回） */
 export function normalizeStatKey(k) {

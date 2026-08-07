@@ -2,6 +2,7 @@
 import { library } from './data.js';
 import { renderRichText, escapeHtml, statEntries, formatValue, compareValues } from '../lib/util.js';
 import { maxLevelStats, panelOrder } from '../lib/calc.js';
+import { STAT, SUBSTAT } from '../lib/constants.js';
 
 export let wikiTab = 'characters';
 export function setWikiTab(key) {
@@ -54,7 +55,7 @@ const PANEL_RENDERERS = {
 // 初始属性展示列：满级三属优先，其余从 calc.panelOrder 派生（排除穿透值/贯穿力——贯穿力在展示层合并到穿透率列）
 const INITIAL_STATS = [
   ...maxLevelStats,
-  ...panelOrder.filter((s) => !maxLevelStats.includes(s) && s !== '穿透值' && s !== '贯穿力'),
+  ...panelOrder.filter((s) => !maxLevelStats.includes(s) && s !== STAT.PEN_VALUE && s !== STAT.PIERCE),
 ];
 const MAX_STATS = maxLevelStats;
 // 各子面板可点击排序的表头
@@ -79,25 +80,25 @@ function statCells(obj, keys, merge) {
   return keys.map((k) => `<td>${fmt(merge?.[k] ? merge[k](obj) : obj?.[k])}</td>`).join('');
 }
 /** 穿透率列取值：普通角色取穿透率，命破角色（无穿透率）取贯穿力——展示层合并 */
-const penCell = (o) => o.穿透率 ?? o.贯穿力;
+const penCell = (o) => o[STAT.PEN_RATE] ?? o[STAT.PIERCE];
 /** 核心技满级提升说明（悬浮在核心技图标上，取自 coreSkillBoost；X% 键为攻击/生命等百分比提升）。
  *  coreSkillBoost 为每档增量数组，满级提升 = 全部档位累计。 */
 function coreBoostHtml(c) {
   const labels = {
-    攻击力: '基础攻击力',
-    生命值: '基础生命值',
-    防御力: '基础防御力',
-    冲击力: '基础冲击力',
-    能量自动回复: '基础能量自动回复',
-    '攻击力%': '攻击力',
-    '生命值%': '生命值',
-    '防御力%': '防御力',
-    '冲击力%': '冲击力',
-    暴击率: '暴击率',
-    暴击伤害: '暴击伤害',
-    穿透率: '穿透率',
-    异常掌控: '异常掌控',
-    异常精通: '异常精通',
+    [STAT.ATK]: '基础攻击力',
+    [STAT.HP]: '基础生命值',
+    [STAT.DEF]: '基础防御力',
+    [STAT.IMPACT]: '基础冲击力',
+    [STAT.ENERGY]: '基础能量自动回复',
+    [SUBSTAT.ATK_PCT]: STAT.ATK,
+    [SUBSTAT.HP_PCT]: STAT.HP,
+    [SUBSTAT.DEF_PCT]: STAT.DEF,
+    [`${STAT.IMPACT}%`]: STAT.IMPACT,
+    [STAT.CR]: STAT.CR,
+    [STAT.CD]: STAT.CD,
+    [STAT.PEN_RATE]: STAT.PEN_RATE,
+    [STAT.ANOMALY_CTRL]: STAT.ANOMALY_CTRL,
+    [STAT.ANOMALY_PROF]: STAT.ANOMALY_PROF,
   };
   const boost = {};
   for (const item of c.coreSkillBoost || []) {
@@ -151,7 +152,7 @@ function renderCharacters() {
     if (key === '特性') return c.trait;
     if (key === '阵营') return c.faction;
     if (key.startsWith('满级')) return c.maxLevel?.[key.slice(2)] ?? null;
-    if (key === '穿透率') return penCell(c); // 展示层合并：命破角色取贯穿力
+    if (key === STAT.PEN_RATE) return penCell(c); // 展示层合并：命破角色取贯穿力
     return c[key] ?? null;
   };
   const rows = sortRows(Object.values(library.characters), charVal).map((c) => {

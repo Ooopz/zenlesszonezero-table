@@ -2,6 +2,19 @@
 // 纯逻辑、无 DOM/Node 依赖；需要数据的函数通过 setCalcContext 注入上下文，
 // 因此浏览器（web/main.js 注入）与 Node（测试/批量分析）都能使用。
 import { statEntries, formatValue, lookup } from './util.js';
+import {
+  STAT,
+  PANEL_ORDER,
+  PANEL_STAT_MAP,
+  MULT_STATS,
+  MAX_LEVEL_STATS,
+  PERCENT_STATS,
+  TARGET_STATS,
+  TARGET_PERCENTS,
+  TARGET_UNITS,
+  VALID_STAT_OPTIONS,
+  isDamageBonus as isDamageBonusName,
+} from './constants.js';
 
 // ---------- 数据上下文（由调用方注入） ----------
 // ctx = { library, charIndex, wengineIndex, discIndex, readCharTarget, readValidStats }
@@ -21,51 +34,20 @@ export function setCalcContext(c) {
   ctxVersion++;
 }
 
-// ---------- 属性常量 ----------
-export const panelOrder = [
-  '攻击力',
-  '生命值',
-  '防御力',
-  '冲击力',
-  '暴击率',
-  '暴击伤害',
-  '异常掌控',
-  '异常精通',
-  '穿透率',
-  '贯穿力',
-  '穿透值',
-  '能量自动回复',
-];
+// ---------- 属性常量（单一权威定义在 constants.js，此处仅兼容导出） ----------
+export const panelOrder = PANEL_ORDER;
 /** 面板属性 → 对应哪些有效副词条类型（用于按有效属性配置高亮面板行） */
-export const panelStatMap = {
-  攻击力: ['攻击力', '攻击力%'],
-  生命值: ['生命值', '生命值%'],
-  防御力: ['防御力', '防御力%'],
-  暴击率: ['暴击率'],
-  暴击伤害: ['暴击伤害'],
-  穿透值: ['穿透值'],
-  异常精通: ['异常精通'],
-};
-export const multStats = new Set(['攻击力', '生命值', '防御力', '冲击力', '能量自动回复', '异常掌控']); // 百分比加成按 基础×(1+Σ%)
+export const panelStatMap = PANEL_STAT_MAP;
+export const multStats = MULT_STATS; // 百分比加成按 基础×(1+Σ%)
 /** 满级行仅含的基础属性（wiki 成长表「满级」只有这三项），wiki 视图的「满级X」列与此对齐 */
-export const maxLevelStats = ['生命值', '攻击力', '防御力'];
-export const isDamageBonus = (name) => name.endsWith('伤害加成') || name.endsWith('伤害提升');
+export const maxLevelStats = MAX_LEVEL_STATS;
+export const isDamageBonus = isDamageBonusName;
+/** 百分比面板属性（值 ≤1 表示百分比），供 plans 等按属性名判定百分比的模块复用 */
+export const percentStats = PERCENT_STATS;
 
-export const targetStats = [
-  '攻击力',
-  '暴击率',
-  '暴击伤害',
-  '穿透率',
-  '异常掌控',
-  '异常精通',
-  '冲击力',
-  '能量自动回复',
-  '生命值',
-  '防御力',
-  '属性伤害加成',
-];
-export const targetPercents = new Set(['暴击率', '暴击伤害', '穿透率', '属性伤害加成']);
-export const targetUnits = { 暴击率: '%', 暴击伤害: '%', 穿透率: '%', 属性伤害加成: '%' };
+export const targetStats = TARGET_STATS;
+export const targetPercents = TARGET_PERCENTS;
+export const targetUnits = TARGET_UNITS;
 
 // ---------- 副词条成长与命中 ----------
 // 数据来源：bilibili wiki。S级副词条初始值=成长值，每强化一次 +成长值；等级每 +3 触发一次成长。
@@ -107,21 +89,10 @@ export const substatGrowthTable = {
     '防御力%': 0.016,
   },
 };
-export const validStatOptions = [
-  { type: '攻击力', label: '攻击力（固定）' },
-  { type: '攻击力%', label: '攻击力%' },
-  { type: '暴击率', label: '暴击率' },
-  { type: '暴击伤害', label: '暴击伤害' },
-  { type: '穿透值', label: '穿透值' },
-  { type: '异常精通', label: '异常精通' },
-  { type: '生命值', label: '生命值（固定）' },
-  { type: '生命值%', label: '生命值%' },
-  { type: '防御力', label: '防御力（固定）' },
-  { type: '防御力%', label: '防御力%' },
-];
+export const validStatOptions = VALID_STAT_OPTIONS;
 /** 副词条成长类型：暴击/暴伤恒为%；其余按数值大小（≤1 视为百分比） */
 export function substatType(name, value) {
-  return ['暴击率', '暴击伤害'].includes(name) ? name : value <= 1 ? name + '%' : name;
+  return [STAT.CR, STAT.CD].includes(name) ? name : value <= 1 ? name + '%' : name;
 }
 /** 单个驱动盘：各副词条的成长（强化）次数 = 当前值/成长值 - 1 */
 export function discGrowth(disc, rarity) {

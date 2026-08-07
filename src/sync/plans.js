@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { readCookieCache } from './characters.js';
 import { pool } from './library.js';
 import { normalizeStatKey } from '../lib/util.js';
+import { PERCENT_STATS } from '../lib/constants.js';
 import { validatePlans, warnIfInvalid } from '../lib/schema.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -84,9 +85,8 @@ async function fetchUid(cookies) {
 // ---------------- 数据提取 ----------------
 
 /** 按属性名判定百分比：暴击/暴伤/穿透率恒为百分比（方案数据的 show_percent 字段不可靠，
- *  同一角色不同方案对暴击率有的标 1 有的标 0，但值都是「45」这种百分比数值） */
-const PERCENT_PANEL = new Set(['暴击率', '暴击伤害', '穿透率']);
-const isPercentPanel = (name) => PERCENT_PANEL.has(normalizeStatKey(name));
+ *  同一角色不同方案对暴击率有的标 1 有的标 0，但值都是「45」这种百分比数值）。集合见 constants.PERCENT_STATS */
+const isPercentPanel = (name) => PERCENT_STATS.has(normalizeStatKey(name));
 
 /** 解析方案面板数值：百分比属性（如暴击率 45）转内部小数（/100）；无效返回 null */
 function parseValue(v, percent) {
