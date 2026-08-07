@@ -33,6 +33,15 @@ body {
   font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
   min-height: 100vh;
 }
+/* CRT 扫描线氛围（绝区零赛博质感）：极淡白色细线叠加，pointer-events 不挡交互 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.016) 0 1px, transparent 1px 3px);
+}
 /* 滚动条美化（可见滚动区域：弹窗 / 表格容器 / wiki 等；主网格刻意隐藏） */
 ::-webkit-scrollbar {
   width: 10px;
@@ -61,10 +70,20 @@ header {
   gap: 16px;
   padding: 12px 24px;
   background: rgba(13, 13, 13, 0.92);
-  border-bottom: 2px solid var(--acc);
   backdrop-filter: blur(6px);
   flex-wrap: wrap;
   row-gap: 8px;
+}
+/* 黄黑分段警示线（绝区零风格 header 底部装饰） */
+header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--acc) 0 16px, #111 16px 22px);
+  opacity: 0.85;
 }
 header .logo {
   height: 30px;
@@ -72,12 +91,17 @@ header .logo {
   border-radius: 5px;
   border: 1px solid var(--line);
   flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(247, 212, 29, 0.25));
 }
 header h1 {
   font-size: 21px;
   font-weight: 900;
   letter-spacing: 2px;
-  color: var(--acc);
+  background: linear-gradient(180deg, #ffe08a 0%, var(--acc) 52%, #c89a00 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 8px rgba(247, 212, 29, 0.3));
 }
 header .sub {
   font-size: 13px;
@@ -187,6 +211,17 @@ button:active {
 }
 #status.show {
   display: block;
+  animation: statusIn 0.28s ease;
+}
+@keyframes statusIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 main {
   display: grid;
@@ -201,11 +236,6 @@ main {
 }
 main::-webkit-scrollbar {
   display: none;
-}
-@media (max-width: 1100px) {
-  main {
-    grid-template-columns: 1fr;
-  }
 }
 .card {
   position: relative;
@@ -249,6 +279,21 @@ main::-webkit-scrollbar {
   background: var(--card2);
   flex-shrink: 0;
   transition: border-color var(--t), box-shadow var(--t);
+}
+/* 立绘大图（wiki tachie）：卡片左上角竖列、高度与右侧属性面板一致、无边框，内容右移 */
+.upper-left.has-tachie {
+  position: relative;
+  padding-left: 140px;
+}
+.upper-left.has-tachie .portrait-lg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 128px;
+  height: 100%;
+  border: none;
+  object-fit: cover;
+  object-position: center top;
 }
 /* 稀有度头像框：S 金 / A 紫 / B 蓝（由 render 在 .card 上挂 data-rarity） */
 .card[data-rarity='S'] .portrait {
@@ -441,7 +486,8 @@ main::-webkit-scrollbar {
   letter-spacing: 2px;
   margin-bottom: 6px;
   border-left: 3px solid var(--acc);
-  padding-left: 6px;
+  padding: 3px 8px 3px 7px;
+  background: linear-gradient(90deg, rgba(247, 212, 29, 0.12), rgba(247, 212, 29, 0.02) 55%, transparent);
 }
 .discs-vert {
   display: grid;
@@ -578,9 +624,10 @@ main::-webkit-scrollbar {
 .cs .cs-val[data-core='1'] {
   color: var(--acc);
   font-size: 15px;
+  text-shadow: 0 0 14px rgba(247, 212, 29, 0.35);
 }
 .cs tr.hl .cs-val[data-core='1'] {
-  text-shadow: 0 0 10px rgba(247, 212, 29, 0.35);
+  text-shadow: 0 0 16px rgba(247, 212, 29, 0.55);
 }
 .cs .cs-val .break {
   font-size: 11px;
@@ -614,17 +661,6 @@ main::-webkit-scrollbar {
 .cs .cs-rate .tfill {
   display: block;
   height: 100%;
-  transition: width 0.35s ease;
-  background-image: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.22) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgba(255, 255, 255, 0.22) 50%,
-    rgba(255, 255, 255, 0.22) 75%,
-    transparent 75%
-  );
-  background-size: 7px 7px;
 }
 .empty {
   grid-column: 1/-1;
@@ -660,6 +696,7 @@ textarea {
 }
 .modal.show {
   display: flex;
+  animation: fadeIn 0.16s ease;
 }
 .modal-box {
   background: var(--card);
@@ -670,6 +707,25 @@ textarea {
   max-height: 86vh;
   overflow: auto;
   padding: 18px;
+  animation: popIn 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .modal-box h2 {
   color: var(--acc);
@@ -821,6 +877,8 @@ textarea {
 .tbl-wrap {
   grid-column: 1/-1;
   padding: 16px 24px;
+  overflow-x: auto;
+  min-width: 0;
 }
 table.tbl {
   border-collapse: collapse;
@@ -945,6 +1003,19 @@ table.tbl {
   color: var(--acc);
   font-weight: 700;
 }
+.tip {
+  animation: tipIn 0.14s ease;
+}
+@keyframes tipIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .tbl .tstat {
   min-width: 64px;
   vertical-align: middle;
@@ -975,17 +1046,6 @@ table.tbl {
 .tbl .tfill {
   display: block;
   height: 100%;
-  transition: width 0.35s ease;
-  background-image: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.22) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgba(255, 255, 255, 0.22) 50%,
-    rgba(255, 255, 255, 0.22) 75%,
-    transparent 75%
-  );
-  background-size: 7px 7px;
 }
 .tbl tbody tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.02);
@@ -1146,4 +1206,161 @@ table.tbl th.sorted {
 }
 .wiki-ms-dot:hover {
   border-color: var(--acc);
+}
+
+/* ---------- 窄屏适配 ---------- */
+@media (max-width: 1100px) {
+  main {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 900px) {
+  /* 卡片：左侧信息与右侧面板上下堆叠（面板全宽） */
+  .upper {
+    flex-direction: column;
+  }
+  .upper-left {
+    flex: 1 1 auto;
+  }
+  /* 卡片下部驱动盘：6 盘 3 列 → 2 列 */
+  .discs-vert.wide {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 700px) {
+  header {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  header h1 {
+    font-size: 18px;
+  }
+  /* 弹窗输入/勾选两列 → 一列 */
+  .tgrid {
+    grid-template-columns: 1fr;
+  }
+  /* 驱动盘单列 */
+  .discs-vert,
+  .discs-vert.wide {
+    grid-template-columns: 1fr;
+  }
+  /* 技能等级格子换行 */
+  .skill-grid {
+    flex-wrap: wrap;
+  }
+  .skill-cell {
+    flex: 1 1 30%;
+  }
+  /* 卡片面板表格字号略降，适配窄屏 */
+  .cs {
+    font-size: 12px;
+  }
+  .tbl-wrap {
+    padding: 12px 10px;
+  }
+  .modal {
+    padding: 10px;
+  }
+}
+
+/* ---------- 排版细节与动效 ---------- */
+/* 数字等宽：面板/表格数值小数点对齐 */
+.cs .cs-val,
+.tbl td,
+.tbl .tpct,
+.plantable td,
+.rpct {
+  font-variant-numeric: tabular-nums;
+}
+/* 属性元素色点徽章（元素名前圆点用元素色） */
+.tag.e::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: 1px;
+  background: currentColor;
+}
+/* 稀有度渐变：卡片顶部条随稀有度着色 */
+.card[data-rarity='S'] {
+  border-top-color: #ffd75e;
+}
+.card[data-rarity='A'] {
+  border-top-color: #9a7bff;
+}
+/* 空状态图标化 */
+.empty::before {
+  content: '◈';
+  display: block;
+  font-size: 38px;
+  line-height: 1;
+  margin-bottom: 10px;
+  opacity: 0.4;
+  color: var(--acc);
+}
+/* 卡片逐卡入场（轻微上浮淡入，前 8 张错开） */
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+main > .card {
+  animation: cardIn 0.3s ease both;
+}
+main > .card:nth-child(2) {
+  animation-delay: 0.04s;
+}
+main > .card:nth-child(3) {
+  animation-delay: 0.08s;
+}
+main > .card:nth-child(4) {
+  animation-delay: 0.12s;
+}
+main > .card:nth-child(5) {
+  animation-delay: 0.16s;
+}
+main > .card:nth-child(6) {
+  animation-delay: 0.2s;
+}
+main > .card:nth-child(7) {
+  animation-delay: 0.24s;
+}
+main > .card:nth-child(8) {
+  animation-delay: 0.28s;
+}
+/* 尊重系统减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- 美学设计 ---------- */
+/* 稀有度卡片内光晕（S 金 / A 紫，hover 与浮起阴影叠加） */
+.card[data-rarity='S'] {
+  box-shadow: inset 0 0 0 1px rgba(255, 215, 94, 0.08);
+}
+.card[data-rarity='S']:hover {
+  box-shadow: inset 0 0 0 1px rgba(255, 215, 94, 0.13), var(--shadow);
+}
+.card[data-rarity='A'] {
+  box-shadow: inset 0 0 0 1px rgba(154, 123, 255, 0.08);
+}
+.card[data-rarity='A']:hover {
+  box-shadow: inset 0 0 0 1px rgba(154, 123, 255, 0.13), var(--shadow);
+}
+/* 标签微背景，层次更清晰 */
+.tag {
+  background: rgba(255, 255, 255, 0.03);
 }

@@ -133,6 +133,8 @@ export function validateLibrary(lib) {
       err.push(`角色 ${k} coreSkillBoost 应为数组（每档增量，A-F 顺序）`);
     if (c.corePassiveMax !== undefined && typeof c.corePassiveMax !== 'string')
       err.push(`角色 ${k} corePassiveMax 应为字符串（核心被动满级描述）`);
+    if (c.tachie !== undefined && typeof c.tachie !== 'string')
+      err.push(`角色 ${k} tachie 应为字符串（立绘大图 URL）`);
   });
   checkEntries(errors, lib, 'wengines', '音擎', (k, w, err) => {
     if (w.baseAtk !== undefined && typeof w.baseAtk !== 'number') err.push(`音擎 ${k} baseAtk 应为数字`);

@@ -472,11 +472,29 @@ function fetchAppearance(page) {
   return appearanceData ? appearanceData.list.map((it) => ({ name: it.tab_name, image: it.image })) : null;
 }
 
-/** 角色扩展：介绍/技能/影画/外观图/CV */
+/** 角色立绘大图（tachie_m：modules 组件 data 嵌套 JSON 里的移动端立绘 URL） */
+function fetchCharacterTachie(page) {
+  for (const m of page.modules || []) {
+    for (const comp of m.components || []) {
+      if (typeof comp.data !== 'string' || !comp.data.includes('tachie_m')) continue;
+      try {
+        const d = JSON.parse(comp.data);
+        if (typeof d.tachie_m === 'string' && d.tachie_m) return d.tachie_m;
+      } catch {
+        /* 组件 data 解析失败则忽略 */
+      }
+    }
+  }
+  return null;
+}
+
+/** 角色扩展：介绍/技能/影画/外观图/CV/立绘大图 */
 function fetchCharacterExtended(page) {
   const out = {};
   const intro = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.trim().length > 0);
   if (intro) out.description = intro.rich_text;
+  const tachie = fetchCharacterTachie(page);
+  if (tachie) out.tachie = tachie;
   const cvData = findModule(page, (d) => typeof d.rich_text === 'string' && d.rich_text.includes('中配'));
   if (cvData) out.cv = stripHtml(cvData.rich_text).replace(/\s+/g, ' ');
   const skills = fetchSkills(page);

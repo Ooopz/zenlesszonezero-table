@@ -162,7 +162,9 @@ function gapAdviceHtml(character, R) {
 function characterCard(character) {
   const R = character.calculate();
   const libCharacter = R.libCharacter;
-  const portrait = character.icon || libCharacter.icon || character.portrait || libCharacter.portrait || '';
+  // 卡片左上角头像：优先立绘大图（wiki tachie），其次小图标/立绘
+  const tachie = character.tachie || libCharacter.tachie || '';
+  const portrait = tachie || character.icon || libCharacter.icon || character.portrait || libCharacter.portrait || '';
   const rarity = character.rarity || libCharacter.rarity || '';
   const element = libCharacter.element || '';
   const trait = libCharacter.trait || '';
@@ -303,9 +305,9 @@ function characterCard(character) {
   card.dataset.rarity = rarity || ''; // 供 CSS 稀有度头像框 / 角标着色
   card.innerHTML = `
     <div class="upper">
-      <div class="upper-left">
+      <div class="upper-left${tachie ? ' has-tachie' : ''}">
         <div class="basic">
-          ${portrait ? `<img class="portrait" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')" onerror="this.style.display='none'">` : ''}
+          ${portrait ? `<img class="portrait${tachie ? ' portrait-lg' : ''}" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')" onerror="this.style.display='none'">` : ''}
           <div class="who">
             <div class="name">${character.name || ''}
               <button class="mini" title="设置/编辑该角色的目标属性与有效副词条" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button>
@@ -385,8 +387,7 @@ function cellStats(R, target, s) {
   if (targetPercents.has(s)) targetInternal = targetVal / 100;
   const rate = current / targetInternal;
   const width = Math.min(100, rate * 100).toFixed(0);
-  // 背景色内联（斜纹等装饰由 CSS background-image 提供）
-  return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background-color:${rateColor(rate)}"></span></div></td>`;
+  return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></div></td>`;
 }
 
 function renderTable(list) {

@@ -273,6 +273,23 @@ window.openTargetSettings = openTargetSettings;
 
 /** 初始化交互：绑定事件并启动加载配置（由 main.js 在数据就绪后调用） */
 export function initUi() {
+  // 图片加载失败统一占位：隐藏破图，露出容器背景色块（error 事件不冒泡，需捕获阶段）
+  document.addEventListener(
+    'error',
+    (e) => {
+      const t = e.target;
+      if (t && t.tagName === 'IMG') t.style.visibility = 'hidden';
+    },
+    true
+  );
+  // Esc 关闭当前弹窗
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    for (const id of ['targetModal', 'noteModal', 'helpModal', 'rolesyncModal']) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('show');
+    }
+  });
   // ---------- 事件绑定 ----------
   document
     .getElementById('targetClose')

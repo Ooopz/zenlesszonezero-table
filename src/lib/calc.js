@@ -367,8 +367,7 @@ export function statProgress(character, R, name) {
 /** 达成率格子：百分比（可不封顶）+ 小进度条（进度条宽度封顶 100%） */
 export function progressCell(rate) {
   const width = Math.min(100, rate * 100).toFixed(0);
-  // 背景色内联（斜纹等装饰由 CSS background-image 提供）
-  return `<span class="rpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><span class="tbar"><span class="tfill" style="width:${width}%;background-color:${rateColor(rate)}"></span></span>`;
+  return `<span class="rpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><span class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></span>`;
 }
 
 // ---------- 目标副词条缺口 ----------
