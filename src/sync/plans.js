@@ -12,6 +12,8 @@
 //
 // ⚠️ 请求头必须带 x-rpc-device_id / x-rpc-device_fp 指纹头，否则 plan_detail /
 //   search_plan 等端点会触发 Geetest 验证码风控（retcode 10035）。
+//   设备头优先取 cookie 里的真实指纹（DEVICEFP / _MHYUUID，从养成指南页面导出）——
+//   写死的伪造指纹会被风控以 retcode 10041 直接拒绝（实测），务必用真实值。
 //   feed 端点域为 act-api-takumi.mihoyo.com，参数用下划线（page_size/next_id/follow_end）。
 
 import fs from 'node:fs';
@@ -31,14 +33,13 @@ const UA =
   'Mozilla/5.0 (Linux; Android 9; 23113RKC6C Build/PQ3A.190605.06200901; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 miHoYoBBS/2.75.2';
 
 // 请求头：nap_cultivate_tool 接口的鉴权组合。
-// x-rpc-device_*（设备指纹）是关键——缺了会触发 Geetest 风控。
+// x-rpc-device_*（设备指纹）是关键——缺了会触发 Geetest 风控；device_id / device_fp
+// 由 deviceHeaders() 按 cookie 里的真实指纹动态注入（见下），这里不写死。
 const planHeaders = {
   Host: 'api-takumi.mihoyo.com',
   'User-Agent': UA,
   'x-rpc-app_version': '2.75.2',
-  'x-rpc-device_id': '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
   'x-rpc-device_name': 'Redmi%2023113RKC6C',
-  'x-rpc-device_fp': '38d7fe73b1032',
   'x-rpc-platform': '2',
   'x-rpc-client_type': '5',
   'x-rpc-language': 'zh-cn',
@@ -55,20 +56,50 @@ const API = 'https://api-takumi.mihoyo.com/event/nap_cultivate_tool';
 const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/user'; // feed 端点域
 const MAX_PLANS = 50; // 每个角色方案上限（「切换方案」列表前 50 个）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // 仅供风控重试等待
+
+/** 设备指纹头：优先取 cookie 里养成指南会话的真实指纹（DEVICEFP / _MHYUUID，随 cookie 一起导出），
+ *  缺失才回退到内置值。写死的伪造指纹会被风控以 retcode 10041 拒绝（实测 avatar_basic_list），
+ *  务必用 cookie 里的真实值。 */
+function deviceHeaders(cookies) {
+  return {
+    'x-rpc-device_id': cookies?._MHYUUID || '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
+    'x-rpc-device_fp': cookies?.DEVICEFP || '38d7fe73b1032',
+  };
+}
+
+// 瞬时风控/限流重试：等待后重试可恢复（如刚跑完一次大同步再触发）。连续重试有上限，避免无限等待。
+const RETRY_DELAYS = [5000, 15000, 45000]; // 每次重试前等待：5s → 15s → 45s
 
 async function request(url, cookies) {
-  const res = await fetch(url, {
-    headers: {
-      ...planHeaders,
-      cookie: Object.entries(cookies)
-        .map(([k, v]) => `${k}=${v}`)
-        .join('; '),
-    },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = await res.json();
-  if (j.retcode !== 0) throw new Error(`retcode ${j.retcode}: ${j.message || j.msg || ''}`);
-  return j;
+  let attempt = 0;
+  for (;;) {
+    const res = await fetch(url, {
+      headers: {
+        ...planHeaders,
+        ...deviceHeaders(cookies),
+        cookie: Object.entries(cookies)
+          .map(([k, v]) => `${k}=${v}`)
+          .join('; '),
+      },
+    });
+    const j = await res.json().catch(() => null);
+    const retcode = j?.retcode;
+    // 429 / 10041：限流风控，指数退避后重试
+    if ((res.status === 429 || retcode === 10041) && attempt < RETRY_DELAYS.length) {
+      const delay = RETRY_DELAYS[attempt++];
+      console.warn(
+        `    ⚠ ${res.status === 429 ? `HTTP ${res.status}` : `retcode ${retcode}`}：请求被风控，等待 ${(delay / 1000).toFixed(0)}s 后重试（${attempt}/${RETRY_DELAYS.length}）`
+      );
+      await sleep(delay);
+      continue;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (retcode !== 0) {
+      throw new Error(`retcode ${retcode}：${j?.message || j?.msg || ''}`);
+    }
+    return j;
+  }
 }
 
 async function fetchUid(cookies) {
