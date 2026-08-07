@@ -1,12 +1,12 @@
 // src/web/ui.js —— 交互层：提示条、服务器同步、目标/有效/备注弹窗、事件绑定、初始化
 import { CLIPBOARD_SCRIPT, escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
 import { targetStats, targetUnits, validStatOptions } from '../lib/calc.js';
+import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET } from '../lib/constants.js';
 import { apiRequest } from './util.js';
 import {
   readCharTarget,
   saveCharTarget,
   readValidStats,
-  saveValidStats,
   readNote,
   saveNote,
   userConfig,
@@ -44,11 +44,11 @@ function startSyncPolling(kind) {
     if (!j || !j.ok || !j.progress || j.progress.kind !== kind) return;
     const p = j.progress;
     let msg = '正在同步…';
-    if (p.step === 'characters') msg = `正在同步角色 ${p.done}/${p.total}…`;
+    if (p.step === SYNC_KINDS.CHARACTERS) msg = `正在同步角色 ${p.done}/${p.total}…`;
     else if (p.step === 'wengines') msg = `正在同步音擎 ${p.done}/${p.total}…`;
     else if (p.step === 'discs') msg = `正在同步驱动盘 ${p.done}/${p.total}…`;
     else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
-    else if (p.step === 'plans') msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
+    else if (p.step === SYNC_KINDS.PLANS) msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
     notify(msg, 60);
   }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
 }
@@ -56,7 +56,7 @@ function startSyncPolling(kind) {
 /** 更新数据库（需本地服务器） */
 async function syncLibrary() {
   notify('正在更新数据库…（约 1 分钟，请稍候）', 60);
-  startSyncPolling('library');
+  startSyncPolling(SYNC_KINDS.LIBRARY);
   const j = await apiRequest('/api/sync-base', { method: 'POST' });
   stopSyncPolling();
   if (j && j.ok) {
@@ -83,7 +83,7 @@ async function openRoleSync() {
 }
 async function syncCharacters(cookie) {
   notify('正在同步角色…', 60);
-  startSyncPolling('characters');
+  startSyncPolling(SYNC_KINDS.CHARACTERS);
   const j = await apiRequest('/api/sync-characters', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -106,7 +106,7 @@ async function syncPlans() {
     return;
   }
   notify('正在同步推荐方案…（每角色最多 20 个方案，约 1 分钟）', 120);
-  startSyncPolling('plans');
+  startSyncPolling(SYNC_KINDS.PLANS);
   const j = await apiRequest('/api/sync-plans', { method: 'POST' });
   stopSyncPolling();
   if (j && j.ok) {
@@ -120,30 +120,7 @@ async function syncPlans() {
 // ---------- 目标设置弹窗 ----------
 let currentTargetChar = null;
 
-/** 驱动盘 4/5/6 号位主词条候选（对应各槽位推荐，含养成指南所用固定值名与百分比变体） */
-const MAIN_STAT_OPTIONS = {
-  4: ['暴击率', '暴击伤害', '异常精通', '攻击力', '攻击力%', '防御力', '防御力%', '生命值', '生命值%'],
-  5: [
-    '穿透率',
-    '攻击力',
-    '攻击力%',
-    '防御力',
-    '防御力%',
-    '生命值',
-    '生命值%',
-    '物理伤害加成',
-    '火属性伤害加成',
-    '冰属性伤害加成',
-    '电属性伤害加成',
-    '以太伤害加成',
-    '风属性伤害加成',
-    '烈霜伤害加成',
-    '流明伤害加成',
-  ],
-  6: ['冲击力', '能量自动回复', '异常掌控', '攻击力', '攻击力%', '防御力', '防御力%', '生命值', '生命值%'],
-};
-
-/** 填充「推荐音擎」下拉：只允许选属性库（wiki）中的音擎 */
+/** 填充「推荐音擎」下拉：只允许选属性库（wiki）中的音擎（候选见 constants.MAIN_STAT_OPTIONS） */
 function fillWengineSelect() {
   const sel = document.getElementById('targetWengine');
   const names = Object.keys(library.wengines || {}).sort((a, b) => a.localeCompare(b, 'zh'));
@@ -170,10 +147,18 @@ function openTargetSettings(name) {
   // 推荐音擎（wiki 音擎下拉）+ 4/5/6 号位主词条（各槽位候选下拉）
   fillWengineSelect();
   for (const slot of [4, 5, 6]) fillMainSelect(slot);
-  document.getElementById('targetWengine').value = target['推荐音擎'] || '';
-  document.getElementById('targetMain4').value = target['4号位主词条'] || '';
-  document.getElementById('targetMain5').value = target['5号位主词条'] || '';
-  document.getElementById('targetMain6').value = target['6号位主词条'] || '';
+  document.getElementById('targetWengine').value = target[TARGET_KEYS.WENGINE] || '';
+  document.getElementById('targetMain4').value = target[TARGET_KEYS.MAIN4] || '';
+  document.getElementById('targetMain5').value = target[TARGET_KEYS.MAIN5] || '';
+  document.getElementById('targetMain6').value = target[TARGET_KEYS.MAIN6] || '';
+  // 有效副词条勾选（并入目标弹窗，未手动配置时预勾选默认游戏推荐）
+  const effSelected = new Set(readValidStats(name));
+  document.getElementById('effGrid').innerHTML = validStatOptions
+    .map(
+      (o) =>
+        `<label class="chk"><input type="checkbox" data-type="${escapeHtml(o.type)}" ${effSelected.has(o.type) ? 'checked' : ''}> ${escapeHtml(o.label)}</label>`
+    )
+    .join('');
   renderPlanTable(name);
   document.getElementById('targetModal').classList.add('show');
 }
@@ -186,15 +171,17 @@ function saveTargetSettings() {
   });
   // 音擎/主词条（字符串目标，空值不覆盖）
   const w = document.getElementById('targetWengine').value.trim();
-  if (w) target['推荐音擎'] = w;
+  if (w) target[TARGET_KEYS.WENGINE] = w;
   for (const [id, key] of [
-    ['targetMain4', '4号位主词条'],
-    ['targetMain5', '5号位主词条'],
-    ['targetMain6', '6号位主词条'],
+    ['targetMain4', TARGET_KEYS.MAIN4],
+    ['targetMain5', TARGET_KEYS.MAIN5],
+    ['targetMain6', TARGET_KEYS.MAIN6],
   ]) {
     const v = document.getElementById(id).value.trim();
     if (v) target[key] = v;
   }
+  // 有效副词条（勾选结果；全不勾选 = 清空 → 覆盖默认游戏推荐）
+  target[TARGET_KEYS.VALID_STATS] = [...document.querySelectorAll('#effGrid input:checked')].map((inp) => inp.dataset.type);
   saveCharTarget(currentTargetChar, target);
   document.getElementById('targetModal').classList.remove('show');
   render();
@@ -215,7 +202,7 @@ function renderPlanTable(name) {
   const statNames = [];
   for (const p of plansList) for (const a of p.panel || []) if (!statNames.includes(a.name)) statNames.push(a.name);
 
-  const heads = ['', '方案', ...statNames, '推荐音擎', '4号位', '5号位', '6号位', '推荐副词条'];
+  const heads = ['', '方案', ...statNames, TARGET_KEYS.WENGINE, '4号位', '5号位', '6号位', '推荐副词条'];
   const rows = plansList.map((p, i) => {
     const statMap = {};
     for (const a of p.panel || []) statMap[a.name] = a;
@@ -251,40 +238,18 @@ function applyPlan(name, idx) {
     // 目标系统：百分比属性填整数（60 = 60%），其余填实际数值
     target[a.name] = a.percent ? Math.round(a.high * 100) : a.high;
   }
-  if (p.weapon?.main) target['推荐音擎'] = p.weapon.main;
-  if (p.mainProps?.[4]) target['4号位主词条'] = p.mainProps[4];
-  if (p.mainProps?.[5]) target['5号位主词条'] = p.mainProps[5];
-  if (p.mainProps?.[6]) target['6号位主词条'] = p.mainProps[6];
+  if (p.weapon?.main) target[TARGET_KEYS.WENGINE] = p.weapon.main;
+  if (p.mainProps?.[4]) target[TARGET_KEYS.MAIN4] = p.mainProps[4];
+  if (p.mainProps?.[5]) target[TARGET_KEYS.MAIN5] = p.mainProps[5];
+  if (p.mainProps?.[6]) target[TARGET_KEYS.MAIN6] = p.mainProps[6];
+  // 推荐副词条 → 有效副词条（过滤到合法副词条类型，如「攻击力%」「异常精通」）
+  if (p.subStats?.length) target[TARGET_KEYS.VALID_STATS] = p.subStats.filter((s) => SUBSTAT_TYPE_SET.has(s));
   saveCharTarget(name, target);
   openTargetSettings(name); // 重新渲染显示已应用的值
   notify(`${name} 已应用「${p.name}」推荐值`);
 }
 window.ZZZ = window.ZZZ || {};
 window.ZZZ.applyPlan = applyPlan;
-
-// ---------- 有效副词条弹窗 ----------
-let currentValidChar = null;
-function openValidStats(name) {
-  currentValidChar = name;
-  const selected = new Set(readValidStats(name));
-  document.getElementById('effChar').textContent = name || '';
-  document.getElementById('effGrid').innerHTML = validStatOptions
-    .map(
-      (o) =>
-        `<label class="chk"><input type="checkbox" data-type="${o.type}" ${selected.has(o.type) ? 'checked' : ''}> ${o.label}</label>`
-    )
-    .join('');
-  document.getElementById('effModal').classList.add('show');
-}
-function saveValidStatsModal() {
-  if (!currentValidChar) return;
-  const selected = [];
-  document.querySelectorAll('#effGrid input:checked').forEach((inp) => selected.push(inp.dataset.type));
-  saveValidStats(currentValidChar, selected);
-  document.getElementById('effModal').classList.remove('show');
-  render();
-  notify(`${currentValidChar} 有效副词条已保存`);
-}
 
 // 备注弹窗（点击头像）
 let currentNoteChar = null;
@@ -305,7 +270,6 @@ function saveNoteModal() {
 // 被卡片/表格内联 onclick 引用的函数，需挂到全局
 window.openNote = openNote;
 window.openTargetSettings = openTargetSettings;
-window.openValidStats = openValidStats;
 
 /** 初始化交互：绑定事件并启动加载配置（由 main.js 在数据就绪后调用） */
 export function initUi() {
@@ -320,17 +284,6 @@ export function initUi() {
     document.getElementById('targetModal').classList.remove('show');
     render();
     notify('已清空该角色目标');
-  });
-  document
-    .getElementById('effClose')
-    .addEventListener('click', () => document.getElementById('effModal').classList.remove('show'));
-  document.getElementById('effSave').addEventListener('click', saveValidStatsModal);
-  document.getElementById('effClear').addEventListener('click', () => {
-    if (!currentValidChar) return;
-    saveValidStats(currentValidChar, []);
-    document.getElementById('effModal').classList.remove('show');
-    render();
-    notify('已清空该角色有效副词条');
   });
   document
     .getElementById('noteClose')
@@ -354,9 +307,9 @@ export function initUi() {
     b.addEventListener('click', () => {
       syncDropdown.classList.remove('open');
       const act = b.dataset.action;
-      if (act === 'library') syncLibrary();
-      else if (act === 'characters') openRoleSync();
-      else if (act === 'plans') syncPlans();
+      if (act === SYNC_KINDS.LIBRARY) syncLibrary();
+      else if (act === SYNC_KINDS.CHARACTERS) openRoleSync();
+      else if (act === SYNC_KINDS.PLANS) syncPlans();
     })
   );
   // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
@@ -364,7 +317,7 @@ export function initUi() {
     b.addEventListener('click', () => {
       userConfig.view = b.dataset.view;
       saveUserConfig();
-      history.replaceState(null, '', b.dataset.view === 'card' ? location.pathname : `?view=${b.dataset.view}`);
+      history.replaceState(null, '', b.dataset.view === VIEWS.CARD ? location.pathname : `?view=${b.dataset.view}`);
       render();
     })
   );

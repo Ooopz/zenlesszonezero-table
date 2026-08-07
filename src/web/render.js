@@ -28,6 +28,7 @@ import {
   targetGap,
 } from '../lib/calc.js';
 import { escapeHtml, escapeJsAttr, formatValue, renderRichText, compareValues } from '../lib/util.js';
+import { STAT, VIEWS } from '../lib/constants.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
 
 // ---------- 悬浮提示 ----------
@@ -304,8 +305,7 @@ function characterCard(character) {
           ${portrait ? `<img class="portrait" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')" onerror="this.style.display='none'">` : ''}
           <div class="who">
             <div class="name">${character.name || ''}
-              <button class="mini" title="设置/编辑该角色的目标属性" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button>
-              <button class="mini" title="设置该角色视为「有效」的副词条属性" onclick="openValidStats('${escapeJsAttr(character.name)}')">有效</button>
+              <button class="mini" title="设置/编辑该角色的目标属性与有效副词条" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button>
             </div>
             ${readNote(character.name) ? `<div class="note">${escapeHtml(readNote(character.name))}</div>` : ''}
             <div class="tags">
@@ -331,7 +331,7 @@ function characterCard(character) {
             ${wengineIcon ? `<img src="${wengineIcon}" alt="" onerror="this.style.display='none'"${wengineEffect ? ` data-detail="${escapeHtml(wengineEffect)}" title="悬浮查看音擎特效"` : ''}>` : ''}
             <div class="wmain">
               <div class="wname">${wengine.name || '未佩戴'}<span style="color:var(--acc)">${'★'.repeat(wengine.refinement || 0)}</span></div>
-              <div class="wmeta">${wengineBaseAtk != null ? `基础攻击 ${formatValue('攻击力', wengineBaseAtk)}` : ''}${wengineSubStats.length ? `　${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}` : ''}</div>
+              <div class="wmeta">${wengineBaseAtk != null ? `基础攻击 ${formatValue(STAT.ATK, wengineBaseAtk)}` : ''}${wengineSubStats.length ? `　${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}` : ''}</div>
             </div>
           </div>
         </div>
@@ -430,12 +430,12 @@ function renderTable(list) {
       const charNote = readNote(character.name);
       const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
       cell['角色'] =
-        `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button><button class="mini" onclick="openValidStats('${escapeJsAttr(character.name)}')">有效</button></span></span></td>`;
+        `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
 
       // 音擎：图标 + 悬浮详情
       const wengineDetail =
         `<b>${wengine.name || '未佩戴'}</b>${wengine.refinement ? ` ★${wengine.refinement}` : ''}` +
-        (wengineBaseAtk != null ? `<br>基础攻击 ${formatValue('攻击力', wengineBaseAtk)}` : '') +
+        (wengineBaseAtk != null ? `<br>基础攻击 ${formatValue(STAT.ATK, wengineBaseAtk)}` : '') +
         (wengineSubStats.length
           ? `<br>${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}`
           : '') +
@@ -557,11 +557,11 @@ grid.addEventListener('click', (e) => {
 
 // ---------- 渲染调度 ----------
 export function render() {
-  const view = new URLSearchParams(location.search).get('view') || userConfig.view || 'card';
+  const view = new URLSearchParams(location.search).get('view') || userConfig.view || VIEWS.CARD;
   // 高亮当前视图切换按钮
   document.querySelectorAll('.view-tab').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   grid.innerHTML = '';
-  if (view === 'wiki') {
+  if (view === VIEWS.WIKI) {
     grid.innerHTML = renderWiki();
     return;
   }
@@ -574,6 +574,6 @@ export function render() {
     grid.innerHTML = `<div class="empty">没有匹配的角色。<br>试试调整或清空筛选条件。</div>`;
     return;
   }
-  if (view === 'table') renderTable(list);
+  if (view === VIEWS.TABLE) renderTable(list);
   else for (const character of list) grid.appendChild(characterCard(character));
 }

@@ -48,16 +48,17 @@
           <code>npm start</code> 后才能访问页面。
         </p>
         <p>
-          <b>目标设置：</b>卡片头部「目标」按钮为该角色单独填写目标属性值（百分比填整数，如暴击率 60 表示 60%），
-          卡片显示各项「当前/目标」的达成率进度条与总体达成率。每个角色各自保存。
+          <b>目标设置：</b>点卡片「目标」按钮，为角色一站式配置：目标属性值（百分比填整数，如暴击率 60 表示
+          60%）、推荐音擎、4/5/6 号位主词条、有效副词条（可一键从下方推荐方案应用）。卡片显示各项
+          「当前/目标」的达成率进度条与总体达成率。每个角色各自保存。
         </p>
         <p>
           <b>统计表格：</b>点「统计表格」切换到一览视图，每个角色一行（角色/音擎/驱动盘/各属性值），
           属性值下方有小进度条显示该角色的达成率；再点「卡片视图」切回。表头/行可拖动排序。
         </p>
         <p>
-          <b>副词条命中：</b>卡片头部「有效」按钮为该角色勾选视为有效的副词条属性； 驱动盘词条旁标注
-          <b>×n</b>（该词条强化次数，按 B 站 wiki 成长规则由词条数值推算）， 副词条命中次数 =
+          <b>副词条命中：</b>「目标」弹窗的「有效副词条」区勾选视为有效的副词条属性；驱动盘词条旁标注
+          <b>×n</b>（该词条强化次数，按 B 站 wiki 成长规则由词条数值推算），副词条命中次数 =
           六个盘落在有效属性上的词条次数之和（每个词条本身算 1，每强化一次再 +1）。
         </p>
         <p>
@@ -117,6 +118,13 @@
             <select id="targetMain6"><option value="">—</option></select>
           </div>
         </div>
+        <div class="eff-block">
+          <h3 style="margin-top: 14px">有效副词条</h3>
+          <p style="color: var(--dim); font-size: 13px; margin: 2px 0 0">
+            勾选视为「有效」的副词条（决定驱动盘副词条命中次数与缺口分析）。
+          </p>
+          <div id="effGrid" class="tgrid"></div>
+        </div>
         <div class="row">
           <button id="targetSave">保存</button>
           <button id="targetClear">清空</button>
@@ -124,22 +132,6 @@
         <div id="planTableWrap">
           <h3 style="margin-top: 18px">推荐方案（养成指南）· 属性列为推荐最大值</h3>
           <div id="planTable"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal" id="effModal">
-      <div class="modal-box">
-        <button class="close" id="effClose">✕</button>
-        <h2>有效副词条设置 · <span id="effChar" style="color: var(--acc)"></span></h2>
-        <p style="color: var(--dim); font-size: 14px">
-          勾选该角色视为「有效」的副词条属性。副词条命中次数 = 六个盘落在有效属性上的词条次数之和（每个词条本身算
-          1，每强化一次再 +1）。
-        </p>
-        <div id="effGrid" class="tgrid"></div>
-        <div class="row">
-          <button id="effSave">保存</button>
-          <button id="effClear">清空</button>
         </div>
       </div>
     </div>

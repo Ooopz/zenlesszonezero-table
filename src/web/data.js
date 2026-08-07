@@ -1,6 +1,7 @@
 // src/web/data.js —— 数据层：由 main.js 注入数据（不再从 DOM 内嵌块读取），维护索引/配置/过滤
 import { buildIndex, lookup, statEntries } from '../lib/util.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
+import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
 import { apiRequest } from './util.js';
 
 // ---------- 数据（由 setData 注入） ----------
@@ -62,33 +63,24 @@ export function saveCharTarget(name, target) {
   userConfig.charTargets[name] = target;
   saveUserConfig();
 }
-// 合法有效副词条类型（与 calc.validStatOptions 的 type 一致）
-const VALID_STAT_TYPES = new Set([
-  '攻击力',
-  '攻击力%',
-  '暴击率',
-  '暴击伤害',
-  '穿透值',
-  '异常精通',
-  '生命值',
-  '生命值%',
-  '防御力',
-  '防御力%',
-]);
-
 export function readValidStats(name) {
-  // 手动配置过（含清空）→ 覆盖默认
+  const target = readCharTarget(name);
+  // 整合到目标：目标配置含「有效副词条」键（含清空 []）→ 手动配置覆盖默认
+  if (TARGET_KEYS.VALID_STATS in target) return target[TARGET_KEYS.VALID_STATS] || [];
+  // 兼容旧数据：未迁移前有效副词条独立存于 validStats
   if (name in userConfig.validStats) return userConfig.validStats[name] || [];
-  // 否则用角色默认：游戏推荐的有效属性（equipPlan.plan_effective_property_list）
+  // 否则用角色默认：游戏推荐的有效属性（equipPlan.plan_effective_property_list）。
+  // 合法有效副词条类型见 constants.SUBSTAT_TYPE_SET（与 calc.validStatOptions 的 type 一致）
   const character = myCharacters.find((c) => c.name === name);
   if (!character) return [];
   return (character.equipPlan?.plan_effective_property_list || [])
     .map((p) => (p.full_name && p.full_name.includes('百分比') ? `${p.name}%` : p.name))
-    .filter((t) => VALID_STAT_TYPES.has(t));
+    .filter((t) => SUBSTAT_TYPE_SET.has(t));
 }
 export function saveValidStats(name, list) {
-  userConfig.validStats[name] = list;
-  saveUserConfig();
+  const target = readCharTarget(name);
+  target[TARGET_KEYS.VALID_STATS] = list;
+  saveCharTarget(name, target);
 }
 export function readNote(name) {
   return userConfig.notes[name] || '';
