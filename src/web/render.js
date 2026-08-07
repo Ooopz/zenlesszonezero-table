@@ -196,8 +196,10 @@ function characterCard(character) {
     const actFinal = R.actual?.[name]?.final;
     const mismatch = actFinal != null && theoFinal != null && Math.abs(actFinal - theoFinal) > 1e-6;
     const split = theoFinal != null ? `理论${formatValue(name, theoFinal)}` : '';
+    // 面板数值金色突出由「配置的有效副词条」决定：有效副词条 → 对应面板属性（如配了攻击力% 则攻击力金色）
+    const core = highlighted ? '1' : '';
     mergedRows.push(
-      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val"${mismatch ? ` style="color:var(--red)"` : ''}>${formatValue(name, displayFinal)}${split ? `<span class="break">(${split})</span>` : ''}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
+      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val" data-core="${core}"${mismatch ? ` style="color:var(--red)"` : ''}>${formatValue(name, displayFinal)}${split ? `<span class="break">(${split})</span>` : ''}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
     );
     displayed.add(name);
   };
@@ -298,6 +300,7 @@ function characterCard(character) {
 
   const card = document.createElement('div');
   card.className = 'card';
+  card.dataset.rarity = rarity || ''; // 供 CSS 稀有度头像框 / 角标着色
   card.innerHTML = `
     <div class="upper">
       <div class="upper-left">
@@ -382,7 +385,8 @@ function cellStats(R, target, s) {
   if (targetPercents.has(s)) targetInternal = targetVal / 100;
   const rate = current / targetInternal;
   const width = Math.min(100, rate * 100).toFixed(0);
-  return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></div></td>`;
+  // 背景色内联（斜纹等装饰由 CSS background-image 提供）
+  return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background-color:${rateColor(rate)}"></span></div></td>`;
 }
 
 function renderTable(list) {
@@ -430,7 +434,7 @@ function renderTable(list) {
       const charNote = readNote(character.name);
       const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
       cell['角色'] =
-        `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
+        `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" loading="lazy" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
 
       // 音擎：图标 + 悬浮详情
       const wengineDetail =
