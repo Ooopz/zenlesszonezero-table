@@ -129,6 +129,10 @@ export function validateLibrary(lib) {
   checkEntries(errors, lib, 'characters', '角色', (k, c, err) => {
     if (c.maxLevel !== undefined && (typeof c.maxLevel !== 'object' || Array.isArray(c.maxLevel)))
       err.push(`角色 ${k} maxLevel 应为对象`);
+    if (c.coreSkillBoost !== undefined && !Array.isArray(c.coreSkillBoost))
+      err.push(`角色 ${k} coreSkillBoost 应为数组（每档增量，A-F 顺序）`);
+    if (c.corePassiveMax !== undefined && typeof c.corePassiveMax !== 'string')
+      err.push(`角色 ${k} corePassiveMax 应为字符串（核心被动满级描述）`);
   });
   checkEntries(errors, lib, 'wengines', '音擎', (k, w, err) => {
     if (w.baseAtk !== undefined && typeof w.baseAtk !== 'number') err.push(`音擎 ${k} baseAtk 应为数字`);

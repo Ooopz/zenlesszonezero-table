@@ -51,8 +51,11 @@ const PANEL_RENDERERS = {
   bangboos: renderBangboos,
 };
 
-// 初始属性展示列：满级三属优先，其余从 calc.panelOrder 派生（排除穿透值），避免两处定义漂移
-const INITIAL_STATS = [...maxLevelStats, ...panelOrder.filter((s) => !maxLevelStats.includes(s) && s !== '穿透值')];
+// 初始属性展示列：满级三属优先，其余从 calc.panelOrder 派生（排除穿透值/贯穿力——贯穿力在展示层合并到穿透率列）
+const INITIAL_STATS = [
+  ...maxLevelStats,
+  ...panelOrder.filter((s) => !maxLevelStats.includes(s) && s !== '穿透值' && s !== '贯穿力'),
+];
 const MAX_STATS = maxLevelStats;
 // 各子面板可点击排序的表头
 const CHAR_SORTABLE = new Set([
@@ -71,10 +74,14 @@ const BANG_SORTABLE = new Set(['名称', '稀有度']);
 function fmt(v) {
   return v == null || v === '' ? '' : v;
 }
-function statCells(obj, keys) {
-  return keys.map((k) => `<td>${fmt(obj?.[k])}</td>`).join('');
+/** 单元格：merge 提供按列名取值的覆盖（如穿透率列合并显示命破角色的贯穿力） */
+function statCells(obj, keys, merge) {
+  return keys.map((k) => `<td>${fmt(merge?.[k] ? merge[k](obj) : obj?.[k])}</td>`).join('');
 }
-/** 核心技满级提升说明（悬浮在核心技图标上，取自 coreSkillBoost；X% 键为攻击/生命等百分比提升） */
+/** 穿透率列取值：普通角色取穿透率，命破角色（无穿透率）取贯穿力——展示层合并 */
+const penCell = (o) => o.穿透率 ?? o.贯穿力;
+/** 核心技满级提升说明（悬浮在核心技图标上，取自 coreSkillBoost；X% 键为攻击/生命等百分比提升）。
+ *  coreSkillBoost 为每档增量数组，满级提升 = 全部档位累计。 */
 function coreBoostHtml(c) {
   const labels = {
     攻击力: '基础攻击力',
@@ -92,7 +99,12 @@ function coreBoostHtml(c) {
     异常掌控: '异常掌控',
     异常精通: '异常精通',
   };
-  const parts = Object.entries(c.coreSkillBoost || {}).map(([k, v]) => `${labels[k] || k}+${formatValue(k, v)}`);
+  const boost = {};
+  for (const item of c.coreSkillBoost || []) {
+    if (!item) continue; // 该档无基础提升（null 占位）
+    for (const [k, v] of Object.entries(item)) boost[k] = (boost[k] || 0) + v;
+  }
+  const parts = Object.entries(boost).map(([k, v]) => `${labels[k] || k}+${formatValue(k, v)}`);
   return parts.length ? `<div style="color:var(--green)">核心技满级提升：${parts.join('、')}</div>` : '';
 }
 
@@ -139,6 +151,7 @@ function renderCharacters() {
     if (key === '特性') return c.trait;
     if (key === '阵营') return c.faction;
     if (key.startsWith('满级')) return c.maxLevel?.[key.slice(2)] ?? null;
+    if (key === '穿透率') return penCell(c); // 展示层合并：命破角色取贯穿力
     return c[key] ?? null;
   };
   const rows = sortRows(Object.values(library.characters), charVal).map((c) => {
@@ -164,7 +177,14 @@ function renderCharacters() {
     ];
     const skillsHtml = skillDefs
       .map(({ key, label, icon }) => {
-        let tip = skillItemsHtml(byType[key]) || `<b>${label}</b>（无数据）`;
+        // 核心被动满级描述替换初始档说明：wiki 标注「此处数据为初始数据」仅指 A 档，满级取末档内嵌详情
+        let tip;
+        if (key === 'core' && c.corePassiveMax) {
+          const name = byType[key]?.items?.[0]?.name || '核心技';
+          tip = `<b>${escapeHtml(name)}</b><br>${renderRichText(c.corePassiveMax)}`;
+        } else {
+          tip = skillItemsHtml(byType[key]) || `<b>${label}</b>（无数据）`;
+        }
         if (key === 'core') {
           const boost = coreBoostHtml(c);
           if (boost) tip += `<div class="tip-hr"></div>${boost}`;
@@ -192,7 +212,7 @@ function renderCharacters() {
       <td class="wiki-tight">${escapeHtml(c.faction)}</td>
       <td class="wiki-icons">${skillsHtml}</td>
       <td class="wiki-icons">${cinemasHtml}</td>
-      ${statCells(c, INITIAL_STATS)}
+      ${statCells(c, INITIAL_STATS, { 穿透率: penCell })}
       ${statCells(c.maxLevel, MAX_STATS)}
     </tr>`;
   });

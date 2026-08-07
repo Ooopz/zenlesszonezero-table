@@ -36,7 +36,8 @@ test('formatValue 数值展示', () => {
   assert.equal(formatValue('攻击力', 1234.5), '1,234.5');
   assert.equal(formatValue('暴击率', 0.5), '50.0%');
   assert.equal(formatValue('暴击伤害', 1.2), '120.0%');
-  assert.equal(formatValue('能量自动回复', 1.2), '1.2');
+  assert.equal(formatValue('能量自动回复', 1.2), '1.20', '能量自动回复截断到 2 位');
+  assert.equal(formatValue('能量自动回复', 1.728), '1.72', '能量自动回复截断（不舍入）');
   assert.equal(formatValue('攻击力', null), '—');
   assert.equal(formatValue('攻击力', 0), '0');
 });
@@ -94,8 +95,8 @@ test('normalizeStatKey 把属性别名映射到规范名', () => {
   assert.equal(normalizeStatKey('防御'), '防御力');
   assert.equal(normalizeStatKey('暴击'), '暴击率', '短名 暴击 → 暴击率');
   assert.equal(normalizeStatKey('暴伤'), '暴击伤害', '短名 暴伤 → 暴击伤害');
-  assert.equal(normalizeStatKey('贯穿力'), '穿透率', '命破 贯穿力 → 穿透率');
-  assert.equal(normalizeStatKey('贯穿率'), '穿透率', '命破 贯穿率 → 穿透率');
+  assert.equal(normalizeStatKey('贯穿力'), '贯穿力', '贯穿力独立保留（不归一化成穿透率）');
+  assert.equal(normalizeStatKey('贯穿率'), '贯穿力', '命破 贯穿率 → 贯穿力');
   assert.equal(normalizeStatKey('闪能自动积累'), '能量自动回复', '命破 闪能自动积累 → 能量自动回复');
   assert.equal(normalizeStatKey('闪能自动累积'), '能量自动回复', '命破 闪能自动累积 → 能量自动回复');
   assert.equal(normalizeStatKey('闪能自动累计'), '能量自动回复', '命破 闪能自动累计 → 能量自动回复');
@@ -117,10 +118,10 @@ test('normalizeStatKeys 归一化对象键，规范名优先', () => {
   assert.deepEqual(normalizeStatKeys({ 生命值: 100, 生命: 90 }), { 生命值: 100 });
   // 未知键原样保留
   assert.deepEqual(normalizeStatKeys({ 暴击率: 0.5, foo: 1 }), { 暴击率: 0.5, foo: 1 });
-  // 命破角色专属属性键归一化（贯穿力 / 闪能自动* 三个变体）
-  assert.deepEqual(normalizeStatKeys({ 贯穿力: 105, 闪能自动累积: 2 }), { 穿透率: 105, 能量自动回复: 2 });
-  assert.deepEqual(normalizeStatKeys({ 贯穿力: 94, 闪能自动积累: 0 }), { 穿透率: 94, 能量自动回复: 0 });
-  assert.deepEqual(normalizeStatKeys({ 贯穿率: 100, 闪能自动累计: 1 }), { 穿透率: 100, 能量自动回复: 1 });
+  // 命破角色专属属性键：贯穿力独立保留，闪能自动* 三个变体归一到能量自动回复
+  assert.deepEqual(normalizeStatKeys({ 贯穿力: 105, 闪能自动累积: 2 }), { 贯穿力: 105, 能量自动回复: 2 });
+  assert.deepEqual(normalizeStatKeys({ 贯穿力: 94, 闪能自动积累: 0 }), { 贯穿力: 94, 能量自动回复: 0 });
+  assert.deepEqual(normalizeStatKeys({ 贯穿率: 100, 闪能自动累计: 1 }), { 贯穿力: 100, 能量自动回复: 1 });
   assert.deepEqual(normalizeStatKeys(null), {});
   assert.deepEqual(normalizeStatKeys(undefined), {});
 });

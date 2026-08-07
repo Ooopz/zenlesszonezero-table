@@ -188,11 +188,15 @@ function characterCard(character) {
       rateSum += prog.rate;
       rateCount++;
     }
-    const split =
-      (displayBase != null ? `基础${formatValue(name, displayBase)}` : '') +
-      (displayBonus != null && displayBonus !== 0 ? ` +${formatValue(name, displayBonus)}` : '');
+    // 灰字 = 理论面板（满级基础 + 核心技当前等级 + 音擎 + 驱动盘词条推算），
+    // 与主值（账号实际面板）并列，用于对比定位计算问题；无理论值（如伤害加成）则留空。
+    // 有账号实际值且与理论不一致时标红（攻击/生命/防御理论已按游戏规则取整）
+    const theoFinal = R.theoretical?.final?.[name];
+    const actFinal = R.actual?.[name]?.final;
+    const mismatch = actFinal != null && theoFinal != null && Math.abs(actFinal - theoFinal) > 1e-6;
+    const split = theoFinal != null ? `理论${formatValue(name, theoFinal)}` : '';
     mergedRows.push(
-      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name">${name}</td><td class="cs-val">${formatValue(name, displayFinal)}${split ? `<span class="break">(${split})</span>` : ''}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
+      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val"${mismatch ? ` style="color:var(--red)"` : ''}>${formatValue(name, displayFinal)}${split ? `<span class="break">(${split})</span>` : ''}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
     );
     displayed.add(name);
   };

@@ -91,13 +91,14 @@ function parseStatPairs(html) {
   return normalizeStatKeys(out);
 }
 
-/** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值} */
+/** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值}。
+ *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。 */
 function parseSignedStat(text) {
   const s = stripHtml(text);
-  const m = s.match(/([一-鿿A-Za-z]+)([+-])([\d.]+%?)/);
+  const m = s.match(/([一-鿿A-Za-z]+)([+\-＋－])([\d.]+%?)/);
   if (!m) return null;
   let v = parseFloat(m[3]) / (m[3].includes('%') ? 100 : 1);
-  if (m[2] === '-') v = -v;
+  if (m[2] === '-' || m[2] === '－') v = -v;
   return { [m[1]]: v };
 }
 
@@ -410,12 +411,26 @@ const coreStatAlias = {
   穿透率: '穿透率',
 };
 
+/** 解码 HTML 实体（核心技档位 data-name 属性值是编码后的嵌套 HTML，需还原成富文本） */
+function decodeHtmlEntities(s) {
+  return String(s)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 /** 核心技 A-F 档位开头的基础面板提升（如「暴击率提升4.8%」「基础攻击力提升25点」），
- *  汇总为 { 属性: 满级累计提升 }。基础提升固定位于档位文本开头，仅匹配开头（^）与白名单属性名，
- *  天然跳过条件性/招式增强（如「猫又处于[肉球突袭]状态时暴击伤害提升20%」开头即不匹配）。
- *  数字档（2-6）是核心被动增强而非基础面板提升，不在此列。百分比值除以 100 归一化。 */
+ *  按档存储为增量数组：第 i 项 = 第 i 档（A-F 顺序）给的基础提升，对应核心技等级 i+2
+ *  （核心被动初始 1 级，每升一档 +1，满级 7 = A-F 全升）。基础提升固定位于档位文本开头，
+ *  仅匹配开头（^）与白名单属性名，天然跳过条件性/招式增强（如「猫又处于[肉球突袭]状态时暴击伤害提升20%」开头即不匹配）。
+ *  数字档（2-6）是核心被动增强而非基础面板提升，不在此列。百分比值除以 100 归一化。
+ *  同时提取各档位内嵌 data-name 的核心被动完整说明：数值逐档递增，wiki 标注「此处数据为初始数据」仅指 A 档；
+ *  末档（遍历顺序即档位顺序，最后覆盖的是最高档）即满级数据，存为 passiveMax 供前端展示。 */
 function fetchCoreSkill(page) {
-  const boost = {};
+  const boost = [];
+  let passiveMax = null;
   const reAlpha = /^([一-鿿A-Za-z]+)提升(-?[\d.]+)(%|点)?/;
   for (const m of page.modules || []) {
     for (const comp of m.components || []) {
@@ -425,20 +440,27 @@ function fetchCoreSkill(page) {
         for (const ch of it.children || []) {
           for (const g of ch.growth || []) {
             if (!/^[A-F]$/.test(g.name)) continue; // 仅 A-F 档
-            const txt = stripHtml(g.children?.[0]?.row?.[0]?.[0] || '');
+            const html = g.children?.[0]?.row?.[0]?.[0] || '';
+            const txt = stripHtml(html);
+            const entry = {};
             const mm = txt.match(reAlpha);
-            if (!mm) continue;
-            const key = coreStatAlias[mm[1]];
-            if (!key) continue;
-            let v = parseFloat(mm[2]);
-            if (mm[3] === '%') v /= 100;
-            boost[key] = Math.round(((boost[key] || 0) + v) * 1e6) / 1e6; // 消除百分比累加的浮点误差
+            if (mm) {
+              const key = coreStatAlias[mm[1]];
+              if (key) {
+                let v = parseFloat(mm[2]);
+                if (mm[3] === '%') v /= 100;
+                entry[key] = Math.round(v * 1e6) / 1e6; // 消除百分比浮点误差
+              }
+            }
+            boost.push(Object.keys(entry).length ? entry : null); // 该档无基础提升存 null 占位，保持档位顺序
+            const dn = String(html).match(/data-name="([^"]*)"/);
+            if (dn) passiveMax = decodeHtmlEntities(dn[1]);
           }
         }
       }
     }
   }
-  return Object.keys(boost).length ? boost : null;
+  return { boost: boost.length ? boost : null, passiveMax };
 }
 
 /** 外观图：tab 列表里带 image 且无 children 的条目（角色/音擎共用） */
@@ -459,8 +481,9 @@ function fetchCharacterExtended(page) {
   if (cvData) out.cv = stripHtml(cvData.rich_text).replace(/\s+/g, ' ');
   const skills = fetchSkills(page);
   if (skills.length) out.skills = skills;
-  const coreBoost = fetchCoreSkill(page);
-  if (coreBoost) out.coreSkillBoost = coreBoost;
+  const core = fetchCoreSkill(page);
+  if (core.boost) out.coreSkillBoost = core.boost;
+  if (core.passiveMax) out.corePassiveMax = core.passiveMax;
   const cinemaData = findModule(
     page,
     (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).some((h) => h.includes('影画')))

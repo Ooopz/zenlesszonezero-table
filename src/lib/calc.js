@@ -32,6 +32,7 @@ export const panelOrder = [
   '异常掌控',
   '异常精通',
   '穿透率',
+  '贯穿力',
   '穿透值',
   '能量自动回复',
 ];
@@ -45,7 +46,7 @@ export const panelStatMap = {
   穿透值: ['穿透值'],
   异常精通: ['异常精通'],
 };
-export const multStats = new Set(['攻击力', '生命值', '防御力', '冲击力']); // 百分比加成按 基础×(1+Σ%)
+export const multStats = new Set(['攻击力', '生命值', '防御力', '冲击力', '能量自动回复', '异常掌控']); // 百分比加成按 基础×(1+Σ%)
 /** 满级行仅含的基础属性（wiki 成长表「满级」只有这三项），wiki 视图的「满级X」列与此对齐 */
 export const maxLevelStats = ['生命值', '攻击力', '防御力'];
 export const isDamageBonus = (name) => name.endsWith('伤害加成') || name.endsWith('伤害提升');
@@ -143,7 +144,99 @@ export function hitCount(character) {
   return hits;
 }
 
+// ---------- 局外面板公式（可复用：计算引擎内部使用，后续功能可直接 import） ----------
+/** 局外面板单一属性合成：攻击/生命/防御/冲击力（multStats）= 基础×(1+Σ%)+Σ固定；
+ *  其余属性（暴击率等）= 基础+Σ值；穿透值为固定值累加。base 为空返回 null。 */
+export function panelBonus(name, base, pct = 0, flat = 0) {
+  if (base == null) return null;
+  const bonus = multStats.has(name) ? base * pct + flat : flat + pct;
+  return { bonus, final: base + bonus };
+}
+
+/** 加成分类：无效值→null；伤害加成→damage；穿透值→pen；
+ *  multStats 属性值≤1→pct、>1→flat；非 multStats 属性→pct */
+export function classifyBonus(name, value) {
+  if (name == null || value == null || !Number.isFinite(value)) return null;
+  if (isDamageBonus(name)) return { kind: 'damage' };
+  if (name === '穿透值') return { kind: 'pen' };
+  return multStats.has(name) ? (value <= 1 ? { kind: 'pct' } : { kind: 'flat' }) : { kind: 'pct' };
+}
+
+/** 基础攻击白值 = 角色基础攻击 + 音擎基础攻击 + 核心技满级基础攻击提升 */
+export function atkWhiteValue(charAtk, wengineAtk, coreAtk = 0) {
+  return charAtk + wengineAtk + coreAtk;
+}
+
+/** 局内攻击力 = 场外总攻 × (1+局内%) + 局内固定（战斗 buff 预留，后续伤害功能用） */
+export function inBattleAtk(outOfBattleAtk, { inPct = 0, inFlat = 0 } = {}) {
+  return outOfBattleAtk * (1 + inPct) + inFlat;
+}
+
+/** 核心技在指定等级（1-7）的基础面板提升（累计值）。
+ *  coreSkillBoost 为每档增量数组（A-F 顺序，第 i 项对应等级 i+2），等级 lv 取前 (lv-1) 档之和；
+ *  兼容旧结构（满级累计对象）时直接返回对象值。 */
+export function coreSkillBoostAt(libCharacter, name, level = 7) {
+  const list = libCharacter?.coreSkillBoost;
+  if (!Array.isArray(list)) {
+    const v = list?.[name];
+    return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+  }
+  let sum = 0;
+  for (let i = 0; i < level - 1 && i < list.length; i++) sum += list[i]?.[name] || 0;
+  return sum;
+}
+
 // ---------- 计算引擎 ----------
+
+/** wiki 推算的单属性理论基础值：攻击力 = 角色基础攻击 + 音擎白值 + 核心技当前等级攻击提升；
+ *  其余 = wiki 基础 + 核心技数值提升；穿透值无基础（纯装备词条累加）→ 0。 */
+function theoreticalBaseOf(s, { baseSource, wengineAtk, libCharacter, coreLevel }) {
+  if (s === '攻击力') {
+    const charAtk = baseSource.攻击力 ?? baseSource['基础攻击力'];
+    return charAtk != null
+      ? atkWhiteValue(charAtk, wengineAtk, coreSkillBoostAt(libCharacter, '攻击力', coreLevel))
+      : null;
+  }
+  const bs = baseSource[s];
+  return bs != null ? bs + coreSkillBoostAt(libCharacter, s, coreLevel) : s === '穿透值' ? 0 : null;
+}
+
+/** 从基础值合成 { base, bonus, final }；base 为空返回 null */
+function synthPanel(s, tb, pct, flat) {
+  if (tb == null) return null;
+  const r = panelBonus(s, tb, pct[s] || 0, flat[s] || 0);
+  return { base: tb, bonus: r.bonus, final: r.final };
+}
+
+/** 理论面板最终值取整（对齐游戏面板显示）：攻击/防御/冲击力/异常掌控向下取整，生命向上取整，能量回复截断 2 位 */
+const THEO_ROUND = {
+  攻击力: Math.floor,
+  防御力: Math.floor,
+  冲击力: Math.floor,
+  异常掌控: Math.floor,
+  生命值: Math.ceil,
+  能量自动回复: (v) => Math.trunc(v * 100) / 100,
+};
+function roundTheoretical(final) {
+  for (const [s, fn] of Object.entries(THEO_ROUND)) if (final[s] != null) final[s] = fn(final[s]);
+}
+
+/** 命破角色：贯穿力 = 0.3×攻击力 + 0.1×生命值（派生），穿透率置空（无视防御）。
+ *  panel 为 { base, bonus, final }；最终面板与理论面板共用。 */
+function applyPiercing(panel, libCharacter) {
+  if (libCharacter.trait !== '命破') return;
+  const pierce = (a, h) => (a != null && h != null ? Math.round(0.3 * a + 0.1 * h) : null);
+  panel.final['贯穿力'] = pierce(panel.final['攻击力'], panel.final['生命值']);
+  panel.base['贯穿力'] = pierce(panel.base['攻击力'], panel.base['生命值']);
+  panel.bonus['贯穿力'] =
+    panel.final['贯穿力'] != null && panel.base['贯穿力'] != null
+      ? panel.final['贯穿力'] - panel.base['贯穿力']
+      : null;
+  panel.final['穿透率'] = null;
+  panel.base['穿透率'] = null;
+  panel.bonus['穿透率'] = null;
+}
+
 export function calculateCharacter(character) {
   const { library, charIndex, wengineIndex, discIndex } = ctx;
   const libCharacter = lookup(library.characters, charIndex, character.name) || {};
@@ -156,21 +249,24 @@ export function calculateCharacter(character) {
   const libWengine = lookup(library.wengines, wengineIndex, character.wengine?.name);
   const wengine = character.wengine || {};
 
-  // ① 基础值：优先用账号接口返回的 base（含音擎基础攻击力），否则 wiki 满级
+  // 核心技（核心被动）当前等级：账号 skills 里 type=5；缺失时默认满级 7
+  const coreLevel = character.skills?.find((s) => s.type === 5)?.level ?? 7;
+  const wengineAtk =
+    statEntries(wengine.mainStats).find((t) => t.name === '基础攻击力')?.value ?? libWengine?.baseAtk ?? 0;
+  // wiki 推算基础值（最终面板推算路径与理论面板共用；贯穿力为派生属性，末尾统一计算）
+  const theoBase = {};
+  for (const s of panelOrder) {
+    if (s === '贯穿力') continue;
+    const tb = theoreticalBaseOf(s, { baseSource, wengineAtk, libCharacter, coreLevel });
+    if (tb != null) theoBase[s] = tb;
+  }
+
+  // ① 最终面板基础值：优先账号接口 base（含音擎基础攻击力），缺失时用 wiki 推算
   const base = {};
   for (const s of panelOrder) base[s] = null;
   if (character.panel) for (const [name, v] of Object.entries(character.panel)) if (v.base != null) base[name] = v.base;
   for (const s of panelOrder) {
-    if (base[s] == null) {
-      if (s === '攻击力') {
-        const charAtk = baseSource.攻击力 ?? baseSource['基础攻击力'];
-        const wengineAtk =
-          statEntries(wengine.mainStats).find((t) => t.name === '基础攻击力')?.value ?? libWengine?.baseAtk ?? 0;
-        base[s] = charAtk != null ? charAtk + wengineAtk : null;
-      } else {
-        base[s] = baseSource[s] ?? null;
-      }
-    }
+    if (base[s] == null) base[s] = theoBase[s] ?? null; // 穿透值 theoBase 已为 0
   }
 
   // ② 收集加成（百分比 / 固定值）
@@ -178,16 +274,17 @@ export function calculateCharacter(character) {
     flat = {},
     damageBonus = {};
   function accumulate(name, value) {
-    if (name == null || value == null || !Number.isFinite(value)) return;
-    if (isDamageBonus(name)) {
+    const c = classifyBonus(name, value);
+    if (!c) return;
+    if (c.kind === 'damage') {
       damageBonus[name] = (damageBonus[name] || 0) + value;
       return;
     }
-    if (name === '穿透值') {
+    if (c.kind === 'pen') {
       flat.穿透值 = (flat.穿透值 || 0) + value;
       return;
     }
-    if (multStats.has(name) ? value <= 1 : true) pct[name] = (pct[name] || 0) + value;
+    if (c.kind === 'pct') pct[name] = (pct[name] || 0) + value;
     else flat[name] = (flat[name] || 0) + value;
   }
   const sources = {};
@@ -204,7 +301,9 @@ export function calculateCharacter(character) {
     recordSource(t.name, '音擎', t.value);
   }
 
-  // 驱动盘主/副词条 + 套装 2 件套（每种套装只计一次）
+  // 驱动盘主/副词条 + 套装 2 件套（同套装 ≥2 件才生效，每种套装只计一次）
+  const setCount = {};
+  for (const d of character.discs || []) if (d.set) setCount[d.set] = (setCount[d.set] || 0) + 1;
   const countedSets = new Set();
   for (const d of character.discs || []) {
     const discLib = lookup(library.discs, discIndex, d.set);
@@ -216,7 +315,7 @@ export function calculateCharacter(character) {
       accumulate(t.name, t.value);
       recordSource(t.name, `盘${d.slot}副`, t.value);
     }
-    if (discLib?.set2 && !countedSets.has(d.set)) {
+    if (discLib?.set2 && !countedSets.has(d.set) && (setCount[d.set] || 0) >= 2) {
       countedSets.add(d.set);
       for (const [name, value] of Object.entries(discLib.set2)) {
         accumulate(name, value);
@@ -225,15 +324,20 @@ export function calculateCharacter(character) {
     }
   }
 
-  // ③ 汇总
+  // 核心技当前等级的百分比提升（攻击力%/生命值%/防御力%/冲击力%）进入对应属性百分比乘区
+  for (const baseName of ['攻击力', '生命值', '防御力', '冲击力']) {
+    const v = coreSkillBoostAt(libCharacter, baseName + '%', coreLevel);
+    if (v) accumulate(baseName, v);
+  }
+
+  // ③ 汇总（最终面板）
   const bonus = {},
     final = {};
   for (const s of panelOrder) {
     if (base[s] == null) continue;
-    const pb = pct[s] || 0,
-      fb = flat[s] || 0;
-    bonus[s] = multStats.has(s) ? base[s] * pb + fb : fb + (pct[s] || 0);
-    final[s] = base[s] + bonus[s];
+    const r = synthPanel(s, base[s], pct, flat);
+    bonus[s] = r.bonus;
+    final[s] = r.final;
   }
   for (const [name, value] of Object.entries(damageBonus)) final[name] = value;
 
@@ -245,7 +349,22 @@ export function calculateCharacter(character) {
       if (final[name] == null) final[name] = v.final;
     }
 
-  return { base, bonus, final, actual, sources, libCharacter, libWengine };
+  // ④ 理论面板：纯 wiki 推算（不含账号 base），用于与账号实际值对比定位计算问题（前端灰字展示）
+  const theoretical = { base: {}, bonus: {}, final: {} };
+  for (const s of panelOrder) {
+    const r = synthPanel(s, theoBase[s], pct, flat);
+    if (!r) continue;
+    theoretical.base[s] = r.base;
+    theoretical.bonus[s] = r.bonus;
+    theoretical.final[s] = r.final;
+  }
+  roundTheoretical(theoretical.final); // 对齐游戏面板取整
+
+  // 命破角色：贯穿力派生 + 穿透率置空（最终面板与理论面板共用同一逻辑）
+  applyPiercing({ base, bonus, final }, libCharacter);
+  applyPiercing(theoretical, libCharacter);
+
+  return { base, bonus, final, actual, theoretical, sources, libCharacter, libWengine };
 }
 
 // ---------- 达成率 ----------
@@ -287,7 +406,8 @@ export function progressCell(rate) {
  *  （coreSkillBoost，如「基础攻击力提升25点」），满级数据缺失时回退当前基础值。 */
 function fullBase(R, name) {
   const libVal = R.libCharacter?.maxLevel?.[name];
-  const core = R.libCharacter?.coreSkillBoost?.[name] || 0;
+  // 目标按满级核心技评估，核心技基础提升取满级（A-F 全部档位累计）
+  const core = coreSkillBoostAt(R.libCharacter, name, 7);
   if (libVal == null) return (R.base?.[name] || 0) + core;
   return (name === '攻击力' ? libVal + (R.libWengine?.baseAtk ?? 0) : libVal) + core;
 }

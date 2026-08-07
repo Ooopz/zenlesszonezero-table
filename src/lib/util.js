@@ -53,7 +53,7 @@ export function escapeJsAttr(s) {
 export function formatValue(name, value) {
   if (value == null || !Number.isFinite(value)) return '—';
   if (value === 0) return '0';
-  if (name === '能量自动回复') return value.toFixed(1);
+  if (name === '能量自动回复') return (Math.trunc(value * 100) / 100).toFixed(2);
   if (name.endsWith('加成') || name.includes('暴击')) return (value * 100).toFixed(1) + '%';
   if (Math.abs(value) <= 1) return (value * 100).toFixed(1) + '%';
   return (Math.round(value * 10) / 10).toLocaleString('zh-CN');
@@ -97,8 +97,8 @@ const STAT_ALIASES = {
   防御: '防御力',
   暴击: '暴击率',
   暴伤: '暴击伤害',
-  贯穿力: '穿透率',
-  贯穿率: '穿透率',
+  // 贯穿力是命破角色独立面板属性（wiki 与账号均为本名），不归一化成穿透率；展示层合并
+  贯穿率: '贯穿力',
   闪能自动积累: '能量自动回复',
   闪能自动累积: '能量自动回复',
   闪能自动累计: '能量自动回复',
