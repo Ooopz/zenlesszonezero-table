@@ -310,7 +310,7 @@ export function initUi() {
   // Esc 关闭当前弹窗
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    for (const id of ['targetModal', 'noteModal', 'helpModal', 'rolesyncModal']) {
+    for (const id of ['targetModal', 'noteModal', 'helpModal', 'rolesyncModal', 'skillModal']) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('show');
     }
@@ -338,6 +338,10 @@ export function initUi() {
     render();
     notify('已清空该角色备注');
   });
+  // 技能每级数值弹窗（wiki 数据库视图技能图标点击打开）
+  document
+    .getElementById('skillClose')
+    .addEventListener('click', () => document.getElementById('skillModal').classList.remove('show'));
   // 同步下拉：触发器开合，外部点击收起，菜单项分发到三个同步动作
   const syncTrigger = document.getElementById('syncBtn');
   const syncDropdown = document.querySelector('.sync-dropdown');

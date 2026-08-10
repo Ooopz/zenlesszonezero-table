@@ -135,6 +135,11 @@ export function validateLibrary(lib) {
       err.push(`角色 ${k} corePassiveMax 应为字符串（核心被动满级描述）`);
     if (c.tachie !== undefined && typeof c.tachie !== 'string')
       err.push(`角色 ${k} tachie 应为字符串（立绘大图 URL）`);
+    // 技能每级数值：skills[].items[].growth 若存在应为数组（null/缺省 = 无每级数值；结构漂移会被同步脚本静默写坏）
+    if (Array.isArray(c.skills))
+      for (const s of c.skills)
+        for (const it of s.items || [])
+          if (it.growth != null && !Array.isArray(it.growth)) err.push(`角色 ${k} 技能「${s.type}」 growth 应为数组`);
   });
   checkEntries(errors, lib, 'wengines', '音擎', (k, w, err) => {
     if (w.baseAtk !== undefined && typeof w.baseAtk !== 'number') err.push(`音擎 ${k} baseAtk 应为数字`);

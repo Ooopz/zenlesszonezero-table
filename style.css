@@ -746,6 +746,15 @@ textarea {
 }
 .modal-box .close {
   float: right;
+  position: sticky; /* 内容长时弹窗内部滚动，关闭按钮始终贴在顶部可视区，避免滚出视野 */
+  top: 0;
+  z-index: 2;
+  background: var(--card); /* 悬浮在滚动内容上方时需不透明背景保证可读 */
+}
+/* 显式恢复悬浮高亮：通用 button:hover 特异性(0,1,1)低于上面的 .modal-box .close(0,2,0)，会被背景覆盖 */
+.modal-box .close:hover {
+  background: var(--acc);
+  color: #111;
 }
 .row {
   display: flex;
@@ -857,6 +866,65 @@ textarea {
   margin: 0;
   vertical-align: 0;
   white-space: nowrap;
+}
+/* 技能每级数值弹窗（数据库视图技能图标点击打开） */
+.skill-detail-item {
+  padding: 2px 0;
+}
+.skill-detail-item > b {
+  color: var(--acc);
+  font-size: 14px;
+}
+.sd-desc {
+  color: var(--txt);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 4px 0 8px;
+}
+.skill-growth {
+  overflow: auto;
+  margin: 4px 0;
+}
+.skill-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+.skill-table th,
+.skill-table td {
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  text-align: center;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.skill-table th {
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.skill-table td.slv {
+  color: var(--dim);
+  font-weight: 700;
+}
+/* 富文本单元格（核心技被动详情等长文本）：允许换行、左对齐 */
+.skill-table td.sd-rich {
+  white-space: normal;
+  text-align: left;
+  min-width: 300px;
+  line-height: 1.6;
+}
+/* 列内各等级数值完全相同的标注（固定倍率，非抓取缺失） */
+.skill-table th .sd-fixed {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 400;
+}
+.skill-table tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.03);
 }
 .chk input {
   accent-color: var(--acc);
@@ -1184,6 +1252,12 @@ table.tbl th.sorted {
 }
 .wiki-icon .s-ico:hover {
   border-color: var(--acc);
+}
+.wiki-icon.has-skill {
+  cursor: pointer; /* 有技能数据的图标可点击查看每级数值 */
+}
+.wiki-icon.has-skill .s-ico:hover {
+  box-shadow: 0 0 6px var(--acc66);
 }
 .wiki-icon .s-lbl {
   font-size: 10px;

@@ -59,6 +59,10 @@
           属性值下方有小进度条显示该角色的达成率；再点「卡片视图」切回。表头/行可拖动排序。
         </p>
         <p>
+          <b>数据库视图：</b>查看角色/音擎/驱动盘/邦布的静态基础数据。角色行技能图标可<b>点击</b>弹出
+          「技能数值」弹窗，展示该技能每级的伤害倍率、失衡倍率等详细数值（悬浮仍显示说明）。
+        </p>
+        <p>
           <b>副词条命中：</b>「目标」弹窗的「有效副词条」区勾选视为有效的副词条属性；驱动盘词条旁标注
           <b>×n</b>（该词条强化次数，按 B 站 wiki 成长规则由词条数值推算），副词条命中次数 =
           六个盘落在有效属性上的词条次数之和（每个词条本身算 1，每强化一次再 +1）。
@@ -185,6 +189,14 @@
           <button id="noteSave">保存</button>
           <button id="noteClear">清空</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal" id="skillModal">
+      <div class="modal-box modal-wide">
+        <button class="close" id="skillClose">✕</button>
+        <h2>技能数值 · <span id="skillTitle" style="color: var(--acc)"></span></h2>
+        <div id="skillBody"></div>
       </div>
     </div>
 

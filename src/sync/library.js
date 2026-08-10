@@ -370,8 +370,103 @@ function fetchMaterials(page) {
     .filter((m) => m.name);
 }
 
-/** 技能：按 tab_name 分类的条目（children 含 title + 富文本 desc）；requireChildren 时要求 children 非空 */
-function fetchSkills(page, { requireChildren = false } = {}) {
+/** 把技能「详细数据」的 HTML 拆成逐行数值 [{k, v}]。
+ *  实测 22000+ 行全部为「每行一段 <p>」；段内以「名称：数值」为基本单元：
+ *  - 冒号后紧跟数值（数字/正负号/百分号）才算分隔符——「蓄力伤害倍率：215%炮击伤害倍率：215%」可拆成多对；
+ *  - 值从冒号后取「数值 token」（含 %、+固定值、点/秒 等单位），如 215% / 20点/秒 / 13.8%+44；
+ *  - 技能名自身含冒号的（如「强化特殊技：极寒重碾伤害倍率：1007.6%」），前面的冒号后不是数值，自然不拆分；
+ *  - 值以中文开头（如「攻击力提升：露西攻击力13.8%+44」）视为纯说明。
+ *  纯说明段落返回 { k:null, v:整段 }；完全解析不出返回空数组。 */
+export function parseSkillValueLines(html) {
+  const paras = String(html || '')
+    .match(/<p[^>]*>([\s\S]*?)<\/p>/gi)
+    ?.map((p) => stripHtml(p).trim())
+    .filter(Boolean);
+  const segs = paras && paras.length ? paras : [stripHtml(html).trim()];
+  const lines = [];
+  for (const seg of segs) {
+    if (!seg) continue;
+    const seps = [];
+    const sepRe = /[：:](?=\s*[+\-＋－.\d%％])/g;
+    let m;
+    while ((m = sepRe.exec(seg))) seps.push(m.index);
+    if (!seps.length) {
+      lines.push({ k: null, v: seg });
+      continue;
+    }
+    let start = 0;
+    for (let i = 0; i < seps.length; i++) {
+      const ci = seps[i];
+      const hasNext = i + 1 < seps.length;
+      const nextSep = hasNext ? seps[i + 1] : seg.length;
+      const k = seg.slice(start, ci).replace(/[\s:：]+$/, '');
+      // 值 = 冒号后的数值 token；多对时下一对紧贴值结束处（其标签即 start）
+      const rest = seg.slice(ci + 1, hasNext ? nextSep : undefined);
+      const valueMatch = rest.match(/^[\d.]+(?:%[＋+][\d.]+)?(?:%|点\/秒|点)?/);
+      let v = valueMatch ? valueMatch[0].trim() : '';
+      if (!hasNext && !v) v = rest.trim(); // 末对无数值 token 时整段视为值（兜底）
+      lines.push(k && v ? { k, v } : { k: null, v: seg });
+      if (!valueMatch) break; // 数值 token 缺失（理论上不会到这），停止解析该段
+      start = ci + 1 + valueMatch[0].length;
+    }
+  }
+  return lines;
+}
+
+/** 占位分组名（wiki 源数据的内部名：分类1/分类2/强化效果/空）→ 推导有意义的列名。
+ *  从行键取「公共后缀」（轻/重/连续招架失衡倍率 → 招架失衡倍率），单行取该行键，回退首行键。 */
+function deriveGroupName(lines) {
+  const keys = (lines || []).map((l) => l.k).filter((k) => k != null && k);
+  if (!keys.length) return '说明';
+  if (keys.length === 1) return keys[0];
+  let suffix = keys[0];
+  for (const k of keys.slice(1)) while (suffix && !k.endsWith(suffix)) suffix = suffix.slice(1);
+  if (suffix && suffix.length >= 2) return suffix;
+  let prefix = keys[0];
+  for (const k of keys.slice(1)) while (prefix && !k.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  if (prefix && prefix.length >= 2) return prefix;
+  return keys[0];
+}
+const isJunkGroupName = (n) => /^(分类\d*|强化效果|)$/.test((n || '').trim());
+
+/** 技能条目的每级数值：把 children 的 growth（每级一组「详细数据」）结构化。
+ *  数字档（普攻/闪避/支援/特殊/终结为 1-16）每级 → { level, groups: [{ name, lines: [{k,v}] }] }；
+ *  核心技 A-F 档（字母档）每级取开头基础提升（text）+ data-name 内嵌被动详情（rich，数值随档位递增）。
+ *  行文本解析不出 名称：数值 时退化存 text；无任何档位返回 null。 */
+function parseSkillGrowth(ch) {
+  const out = [];
+  for (const g of ch.growth || []) {
+    const level = stripHtml(g.name);
+    const isAlpha = /^[A-F]$/.test(level);
+    const isNum = /^\d+$/.test(level) && Number(level) >= 1 && Number(level) <= 16;
+    if (!isAlpha && !isNum) continue; // 跳过「总计」等越界/杂档位
+    const groups = [];
+    for (const child of g.children || []) {
+      const html = child.row?.[0]?.[0] || '';
+      const txt = stripHtml(html).trim();
+      if (!txt) continue;
+      if (isAlpha) {
+        // 核心技档位：可见文本开头「X提升Y」为基础提升；data-name 内嵌完整被动详情（多数角色各档相同，个别随档递增）
+        const boostEnd = txt.indexOf('[');
+        const boostText = boostEnd > 0 ? txt.slice(0, boostEnd).trim() : '';
+        if (boostText) groups.push({ name: '基础提升', text: boostText });
+        const dn = String(html).match(/data-name="([^"]*)"/);
+        if (dn && decodeHtmlEntities(dn[1])) groups.push({ name: '核心被动', rich: decodeHtmlEntities(dn[1]) });
+        continue;
+      }
+      const lines = parseSkillValueLines(html);
+      const hasPairs = lines.some((l) => l.k != null);
+      // 占位名分组（分类N/空等）从内容推导有意义的列名，避免「分类1」泄漏到展示层
+      const name = isJunkGroupName(stripHtml(child.name)) ? deriveGroupName(lines) : stripHtml(child.name);
+      groups.push(hasPairs ? { name, lines } : { name, text: txt });
+    }
+    if (groups.length) out.push({ level, groups });
+  }
+  return out.length ? out : null;
+}
+
+/** 技能：按 tab_name 分类的条目（children 含 title + 富文本 desc + 每级数值 growth）；requireChildren 时要求 children 非空 */
+export function fetchSkills(page, { requireChildren = false } = {}) {
   const skillData = findModule(
     page,
     (d) =>
@@ -383,7 +478,16 @@ function fetchSkills(page, { requireChildren = false } = {}) {
     .filter((it) => it.tab_name && (!requireChildren || (Array.isArray(it.children) && it.children.length)))
     .map((it) => ({
       type: stripHtml(it.tab_name),
-      items: (it.children || []).map((ch) => ({ name: stripHtml(ch.title), desc: ch.desc || '' })),
+      items: (it.children || [])
+        .map((ch) => {
+          const growth = parseSkillGrowth(ch);
+          return {
+            name: stripHtml(ch.title),
+            desc: ch.desc || '',
+            ...(growth ? { growth } : {}), // 无每级数值（如部分闪避/被动）不写 growth
+          };
+        })
+        .filter((item) => item.name || item.desc || item.growth),
     }));
 }
 
@@ -717,7 +821,8 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
   // 校验 + 写入 data/
   warnIfInvalid('属性库', validateLibrary(library), { strict });
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DATA_DIR, 'library.json'), JSON.stringify(library, null, 2), 'utf-8');
+  // library.json 用紧凑格式：技能每级数值（growth）嵌套 5 层，pretty 缩进会膨胀到 ~11MB，紧凑仅 ~3.5MB
+  fs.writeFileSync(path.join(DATA_DIR, 'library.json'), JSON.stringify(library), 'utf-8');
   // 原始响应快照（含全部未解析字段：介绍/技能/影画/CV/推荐角色等），日后备用
   fs.writeFileSync(path.join(DATA_DIR, 'raw-library.json'), JSON.stringify(raw), 'utf-8');
 

@@ -1,6 +1,6 @@
 // src/web/wiki.js —— Wiki 数据库视图：四个子面板（角色 / 驱动盘 / 音擎 / 邦布）平铺展示
 import { library } from './data.js';
-import { renderRichText, escapeHtml, statEntries, formatValue, compareValues } from '../lib/util.js';
+import { renderRichText, escapeHtml, escapeJsAttr, statEntries, formatValue, compareValues } from '../lib/util.js';
 import { maxLevelStats, panelOrder } from '../lib/calc.js';
 import { STAT, SUBSTAT } from '../lib/constants.js';
 
@@ -120,6 +120,82 @@ function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } 
         .join(sep)
     : '';
 }
+
+/** 行标签：与列名相同 → 只显数值；以列名结尾 → 去掉该前缀（一段伤害倍率 + 伤害倍率 → 一段）；否则原样 */
+function lineLabel(k, groupName) {
+  if (k == null) return k;
+  if (!groupName) return k;
+  if (k === groupName) return '';
+  return k.endsWith(groupName) ? k.slice(0, k.length - groupName.length) : k;
+}
+
+/** 技能条目每级数值表格：等级为行、详细数据分组（伤害倍率/失衡倍率/基础提升/核心被动…）为列。
+ *  分组取所有等级出现过的并集（列数不定，靠弹窗滚动）；格内每行「段次 数值」（列名已在上方，行标签去重）、
+ *  纯说明只显示原文、rich（核心技被动详情）按富文本渲染并换行；
+ *  某列各等级数值完全相同时加「（固定）」标注（如固定倍率的被动攻击），避免误以为是抓取缺失。 */
+function skillGrowthTable(item) {
+  const growth = item.growth || [];
+  if (!growth.length) return '';
+  const groups = [];
+  for (const lvl of growth) for (const g of lvl.groups) if (!groups.includes(g.name)) groups.push(g.name);
+  const isFixed = (gname) => {
+    if (growth.length <= 1) return false;
+    const vals = growth.map((l) => {
+      const g = l.groups.find((x) => x.name === gname);
+      // 缺失该列的等级用空串占位（present 的组 JSON.stringify 永不为空串，不会误判）
+      return g ? JSON.stringify(g.lines || g.text || g.rich || '') : '';
+    });
+    return new Set(vals).size === 1;
+  };
+  const head =
+    `<th>等级</th>` +
+    groups.map((h) => `<th>${escapeHtml(h)}${isFixed(h) ? '<span class="sd-fixed">（固定）</span>' : ''}</th>`).join('');
+  const rows = growth
+    .map((lvl) => {
+      const cells = groups
+        .map((gname) => {
+          const g = lvl.groups.find((x) => x.name === gname);
+          if (!g) return '<td></td>';
+          if (g.rich) return `<td class="sd-rich">${renderRichText(g.rich)}</td>`;
+          const lines = g.lines
+            ? g.lines
+                .map((l) => {
+                  if (l.k == null) return escapeHtml(l.v);
+                  const label = lineLabel(l.k, gname);
+                  return label ? `${escapeHtml(label)} ${escapeHtml(l.v)}` : escapeHtml(l.v);
+                })
+                .join('<br>')
+            : escapeHtml(g.text || '');
+          return `<td>${lines}</td>`;
+        })
+        .join('');
+      return `<tr><td class="slv">${escapeHtml(lvl.level)}</td>${cells}</tr>`;
+    })
+    .join('');
+  return `<div class="skill-growth"><table class="skill-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/** 打开技能每级数值弹窗：列出该技能类型下所有条目（名称 + 说明 + 每级数值表格）。 */
+export function openSkillDetail(charKey, type) {
+  const c = library.characters?.[charKey];
+  const s = (c?.skills || []).find((x) => x.type === type);
+  const title = `${c?.name || charKey} · ${type}`;
+  const body = s?.items?.length
+    ? s.items
+        .map(
+          (it) =>
+            `<div class="skill-detail-item"><b>${escapeHtml(it.name)}</b>${it.desc ? `<div class="sd-desc">${renderRichText(it.desc)}</div>` : ''}${skillGrowthTable(it)}</div>`
+        )
+        .join('<div class="tip-hr"></div>')
+    : `<p style="color:var(--dim)">暂无技能数据</p>`;
+  const modal = document.getElementById('skillModal');
+  document.getElementById('skillTitle').textContent = title;
+  document.getElementById('skillBody').innerHTML = body;
+  modal.classList.add('show');
+}
+// 内联 onclick 引用的函数需挂到全局
+window.ZZZ = window.ZZZ || {};
+window.ZZZ.skill = openSkillDetail;
 /** 渲染表格；sortable 集合内的列头可点击排序（当前列加 data-sort 与 ▲/▼ 指示） */
 function table(headers, rows, sortable = new Set()) {
   const head = headers
@@ -155,7 +231,7 @@ function renderCharacters() {
     if (key === STAT.PEN_RATE) return penCell(c); // 展示层合并：命破角色取贯穿力
     return c[key] ?? null;
   };
-  const rows = sortRows(Object.values(library.characters), charVal).map((c) => {
+  const rows = sortRows(Object.entries(library.characters), ([, c], key) => charVal(c, key)).map(([charKey, c]) => {
     // 技能按类型分组：普攻/闪避/支援技/特殊技/终结技/核心技
     const byType = { normal: '', dodge: '', support: '', special: '', ultimate: '', core: '' };
     for (const s of c.skills || []) {
@@ -167,7 +243,7 @@ function renderCharacters() {
       else if (t.includes('终结')) byType.ultimate = s;
       else byType.core = s;
     }
-    // 技能：一列横排 6 个图标（复用卡片视图技能图标），悬浮看详情
+    // 技能：一列横排 6 个图标（复用卡片视图技能图标），悬浮看详情、点击看每级数值
     const skillDefs = [
       { key: 'normal', label: '普攻', icon: '/src/img/normal.png' },
       { key: 'dodge', label: '闪避', icon: '/src/img/dodge.png' },
@@ -178,19 +254,22 @@ function renderCharacters() {
     ];
     const skillsHtml = skillDefs
       .map(({ key, label, icon }) => {
+        const skill = byType[key];
         // 核心被动满级描述替换初始档说明：wiki 标注「此处数据为初始数据」仅指 A 档，满级取末档内嵌详情
         let tip;
         if (key === 'core' && c.corePassiveMax) {
-          const name = byType[key]?.items?.[0]?.name || '核心技';
+          const name = skill?.items?.[0]?.name || '核心技';
           tip = `<b>${escapeHtml(name)}</b><br>${renderRichText(c.corePassiveMax)}`;
         } else {
-          tip = skillItemsHtml(byType[key]) || `<b>${label}</b>（无数据）`;
+          tip = skillItemsHtml(skill) || `<b>${label}</b>（无数据）`;
         }
         if (key === 'core') {
           const boost = coreBoostHtml(c);
           if (boost) tip += `<div class="tip-hr"></div>${boost}`;
         }
-        return `<span class="wiki-icon" data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
+        // 仅该技能类型含每级数值数据（growth）时才可点击打开弹窗（核心技 A-F 档也算）
+        const clickable = skill?.items?.some((it) => it.growth);
+        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(charKey)}','${escapeJsAttr(skill.type)}')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
       })
       .join('');
     // 影画：一列横排 6 个圆点徽标，悬浮看详情
