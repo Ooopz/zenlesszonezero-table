@@ -1,5 +1,5 @@
 // src/web/ui.js —— 交互层：提示条、服务器同步、目标/有效/备注弹窗、事件绑定、初始化
-import { CLIPBOARD_SCRIPT, escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
+import { CLIPBOARD_SCRIPT, compareValues, escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
 import { targetStats, targetUnits, validStatOptions } from '../lib/calc.js';
 import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET, mainStatName } from '../lib/constants.js';
 import { apiRequest } from './util.js';
@@ -159,6 +159,7 @@ function fillMainSelect(slot) {
 }
 
 function openTargetSettings(name) {
+  if (currentTargetChar !== name) planSort = { key: null, dir: 1 }; // 切换角色时重置方案排序
   currentTargetChar = name;
   const target = readCharTarget(name);
   document.getElementById('targetChar').textContent = name || '';
@@ -212,7 +213,33 @@ function saveTargetSettings() {
   notify(`${currentTargetChar} 目标已保存`);
 }
 
-/** 目标弹窗推荐方案表格：动态属性列（该角色所有方案推荐面板属性并集，取 high 档）+ 音擎 / 456 主词条 / 副词条 */
+/** 推荐方案表格排序状态（三态：升序 → 降序 → 恢复默认），模式与列表/数据库视图一致 */
+let planSort = { key: null, dir: 1 };
+function togglePlanSort(key) {
+  if (planSort.key === key) {
+    if (planSort.dir === 1) planSort.dir = -1;
+    else planSort = { key: null, dir: 1 };
+  } else {
+    planSort = { key, dir: 1 };
+  }
+}
+/** 各列排序取值：属性列取 panel.high（数值），发布时间取时间戳，其余按展示文本 */
+function planSortValue(p, key) {
+  if (key === '方案') return p.name;
+  if (key === '发布时间') return Number(p.releasedAt) || 0;
+  if (key === '推荐音擎') return p.weapon?.main || '';
+  if (key === '二件套') return (p.sets || []).filter((s) => s.cnt === 2).map((s) => s.name).join('、') || '';
+  if (key === '四件套') return (p.sets || []).filter((s) => s.cnt === 4).map((s) => s.name).join('、') || '';
+  if (key === '4号位') return p.mainProps?.[4] || '';
+  if (key === '5号位') return p.mainProps?.[5] || '';
+  if (key === '6号位') return p.mainProps?.[6] || '';
+  if (key === '推荐副词条') return (p.subStats || []).join('、') || '';
+  const a = (p.panel || []).find((x) => x.name === key);
+  return a?.high ?? null;
+}
+
+/** 目标弹窗推荐方案表格：动态属性列（该角色所有方案推荐面板属性并集，取 high 档）+ 音擎 / 456 主词条 / 副词条。
+ *  表头可点击排序（复用 compareValues 与列表视图三态模式）；排序后「应用」仍按原始下标取对应方案。 */
 function renderPlanTable(name) {
   const container = document.getElementById('planTable');
   const entry = plansByName[name];
@@ -226,19 +253,65 @@ function renderPlanTable(name) {
   const statNames = [];
   for (const p of plansList) for (const a of p.panel || []) if (!statNames.includes(a.name)) statNames.push(a.name);
 
-  const heads = ['', '方案', ...statNames, TARGET_KEYS.WENGINE, '4号位', '5号位', '6号位', '推荐副词条'];
-  const rows = plansList.map((p, i) => {
+  // 排序（无值行始终排最后，不受升降序影响）
+  let list = plansList;
+  if (planSort.key) {
+    const key = planSort.key,
+      dir = planSort.dir;
+    const empty = (v) => v == null || v === '';
+    list = [...plansList].sort((a, b) => {
+      const va = planSortValue(a, key),
+        vb = planSortValue(b, key);
+      if (empty(va) && empty(vb)) return 0;
+      if (empty(va)) return 1;
+      if (empty(vb)) return -1;
+      return compareValues(va, vb) * dir;
+    });
+  }
+
+  const heads = [
+    '',
+    '方案',
+    '发布时间',
+    ...statNames,
+    TARGET_KEYS.WENGINE,
+    '二件套',
+    '四件套',
+    '4号位',
+    '5号位',
+    '6号位',
+    '推荐副词条',
+  ];
+  const rows = list.map((p) => {
     const statMap = {};
     for (const a of p.panel || []) statMap[a.name] = a;
+    // 发布时间：releasedAt 为 Unix 秒
+    let released = '—';
+    if (p.releasedAt) {
+      const d = new Date(Number(p.releasedAt) * 1000);
+      if (!Number.isNaN(d.getTime())) {
+        const pad = (x) => String(x).padStart(2, '0');
+        released = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      }
+    }
+    // 二/四件套名（部分方案为 2+2 无四件套，可能同名多套）
+    const setName = (cnt) =>
+      (p.sets || [])
+        .filter((s) => s.cnt === cnt)
+        .map((s) => s.name)
+        .join('、') || '—';
     const cells = [
-      `<td><button class="mini apply-btn" onclick="window.ZZZ.applyPlan('${escapeJsAttr(name)}', ${i})">应用</button></td>`,
+      `<td><button class="mini apply-btn" onclick="window.ZZZ.applyPlan('${escapeJsAttr(name)}', ${plansList.indexOf(p)})">应用</button></td>`,
       `<td class="pname" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</td>`,
+      `<td>${released}</td>`,
       ...statNames.map((n) => {
         const a = statMap[n];
         const val = a && a.high != null ? (a.percent ? `${(a.high * 100).toFixed(1)}%` : formatValue(n, a.high)) : '—';
         return `<td>${val}</td>`;
       }),
       `<td>${escapeHtml(p.weapon?.main || '—')}</td>`,
+      `<td>${escapeHtml(setName(2))}</td>`,
+      `<td>${escapeHtml(setName(4))}</td>`,
       `<td>${escapeHtml(p.mainProps?.[4] || '—')}</td>`,
       `<td>${escapeHtml(p.mainProps?.[5] || '—')}</td>`,
       `<td>${escapeHtml(p.mainProps?.[6] || '—')}</td>`,
@@ -247,7 +320,11 @@ function renderPlanTable(name) {
     return `<tr>${cells.join('')}</tr>`;
   });
   container.innerHTML = `<table class="plantable"><thead><tr>${heads
-    .map((h) => `<th>${escapeHtml(h)}</th>`)
+    .map((h) => {
+      if (!h) return '<th></th>'; // 应用列不可排序
+      const on = planSort.key === h;
+      return `<th data-sort="${escapeHtml(h)}"${on ? ' class="sorted"' : ''}>${escapeHtml(h)}${on ? (planSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
+    })
     .join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
@@ -342,6 +419,13 @@ export function initUi() {
   document
     .getElementById('skillClose')
     .addEventListener('click', () => document.getElementById('skillModal').classList.remove('show'));
+  // 推荐方案表格表头点击排序（targetModal 不在 grid 内，需单独委托；排序后按当前角色重渲染）
+  document.getElementById('planTable').addEventListener('click', (e) => {
+    const th = e.target.closest ? e.target.closest('th[data-sort]') : null;
+    if (!th) return;
+    togglePlanSort(th.dataset.sort);
+    renderPlanTable(currentTargetChar);
+  });
   // 同步下拉：触发器开合，外部点击收起，菜单项分发到三个同步动作
   const syncTrigger = document.getElementById('syncBtn');
   const syncDropdown = document.querySelector('.sync-dropdown');

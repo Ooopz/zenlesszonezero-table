@@ -54,7 +54,7 @@ const planHeaders = {
 
 const API = 'https://api-takumi.mihoyo.com/event/nap_cultivate_tool';
 const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/user'; // feed 端点域
-const MAX_PLANS = 50; // 每个角色方案上限（「切换方案」列表前 50 个）
+const MAX_PLANS = 100; // 每个角色方案上限（「切换方案」列表前 50 个）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // 仅供风控重试等待
 

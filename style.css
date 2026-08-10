@@ -1175,12 +1175,14 @@ table.tbl {
 }
 /* 表头点击排序：指针 + 当前排序列高亮 */
 .wiki-table th[data-sort],
-table.tbl th[data-sort] {
+table.tbl th[data-sort],
+.plantable th[data-sort] {
   cursor: pointer;
   user-select: none;
 }
 .wiki-table th.sorted,
-table.tbl th.sorted {
+table.tbl th.sorted,
+.plantable th.sorted {
   color: var(--txt);
 }
 .wiki-table td.wiki-name {
