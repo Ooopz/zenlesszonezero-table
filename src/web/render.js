@@ -115,7 +115,7 @@ function discTooltipFull(d, validSet) {
 /** 单个驱动盘盘面：左上图标 + 套装名/槽位 + 右上命中 + 主词条 + 纵向副词条(> 表示有效词条数) */
 function discTile(d, validSet) {
   const { discLib, main, subs, discHits } = discDetail(d, validSet);
-  const icon = d.icon || discLib?.icon || '';
+  const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
   const sub = subs.map((s) => `<div class="${s.hit ? 'hit' : ''}">${s.content}</div>`).join('');
   return `<div class="disc" data-detail="${escapeHtml(discTooltip(d))}" title="悬浮查看详情">
     <div class="disc-top">${icon ? `<img class="d-ico" src="${icon}" alt="">` : ''}<div class="disc-head"><div class="dset">${d.set}</div><div class="dslot">${d.slot}号${d.level ? ' · +' + d.level : ''}</div></div>${discHits != null ? `<span class="d-hit">命中 ${discHits}</span>` : ''}</div>
@@ -432,7 +432,7 @@ function renderTable(list, container) {
       .filter(Boolean)
       .map((d) => {
         const discLib = lookup(library.discs, discIndex, d.set);
-        const icon = d.icon || discLib?.icon || '';
+        const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
         if (!icon) return '<span class="d-ico" style="border-color:#444"></span>';
         return `<img class="d-ico" src="${icon}" data-detail="${escapeHtml(discTooltipFull(d, charValidSet))}">`;
       })

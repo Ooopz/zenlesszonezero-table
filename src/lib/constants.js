@@ -153,6 +153,7 @@ export const SYNC_KINDS = {
   LIBRARY: 'library',
   CHARACTERS: 'characters',
   PLANS: 'plans',
+  WORKSHOP: 'workshop',
 };
 
 // ---------- 视图 ----------

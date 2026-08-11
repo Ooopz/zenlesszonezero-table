@@ -6,10 +6,85 @@
 //
 // 依赖 Node 18+（自带 fetch），无需安装任何包。
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { stripHtml, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
 import { validateLibrary } from '../lib/schema.js';
-import { isMain, writeDataFile } from '../lib/node.js';
+import { isMain, writeDataFile, DATA_DIR } from '../lib/node.js';
 import { requestJson, retry } from './http.js';
+
+// ---------- 图片本地化（原 library-img.js 合并进来） ----------
+const IMG_DIR = path.join(DATA_DIR, 'img');
+/** 文件名安全化：保留中文/字母/数字/连字符/下划线，其余替换为 _ */
+const safe = (n) => String(n || '未知').replace(/[^\w一-龥-]/g, '_');
+/** 图片下载（或本地路径规范化）：已是 /data/img/ 的引用统一小写扩展名并修正到实际存在的文件 */
+const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+async function img(url, base) {
+  if (!url) return url;
+  // 已是本地路径：修正扩展名（统一小写 + 用实际存在的文件，兼容历史大小写/扩展名不一致）
+  if (url.startsWith('/data/img/')) {
+    const f = url.split('/').pop();
+    const stem = f.replace(/\.[^.]+$/, '');
+    const actual = IMG_EXTS.map((e) => `${stem}.${e}`).find((n) => fs.existsSync(path.join(IMG_DIR, n)));
+    if (actual && actual !== f) return `/data/img/${actual}`;
+    return url;
+  }
+  if (!/^https?:\/\//.test(url)) return url;
+  const ext = ((url.match(/\.(png|jpg|jpeg|webp|gif)/i) || [])[1] || 'png').toLowerCase();
+  const file = `${base}.${ext}`;
+  const fp = path.join(IMG_DIR, file);
+  if (fs.existsSync(fp)) return `/data/img/${file}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    fs.writeFileSync(fp, Buffer.from(await res.arrayBuffer()));
+    return `/data/img/${file}`;
+  } catch {
+    return url;
+  }
+}
+/** 对 library.json / characters.json 做图片本地化（下载到 data/img/ 并替换为本地路径）。
+ *  同步（sync-library / sync-characters）后调用，避免重新抓取后图片回到远程。 */
+export async function localizeDataFiles() {
+  fs.mkdirSync(IMG_DIR, { recursive: true });
+  const stats = {};
+  // ---- library.json ----
+  const libFile = path.join(DATA_DIR, 'library.json');
+  if (fs.existsSync(libFile)) {
+    const lib = JSON.parse(fs.readFileSync(libFile, 'utf8'));
+    for (const [name, c] of Object.entries(lib.characters || {})) {
+      if (c.portrait) c.portrait = await img(c.portrait, `char-${safe(name)}-portrait`);
+      if (c.icon) c.icon = await img(c.icon, `char-${safe(name)}`);
+      if (c.tachie) c.tachie = await img(c.tachie, `char-${safe(name)}-tachie`);
+    }
+    for (const [name, w] of Object.entries(lib.wengines || {}))
+      if (w.icon) w.icon = await img(w.icon, `wengine-${safe(name)}`);
+    for (const [name, d] of Object.entries(lib.discs || {})) {
+      if (d.icon) d.icon = await img(d.icon, `disc-${safe(name)}`);
+      if (d.roundIcon) d.roundIcon = await img(d.roundIcon, `disc-${safe(name)}-round`);
+    }
+    for (const [name, b] of Object.entries(lib.bangboos || {}))
+      if (b.icon) b.icon = await img(b.icon, `bangboo-${safe(name)}`);
+    fs.writeFileSync(libFile, JSON.stringify(lib));
+    stats['library.json'] = (JSON.stringify(lib).match(/\/data\/img\//g) || []).length;
+  }
+  // ---- characters.json ----
+  const charsFile = path.join(DATA_DIR, 'characters.json');
+  if (fs.existsSync(charsFile)) {
+    const chars = JSON.parse(fs.readFileSync(charsFile, 'utf8'));
+    for (const c of chars || []) {
+      const nm = safe(c?.name);
+      if (c.portrait) c.portrait = await img(c.portrait, `char-${nm}-portrait`);
+      if (c.icon) c.icon = await img(c.icon, `char-${nm}`);
+      if (c.tachie) c.tachie = await img(c.tachie, `char-${nm}-tachie`);
+      if (c.wengine?.icon) c.wengine.icon = await img(c.wengine.icon, `wengine-${safe(c.wengine.name)}`);
+      for (const d of c.discs || []) if (d.icon) d.icon = await img(d.icon, `disc-${safe(d.set || d.name)}`);
+    }
+    fs.writeFileSync(charsFile, JSON.stringify(chars));
+    stats['characters.json'] = (JSON.stringify(chars).match(/\/data\/img\//g) || []).length;
+  }
+  return { stats };
+}
 
 const API = 'https://api-takumi-static.mihoyo.com';
 const HEADERS = {
@@ -216,9 +291,11 @@ function fetchWengineEffect(page) {
               if (fxStart != null) return html.slice(fxStart);
               continue;
             }
-            // 情形②：纯特效格（含斜杠档位数值 + 效果关键词）→ 返回原始 HTML
+            // 情形②：纯特效格（含「档位数值」+ 效果关键词）→ 返回原始 HTML
+            // 档位可能是百分比（8%/9%）也可能是点数（30/34），故模式为 数字(可选%)/数字(可选%)；
+            // 注意斜杠两侧必须是数字（「特殊技/强化特殊技」这类中文斜杠不会误判）
             if (
-              /\//.test(txt) &&
+              /(\d+(\.\d+)?%?\s*\/\s*\d+(\.\d+)?%?)/.test(txt) &&
               /(提升|触发|造成|伤害|精通|暴击|防御|冲击|异常)/.test(txt) &&
               !/(初始面板|满级面板|获取途径)/.test(txt)
             )
@@ -288,6 +365,28 @@ const damageMapping = {
 };
 
 /** 驱动盘：fe_ext.c_46 的 2/4 件套效果 */
+/** 驱动盘圆形光盘图标：modules 里出现次数最多的图片（圆形图标多尺寸变体，区别于方形主图 icon_url）。
+ *  规律：驱动盘页面 modules 里圆形光盘图有 6 个尺寸变体（出现 6 次），其他图出现 2 次。 */
+function fetchDiscRound(page) {
+  const s = JSON.stringify(page.modules || '');
+  const count = {};
+  const urls = {};
+  for (const m of s.matchAll(/https:\/\/act-upload\.mihoyo\.com[^\s"\\]+/g)) {
+    const h = m[0].match(/[0-9a-f]{32}/)?.[0];
+    if (!h) continue;
+    count[h] = (count[h] || 0) + 1;
+    urls[h] = m[0];
+  }
+  let best = null,
+    bestN = 0;
+  for (const [h, n] of Object.entries(count))
+    if (n > bestN) {
+      bestN = n;
+      best = urls[h];
+    }
+  return bestN >= 3 ? best : null;
+}
+
 function fetchDiscSet(page) {
   const fe = parseFe(page);
   const list = fe.c_46?.table?.list;
@@ -709,6 +808,7 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
         key: x.key,
         id: x.id,
         icon: page.icon_url,
+        roundIcon: fetchDiscRound(page),
         setEffects: fetchDiscSet(page),
         ...fetchDiscExtended(page),
       };
@@ -794,6 +894,9 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
   // pretty 缩进会膨胀到 ~11MB，紧凑仅 ~3.5MB；raw-library.json 为原始响应快照（日后备用）
   writeDataFile('library.json', library, { label: '属性库', validate: validateLibrary, strict, pretty: false });
   writeDataFile('raw-library.json', raw, { pretty: false });
+
+  // 图片本地化：更新 wiki 后同步下载 library 图片到 data/img/（与 wiki 数据绑定）
+  await localizeDataFiles();
 
   return { library, stats };
 }

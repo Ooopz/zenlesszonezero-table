@@ -1331,6 +1331,80 @@ table.tbl th.sorted,
 .rec-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);
 }
+/* 工坊配装统计：音擎/驱动盘图标（名称左对齐，进度条右对齐） */
+.rec-table .ws-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rec-table .ws-item .rpct {
+  margin-left: auto; /* 把百分比+进度条推到行尾（右对齐） */
+}
+.rec-table .ws-item em {
+  font-style: normal;
+  color: var(--dim);
+  font-size: 11px;
+}
+.rec-table .ws-ico {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  flex-shrink: 0;
+}
+.rec-table .ws-sets {
+  display: inline-flex;
+  gap: 2px;
+}
+/* 工坊配装占比进度条（样式对齐卡片视图 .cs 达成率） */
+.rec-table .rpct {
+  display: inline-block;
+  min-width: 36px;
+  text-align: right;
+  font-weight: 800;
+}
+.rec-table .tbar {
+  display: inline-block;
+  width: 44px;
+  height: 5px;
+  background: #262626;
+  border-radius: 2px;
+  overflow: hidden;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+.rec-table .tfill {
+  display: block;
+  height: 100%;
+}
+/* 工坊配装：整体字体调大 */
+.rec-table.grad-table {
+  font-size: 14px;
+}
+/* 角色列：图标 + 名字居中横排，角色图标放大（长宽约音擎图标 3 倍） */
+.rec-table.grad-table td.wiki-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.rec-table.grad-table .ws-ico.grad-role {
+  width: 78px;
+  height: 78px;
+  border-radius: 6px;
+}
+.rec-table.grad-table td.ds-main {
+  font-size: 14px;
+}
+.rec-table.grad-table .ws-ico {
+  width: 26px;
+  height: 26px;
+}
+.rec-table.grad-table .ws-item em {
+  font-size: 12px;
+}
 .wiki-ico {
   width: 34px;
   height: 34px;

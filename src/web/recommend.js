@@ -1,7 +1,7 @@
 // src/web/recommend.js —— 推荐视图：四个二级子面板（驱动盘 / 音擎 / 配队 / 角色数值）
 // 全部只基于 data/plans.json + library.json 统计，不联动账号数据（characters.json）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序，驱动盘面板复用 discstats.js。
-import { plans, library } from './data.js';
+import { plans, library, workshopGrad, workshopStats } from './data.js';
 import { computeWengineStats } from '../lib/wengineStats.js';
 import { computeTeamStats } from '../lib/teamStats.js';
 import { computePanelRanges } from '../lib/panelRange.js';
@@ -29,6 +29,10 @@ const TABS = [
   { key: 'wengines', label: '音擎' },
   { key: 'teams', label: '配队' },
   { key: 'panels', label: '角色数值' },
+  { key: 'grad', label: '工坊配装' },
+  { key: 'ws-wengine', label: '工坊音擎' },
+  { key: 'ws-disc', label: '工坊驱动盘' },
+  { key: 'ws-panel', label: '工坊数值' },
 ];
 /** 子面板 key → 渲染函数（renderRecommend 键控分发，驱动盘复用 discstats） */
 const PANEL_RENDERERS = {
@@ -36,6 +40,10 @@ const PANEL_RENDERERS = {
   wengines: renderWengineStats,
   teams: renderTeamStats,
   panels: renderPanelRanges,
+  grad: renderWorkshopGrad,
+  'ws-wengine': renderWorkshopWengine,
+  'ws-disc': renderWorkshopDisc,
+  'ws-panel': renderWorkshopPanel,
 };
 
 /** 空方案数据提示（各面板共用） */
@@ -45,7 +53,7 @@ function emptyPlans() {
 /** 列表 → HTML：每项独立一行（逐项 escapeHtml 后再拼 <br>，避免把 <br> 一起转义） */
 const joinBr = (items) => (items?.length ? items.map((x) => escapeHtml(x)).join('<br>') : '—');
 /** 渲染可排序表格（rec-table；新面板共用骨架，行内容列复用 .ds-chars/.ds-count 等类） */
-function table(headers, rows, sortable = new Set()) {
+function table(headers, rows, sortable = new Set(), className = '') {
   const head = headers
     .map((h) => {
       if (!sortable.has(h)) return `<th>${h}</th>`;
@@ -53,7 +61,7 @@ function table(headers, rows, sortable = new Set()) {
       return `<th data-sort="${h}"${on ? ' class="sorted"' : ''}>${h}${on ? (recSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
     })
     .join('');
-  return `<div class="wiki-wrap"><table class="rec-table"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  return `<div class="wiki-wrap"><table class="rec-table${className ? ' ' + className : ''}"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 }
 
 // ---------- 音擎统计 ----------
@@ -167,6 +175,152 @@ function renderPanelRanges() {
     </tr>`;
   });
   return `<div class="discstats">${table(['角色', '方案数', ...cols], rows, PANEL_SORTABLE)}</div>`;
+}
+
+// ---------- 工坊配装统计（全服每角色最常用音擎 / 驱动盘套装） ----------
+/** 占比进度条：percent 为百分数（如 76.8），样式对齐卡片视图达成率（.rpct 文字 + .tbar/.tfill）。
+ *  颜色阈值：≥20% 绿、<20% 红（无黄色档）。 */
+function gradPct(percent) {
+  const pct = percent || 0;
+  const color = pct >= 20 ? 'var(--green)' : 'var(--red)';
+  return `<span class="rpct">${pct}%</span><span class="tbar"><span class="tfill" style="width:${Math.min(100, pct)}%;background:${color}"></span></span>`;
+}
+/** 音擎悬浮：查 library.wengines 取稀有度/特性/副属性/特效 */
+function wengineTip(name) {
+  const w = library.wengines?.[name];
+  const sub = w?.subStats?.length
+    ? statEntries(w.subStats)
+        .map((t) => `${t.name} ${formatValue(t.name, t.value)}`)
+        .join('、')
+    : '';
+  return (
+    `<b>${escapeHtml(name)}</b>` +
+    (w
+      ? `<br>${[w.rarity, w.trait].filter(Boolean).join(' · ')}${w.baseAtk != null ? ` · 基础攻击 ${formatValue(STAT.ATK, w.baseAtk)}` : ''}`
+      : '') +
+    (sub ? `<br>${sub}` : '') +
+    (w?.specialEffect ? `<br><span style="color:var(--dim)">${renderRichText(w.specialEffect)}</span>` : '')
+  );
+}
+/** 驱动盘组合悬浮：各套装二/四件套效果（查 library.discs） */
+function relicTip(sets) {
+  return (sets || [])
+    .map((s) => {
+      const d = library.discs?.[s.name];
+      return (
+        `<b>${escapeHtml(s.name)}${s.num}件</b>` +
+        (d?.set2Text ? `<br><span style="color:var(--green)">【2件套】${d.set2Text}</span>` : '') +
+        (d?.set4Text ? `<br><span style="color:var(--orange)">【4件套】${d.set4Text}</span>` : '')
+      );
+    })
+    .join('<div class="tip-hr"></div>');
+}
+function renderWorkshopGrad() {
+  const data = workshopGrad.roles || [];
+  if (!data.length) {
+    return '<div class="empty">暂无工坊配装统计。<br><button class="mini" onclick="ZZZ.syncWorkshop()">更新工坊配装</button>（或运行 <b>node src/sync/workshop-grad.js</b>）</div>';
+  }
+  const gradVal = (r, key) => (key === '角色' ? r.name : null);
+  const rows = recSort.apply(data, gradVal).map((r) => {
+    // 音擎：图标 + 名称 + 进度条（悬浮看音擎详情）；驱动盘组合：各套装图标并排 + 组合名 + 进度条（悬浮看套装效果）
+    const weapons = (r.weapons || [])
+      .map(
+        (w) =>
+          `<span class="ws-item" data-detail="${escapeHtml(wengineTip(w.name))}" title="悬浮查看音擎详情">${w.icon ? `<img class="ws-ico" src="${w.icon}" alt="">` : ''}<span>${escapeHtml(w.name)}</span>${gradPct(w.percent)}</span>`
+      )
+      .join('<br>');
+    const relics = (r.relics || [])
+      .map(
+        (x) =>
+          `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}" title="悬浮查看套装效果"><span class="ws-sets">${(
+            x.sets || []
+          )
+            .map((s) => (s.icon ? `<img class="ws-ico" src="${s.icon}" alt="">` : ''))
+            .join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
+      )
+      .join('<br>');
+    return `<tr>
+      <td class="wiki-name" title="${escapeHtml(r.name)}">${r.icon ? `<img class="ws-ico grad-role" src="${r.icon}" alt="">` : ''}<span class="ds-dname">${escapeHtml(r.name)}</span></td>
+      <td class="ds-main">${weapons || '—'}</td>
+      <td class="ds-main">${relics || '—'}</td>
+    </tr>`;
+  });
+  return `<div class="discstats">${table(['角色', '常用音擎', '常用驱动盘套装'], rows, new Set(['角色']), 'grad-table')}</div>`;
+}
+
+// ---------- 工坊汇总：音擎 / 驱动盘 / 数值（基于 workshop.json，见 lib/workshopStats.js） ----------
+/** 工坊 item_id → 角色名 映射（工坊配装数据里有；缺失时回退显示 id） */
+const wsRoleNames = () => new Map((workshopGrad.roles || []).map((r) => [String(r.item_id), r.name]));
+const wsRoleName = (id) => wsRoleNames().get(String(id)) || String(id);
+
+/** 工坊音擎推荐：按配装条目数聚合 */
+function renderWorkshopWengine() {
+  const data = workshopStats.wengines || [];
+  if (!data.length) {
+    return '<div class="empty">暂无工坊音擎推荐。<br>运行 <b>node src/sync/workshop-stats.js</b> 生成后刷新查看。</div>';
+  }
+  const val = (w, key) => (key === '音擎' ? w.name : key === '使用配装数' ? w.count : null);
+  const rows = recSort.apply(data, val).map((w) => {
+    const icon = library.wengines?.[w.name]?.icon
+      ? `<img class="ws-ico" src="${library.wengines[w.name].icon}" alt="">`
+      : '';
+    return `<tr>
+      <td class="wiki-name" data-detail="${escapeHtml(wengineTip(w.name))}" title="悬浮查看音擎详情"><span class="ds-dname">${escapeHtml(w.name)}</span>${icon}</td>
+      <td class="ds-count">${w.count || '—'}</td>
+      <td class="ds-chars">${joinBr((w.characters || []).map(wsRoleName))}</td>
+    </tr>`;
+  });
+  return `<div class="discstats">${table(['音擎', '使用配装数', '推荐角色'], rows, new Set(['音擎', '使用配装数']), 'grad-table')}</div>`;
+}
+
+/** 工坊驱动盘推荐：按配装条目数聚合（同配装同套装只计一次） */
+function renderWorkshopDisc() {
+  const data = workshopStats.discs || [];
+  if (!data.length) {
+    return '<div class="empty">暂无工坊驱动盘推荐。<br>运行 <b>node src/sync/workshop-stats.js</b> 生成后刷新查看。</div>';
+  }
+  const val = (d, key) => (key === '驱动盘' ? d.name : key === '使用配装数' ? d.count : null);
+  const rows = recSort.apply(data, val).map((d) => {
+    const libD = library.discs?.[d.name];
+    const icon = libD?.icon ? `<img class="ws-ico" src="${libD.icon}" alt="">` : '';
+    return `<tr>
+      <td class="wiki-name" data-detail="${escapeHtml(relicTip(d.name ? [{ name: d.name }] : []))}" title="悬浮查看套装效果"><span class="ds-dname">${escapeHtml(d.name)}</span>${icon}</td>
+      <td class="ds-count">${d.count || '—'}</td>
+      <td class="ds-chars">${joinBr((d.characters || []).map(wsRoleName))}</td>
+    </tr>`;
+  });
+  return `<div class="discstats">${table(['驱动盘', '使用配装数', '推荐角色'], rows, new Set(['驱动盘', '使用配装数']), 'grad-table')}</div>`;
+}
+
+/** 工坊数值推荐：角色面板 P25/P50/P75 分位 */
+function renderWorkshopPanel() {
+  const data = workshopStats.panels || [];
+  if (!data.length) {
+    return '<div class="empty">暂无工坊数值推荐。<br>运行 <b>node src/sync/workshop-stats.js</b> 生成后刷新查看。</div>';
+  }
+  // 属性列 = 数据中出现过的属性，按 panelOrder 顺序
+  const seen = new Set();
+  for (const p of data) for (const k of Object.keys(p.stats)) seen.add(k);
+  const cols = [...panelOrder.filter((s) => seen.has(s)), ...[...seen].filter((s) => !panelOrder.includes(s))];
+  const names = wsRoleNames();
+  const val = (p, key) => (key === '角色' ? wsRoleName(p.name) : null);
+  const rows = recSort.apply(data, val).map((p) => {
+    const roleName = names.get(String(p.name)) || String(p.name);
+    const libC = Object.values(library.characters || {}).find((c) => c.name === roleName);
+    const roleIcon = libC?.portrait || libC?.icon || '';
+    const cells = cols
+      .map((s) => {
+        const q = p.stats[s];
+        if (!q) return '<td class="ds-main">—</td>';
+        return `<td class="ds-main" title="P25 / P50 / P75">${q.map((v) => formatValue(s, v)).join(' / ')}</td>`;
+      })
+      .join('');
+    return `<tr>
+      <td class="wiki-name" title="${escapeHtml(roleName)}">${roleIcon ? `<img class="ws-ico grad-role" src="${roleIcon}" alt="">` : ''}<span class="ds-dname">${escapeHtml(roleName)}</span></td>
+      ${cells}
+    </tr>`;
+  });
+  return `<div class="discstats">${table(['角色', ...cols], rows, new Set(['角色']), 'grad-table')}</div>`;
 }
 
 /** 渲染整个推荐视图（tab + 当前子面板） */

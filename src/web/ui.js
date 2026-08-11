@@ -52,6 +52,9 @@ function startSyncPolling(kind) {
     else if (p.step === 'discs') msg = `正在同步驱动盘 ${p.done}/${p.total}…`;
     else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
     else if (p.step === SYNC_KINDS.PLANS) msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
+    else if (p.step === 'rank') msg = `正在爬取排名 ${p.done}/${p.total}…`;
+    else if (p.step === 'fetch') msg = `正在拉取配装 ${p.done}/${p.total}…`;
+    else if (p.step === 'grad') msg = `正在更新全服统计 ${p.done}/${p.total}…`;
     notify(msg, 60);
   }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
 }
@@ -69,6 +72,20 @@ async function syncLibrary() {
     setTimeout(() => location.reload(), 900);
   } else {
     notify('同步失败：' + (j && j.error ? j.error : '未检测到本地服务器，请先运行 npm start'), 10);
+  }
+}
+
+/** 更新工坊配装统计（爬取 api.zzzmap.com，无需 cookie） */
+async function syncWorkshop() {
+  notify('正在更新工坊数据…（首次全量较久，请稍候）', 60);
+  startSyncPolling(SYNC_KINDS.WORKSHOP);
+  const j = await apiRequest('/api/sync-workshop', { method: 'POST' });
+  stopSyncPolling();
+  if (j && j.ok) {
+    notify(`工坊数据更新完成（${j.stats.roles} 角色全服统计），即将刷新`);
+    setTimeout(() => location.reload(), 900);
+  } else {
+    notify('更新失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 10);
   }
 }
 
@@ -434,6 +451,7 @@ export function initUi() {
       if (act === SYNC_KINDS.LIBRARY) syncLibrary();
       else if (act === SYNC_KINDS.CHARACTERS) openRoleSync();
       else if (act === SYNC_KINDS.PLANS) openPlansSync();
+      else if (act === SYNC_KINDS.WORKSHOP) syncWorkshop();
     })
   );
   // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
@@ -459,6 +477,7 @@ export function initUi() {
       setMyTab(key);
       render();
     },
+    syncWorkshop: () => syncWorkshop(),
   });
   document
     .getElementById('rolesyncClose')

@@ -15,8 +15,14 @@ export const grid = document.getElementById('grid');
 export let plans = {};
 export let plansByName = {};
 
-/** 注入属性库 / 我的角色 / 推荐方案数据（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
-export function setData(lib, chars, plansData) {
+/** 工坊全服配装统计：{ roles: [{ item_id, name, weapons, relics }] }（src/sync/workshop-grad.js 爬取） */
+export let workshopGrad = { roles: [] };
+
+/** 工坊配装汇总：{ wengines, discs, panels }（src/sync/workshop-stats.js 生成，基于 workshop.json） */
+export let workshopStats = { wengines: [], discs: [], panels: [] };
+
+/** 注入属性库 / 我的角色 / 推荐方案 / 工坊配装统计 / 工坊配装汇总（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
+export function setData(lib, chars, plansData, gradData, statsData) {
   lib = lib || { characters: {}, wengines: {}, discs: {}, bangboos: {} };
   library = {
     characters: toInstances(lib.characters, Character), // wiki 角色
@@ -28,6 +34,8 @@ export function setData(lib, chars, plansData) {
   plans = plansData || {};
   plansByName = {};
   for (const v of Object.values(plans)) if (v && v.name) plansByName[v.name] = v;
+  workshopGrad = gradData || { roles: [] };
+  workshopStats = statsData || { wengines: [], discs: [], panels: [] };
   rebuildIndex();
 }
 

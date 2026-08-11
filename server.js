@@ -16,6 +16,8 @@ import { SYNC_KINDS } from './src/lib/constants.js';
 import { fetchLibrary } from './src/sync/library.js';
 import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
 import { fetchAllPlans } from './src/sync/plans.js';
+import { fetchWorkshopData } from './src/sync/workshop.js';
+import { localizeDataFiles } from './src/sync/library.js';
 
 const PORT = process.env.PORT || 8718;
 // 项目根目录（server.js 位于根目录）
@@ -153,7 +155,7 @@ const syncLibraryHandler = (req, res) =>
   runSync(req, res, {
     kind: SYNC_KINDS.LIBRARY,
     label: '数据库',
-    run: (_, onProgress) => fetchLibrary(onProgress),
+    run: (_, onProgress) => fetchLibrary(onProgress), // fetchLibrary 内部已做图片本地化（与 wiki 更新绑定）
   });
 
 const syncCharactersHandler = (req, res) =>
@@ -165,7 +167,18 @@ const syncCharactersHandler = (req, res) =>
     cacheOnBodyCookie: true,
     resolveCookies: cookieFromBodyOrCache,
     emptyCookieError: '没有可用的 cookie：请先在页面粘贴，或先运行 node sync-characters.js',
-    run: (cookies, onProgress) => fetchMyCharacters(cookies, onProgress),
+    run: async (cookies, onProgress) => {
+      const s = await fetchMyCharacters(cookies, onProgress);
+      await localizeDataFiles(); // 图片本地化，避免账号角色图片回到远程
+      return s;
+    },
+  });
+
+const syncWorkshopHandler = (req, res) =>
+  runSync(req, res, {
+    kind: SYNC_KINDS.WORKSHOP,
+    label: '工坊配装',
+    run: (_, onProgress) => fetchWorkshopData(onProgress),
   });
 
 const syncPlansHandler = (req, res) =>
@@ -189,12 +202,15 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url === '/api/sync-base') return await syncLibraryHandler(req, res);
     if (req.method === 'POST' && url === '/api/sync-characters') return await syncCharactersHandler(req, res);
     if (req.method === 'POST' && url === '/api/sync-plans') return await syncPlansHandler(req, res);
+    if (req.method === 'POST' && url === '/api/sync-workshop') return await syncWorkshopHandler(req, res);
     if (req.method === 'GET' && url === '/api/data') {
       return respond(res, 200, {
         ok: true,
         library: readDataJson('library.json', { characters: {}, wengines: {}, discs: {} }),
         characters: readDataJson('characters.json', []),
         plans: readDataJson('plans.json', {}),
+        workshopGrad: readDataJson('workshop-grad.json', { roles: [] }),
+        workshopStats: readDataJson('workshop-stats.json', { wengines: [], discs: [], panels: [] }),
       });
     }
     if (req.method === 'GET' && url === '/api/cookie-status')

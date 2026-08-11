@@ -15,6 +15,7 @@ export class Disc {
     this.slot = data.slot ?? null;
     this.level = data.level ?? null;
     this.icon = data.icon || '';
+    this.roundIcon = data.roundIcon || ''; // 圆形光盘图标（wiki 提取，卡片/统计视图用）
     this.rarity = data.rarity || 'S';
     this.mainStats = data.mainStats || [];
     this.subStats = data.subStats || [];
@@ -112,7 +113,6 @@ export class Character {
   statProgress(R, name) {
     return statProgress(this, R, name);
   }
-
 }
 
 /** 把 {键: 数据} 集合实例化为对应基类集合 */
