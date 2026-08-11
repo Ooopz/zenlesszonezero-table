@@ -367,7 +367,7 @@ function cellStats(R, target, s) {
   return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></div></td>`;
 }
 
-function renderTable(list) {
+function renderTable(list, container) {
   const allColumns = ['角色', '音擎', '驱动盘', '副词条命中', ...targetStats];
   // 列序：优先用保存的顺序（过滤掉已不存在的列），新列补到末尾
   let colOrder = (readColOrder() || []).filter((c) => allColumns.includes(c));
@@ -461,7 +461,7 @@ function renderTable(list) {
   if (tableSort.active) {
     rowObjs = tableSort.apply(rowObjs, (row, key) => row.sortVals[key]);
   }
-  grid.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="统计表">${header}${rowObjs.map((r) => r.html).join('')}</table></div>`;
+  container.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="统计表">${header}${rowObjs.map((r) => r.html).join('')}</table></div>`;
 }
 
 // ---------- 表格拖拽排序（行/列） ----------
@@ -530,9 +530,33 @@ grid.addEventListener('click', (e) => {
   render();
 });
 
+// ---------- 我的角色视图（卡片 / 统计 二级子页面） ----------
+let myTab = 'card';
+export function setMyTab(key) {
+  myTab = key;
+}
+const MY_TABS = [
+  { key: 'card', label: '卡片' },
+  { key: 'table', label: '统计' },
+];
+/** 我的角色视图外壳：子面板 tabs + 内容容器（bodyContent 可选，放空态提示等） */
+function myCharsShell(bodyContent = '') {
+  const tabs = MY_TABS.map(
+    (t) =>
+      `<button class="wiki-tab ${t.key === myTab ? 'on' : ''}" data-tab="${t.key}" onclick="ZZZ.myTab('${t.key}')">${t.label}</button>`
+  ).join('');
+  return `<div class="wiki"><div class="wiki-tabs">${tabs}</div><div class="mychars-body">${bodyContent}</div></div>`;
+}
+/** 主视图解析：URL/配置中的 card|table 兼容映射到 mychars（旧配置迁移），legacy 供初始化子页面 tab */
+function resolveView() {
+  const raw = new URLSearchParams(location.search).get('view') || userConfig.view || VIEWS.MY_CHARS;
+  if (raw === VIEWS.CARD || raw === VIEWS.TABLE) return { view: VIEWS.MY_CHARS, legacy: raw };
+  return { view: raw, legacy: null };
+}
+
 // ---------- 渲染调度 ----------
 export function render() {
-  const view = new URLSearchParams(location.search).get('view') || userConfig.view || VIEWS.CARD;
+  const { view, legacy } = resolveView();
   // 高亮当前视图切换按钮
   document.querySelectorAll('.view-tab').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   grid.innerHTML = '';
@@ -545,15 +569,24 @@ export function render() {
     grid.innerHTML = renderRecommend();
     return;
   }
+  // 我的角色：卡片 / 统计 二级子页面
   if (!myCharacters.length) {
-    grid.innerHTML = `<div class="empty">还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。</div>`;
+    grid.innerHTML = myCharsShell(
+      '<div class="empty">还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。</div>'
+    );
     return;
   }
   const list = myCharacters;
   if (!list.length) {
-    grid.innerHTML = `<div class="empty">没有匹配的角色。<br>试试调整或清空筛选条件。</div>`;
+    grid.innerHTML = myCharsShell('<div class="empty">没有匹配的角色。<br>试试调整或清空筛选条件。</div>');
     return;
   }
-  if (view === VIEWS.TABLE) renderTable(list);
-  else for (const character of list) grid.appendChild(characterCard(character));
+  // 兼容旧配置 card/table 视图值 → 初始化子页面 tab
+  if (legacy === VIEWS.TABLE) myTab = 'table';
+  else if (legacy === VIEWS.CARD) myTab = 'card';
+  grid.innerHTML = myCharsShell();
+  const body = grid.querySelector('.mychars-body');
+  body.className = myTab === 'card' ? 'mychars-body cards' : 'mychars-body';
+  if (myTab === 'table') renderTable(list, body);
+  else for (const character of list) body.appendChild(characterCard(character));
 }

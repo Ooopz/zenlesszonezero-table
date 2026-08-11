@@ -1142,6 +1142,12 @@ table.tbl {
   background: var(--acc);
   color: #111;
 }
+/* 我的角色视图：卡片子面板两列布局（body 在 .wiki 内，需自建 grid 承接 .card） */
+.mychars-body.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
 .wiki-wrap {
   overflow: auto;
   max-height: calc(100vh - var(--head-h, 56px) - 90px);

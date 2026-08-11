@@ -17,7 +17,7 @@ import {
   plansByName,
   library,
 } from './data.js';
-import { render } from './render.js';
+import { render, setMyTab } from './render.js';
 import { setWikiTab } from './wiki.js';
 import { setRecommendTab } from './recommend.js';
 
@@ -441,7 +441,7 @@ export function initUi() {
     b.addEventListener('click', () => {
       userConfig.view = b.dataset.view;
       saveUserConfig();
-      history.replaceState(null, '', b.dataset.view === VIEWS.CARD ? location.pathname : `?view=${b.dataset.view}`);
+      history.replaceState(null, '', b.dataset.view === VIEWS.MY_CHARS ? location.pathname : `?view=${b.dataset.view}`);
       render();
     })
   );
@@ -453,6 +453,10 @@ export function initUi() {
     },
     recommendTab: (key) => {
       setRecommendTab(key);
+      render();
+    },
+    myTab: (key) => {
+      setMyTab(key);
       render();
     },
   });

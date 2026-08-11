@@ -161,6 +161,7 @@ export const VIEWS = {
   TABLE: 'table',
   WIKI: 'wiki',
   RECOMMEND: 'recommend',
+  MY_CHARS: 'mychars',
 };
 
 // ---------- 驱动盘槽位 ----------
