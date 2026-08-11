@@ -19,6 +19,7 @@ import {
 } from './data.js';
 import { render } from './render.js';
 import { setWikiTab } from './wiki.js';
+import { setRecommendTab } from './recommend.js';
 
 // ---------- 提示条 ----------
 const statusEl = document.getElementById('status');
@@ -448,6 +449,10 @@ export function initUi() {
   registerZZZ({
     wikiTab: (key) => {
       setWikiTab(key);
+      render();
+    },
+    recommendTab: (key) => {
+      setRecommendTab(key);
       render();
     },
   });

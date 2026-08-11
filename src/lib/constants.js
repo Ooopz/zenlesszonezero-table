@@ -75,7 +75,7 @@ export const TARGET_UNITS = {
   [STAT.CR]: '%',
   [STAT.CD]: '%',
   [STAT.PEN_RATE]: '%',
-  '属性伤害加成': '%',
+  属性伤害加成: '%',
 };
 
 // ---------- 副词条类型（有效副词条 / 成长表） ----------
@@ -160,7 +160,7 @@ export const VIEWS = {
   CARD: 'card',
   TABLE: 'table',
   WIKI: 'wiki',
-  DISC_STATS: 'discstats',
+  RECOMMEND: 'recommend',
 };
 
 // ---------- 驱动盘槽位 ----------

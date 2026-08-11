@@ -1289,6 +1289,42 @@ table.tbl th.sorted,
 .discstats-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);
 }
+/* 推荐视图统计表（音擎/配队/角色数值子面板）：复用驱动盘统计表视觉；内容列沿用 .ds-chars/.ds-count/.ds-main */
+.rec-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 720px;
+}
+.rec-table th,
+.rec-table td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.rec-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 800;
+  font-size: 12px;
+}
+.rec-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+.rec-table th.sorted {
+  color: var(--txt);
+}
+.rec-table td.wiki-name {
+  font-weight: 800;
+  color: var(--txt);
+}
+.rec-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.045);
+}
 .wiki-ico {
   width: 34px;
   height: 34px;

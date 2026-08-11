@@ -10,6 +10,10 @@ const sort = createSort();
 export function toggleDiscStatsSort(key) {
   sort.toggle(key);
 }
+/** 复位驱动盘面板排序（推荐页切换子面板时调用） */
+export function resetDiscStatsSort() {
+  sort.reset();
+}
 
 const HEADERS = ['驱动盘', '匹配角色', '方案数', '副词条', '4号位', '5号位', '6号位'];
 const SORTABLE = new Set(['驱动盘', '匹配角色', '方案数']);

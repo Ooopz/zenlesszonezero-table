@@ -32,7 +32,8 @@ import { createSort } from '../lib/sort.js';
 import { STAT, VIEWS } from '../lib/constants.js';
 import { discSetEffectsHtml, richItemHtml, skillIconForType } from './shared.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
-import { renderDiscStats, toggleDiscStatsSort } from './discstats.js';
+import { toggleDiscStatsSort } from './discstats.js';
+import { renderRecommend, toggleRecommendSort } from './recommend.js';
 
 // ---------- 悬浮提示 ----------
 const tipEl = document.createElement('div');
@@ -524,6 +525,7 @@ grid.addEventListener('click', (e) => {
   if (th.closest('.wiki-table')) toggleWikiSort(key);
   else if (th.closest('table.tbl')) toggleTableSort(key);
   else if (th.closest('table.discstats-table')) toggleDiscStatsSort(key);
+  else if (th.closest('table.rec-table')) toggleRecommendSort(key);
   else return;
   render();
 });
@@ -538,8 +540,9 @@ export function render() {
     grid.innerHTML = renderWiki();
     return;
   }
-  if (view === VIEWS.DISC_STATS) {
-    grid.innerHTML = renderDiscStats();
+  if (view === VIEWS.RECOMMEND || view === 'discstats') {
+    // discstats 兼容旧 user-config 存留的视图值
+    grid.innerHTML = renderRecommend();
     return;
   }
   if (!myCharacters.length) {
