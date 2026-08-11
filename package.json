@@ -9,7 +9,7 @@
     "sync:library": "node src/sync/library.js",
     "sync:characters": "node src/sync/characters.js",
     "sync:plans": "node src/sync/plans.js",
-    "test": "node --test test/calc.test.js test/extract.test.js test/models.test.js test/schema.test.js test/skill-growth.test.js test/util.test.js",
+    "test": "node --test test/calc.test.js test/discstats.test.js test/extract.test.js test/models.test.js test/schema.test.js test/skill-growth.test.js test/util.test.js",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,md,json}\""
   },

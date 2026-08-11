@@ -1215,6 +1215,68 @@ table.tbl th.sorted,
 .wiki-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);
 }
+/* 驱动盘统计表（独立视图）：沿用 wiki 表格外观，滚动容器复用 .wiki-wrap */
+.discstats {
+  grid-column: 1/-1;
+  min-width: 0; /* 允许收缩，宽表格横向溢出收进 .wiki-wrap 滚动 */
+}
+.discstats-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  /* 自动布局 + 单元格 nowrap：列宽按 colgroup/最长行内项定，不随视口拉伸；
+     行内项由渲染时的 <br> 分隔，单个名字/组合/主属性始终单行不换行 */
+  min-width: 880px;
+}
+.discstats-table th,
+.discstats-table td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.discstats-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 800;
+  font-size: 12px;
+}
+.discstats-table th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+.discstats-table th.sorted {
+  color: var(--txt);
+}
+.discstats-table td.wiki-name {
+  font-weight: 800;
+  color: var(--txt);
+}
+/* 驱动盘列：名称在上、图标在下居中；整格悬浮显示二/四件套详情 */
+.discstats-table td.wiki-name .ds-dname {
+  display: block;
+}
+.discstats-table td.wiki-name .ds-dico {
+  display: block;
+  margin: 3px auto 0;
+}
+/* 匹配角色 / 副词条组合 / 456 号位：每项一行（<br> 分隔），
+   nowrap 保证单个名字/组合/主属性不被挤换行；单元格限高滚动避免行被撑得很高 */
+.discstats-table td.ds-chars,
+.discstats-table td.ds-combos,
+.discstats-table td.ds-main {
+  white-space: nowrap;
+  text-align: left;
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-size: 12px;
+}
+.discstats-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.045);
+}
 .wiki-ico {
   width: 34px;
   height: 34px;

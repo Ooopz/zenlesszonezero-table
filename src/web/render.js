@@ -30,6 +30,7 @@ import {
 import { escapeHtml, escapeJsAttr, formatValue, renderRichText, compareValues } from '../lib/util.js';
 import { STAT, VIEWS } from '../lib/constants.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
+import { renderDiscStats, toggleDiscStatsSort } from './discstats.js';
 
 // ---------- 悬浮提示 ----------
 const tipEl = document.createElement('div');
@@ -556,6 +557,7 @@ grid.addEventListener('click', (e) => {
   const key = th.dataset.sort;
   if (th.closest('.wiki-table')) toggleWikiSort(key);
   else if (th.closest('table.tbl')) toggleTableSort(key);
+  else if (th.closest('table.discstats-table')) toggleDiscStatsSort(key);
   else return;
   render();
 });
@@ -568,6 +570,10 @@ export function render() {
   grid.innerHTML = '';
   if (view === VIEWS.WIKI) {
     grid.innerHTML = renderWiki();
+    return;
+  }
+  if (view === VIEWS.DISC_STATS) {
+    grid.innerHTML = renderDiscStats();
     return;
   }
   if (!myCharacters.length) {

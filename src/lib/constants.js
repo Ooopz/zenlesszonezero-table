@@ -160,6 +160,7 @@ export const VIEWS = {
   CARD: 'card',
   TABLE: 'table',
   WIKI: 'wiki',
+  DISC_STATS: 'discstats',
 };
 
 // ---------- 驱动盘槽位 ----------
