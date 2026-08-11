@@ -1224,8 +1224,8 @@ table.tbl th.sorted,
   border-collapse: collapse;
   font-size: 13px;
   /* 自动布局 + 单元格 nowrap：列宽按 colgroup/最长行内项定，不随视口拉伸；
-     行内项由渲染时的 <br> 分隔，单个名字/组合/主属性始终单行不换行 */
-  min-width: 880px;
+     行内项由渲染时的 <br> 分隔，单个名字/词条频次始终单行不换行 */
+  min-width: 950px;
 }
 .discstats-table th,
 .discstats-table td {
@@ -1262,8 +1262,7 @@ table.tbl th.sorted,
   display: block;
   margin: 3px auto 0;
 }
-/* 匹配角色 / 副词条组合 / 456 号位：每项一行（<br> 分隔），
-   nowrap 保证单个名字/组合/主属性不被挤换行；单元格限高滚动避免行被撑得很高 */
+/* 匹配角色 / 副词条 / 456 号位：nowrap 保证单个名字/词条频次不被挤换行；单元格限高滚动避免行被撑得很高 */
 .discstats-table td.ds-chars,
 .discstats-table td.ds-combos,
 .discstats-table td.ds-main {
@@ -1273,6 +1272,19 @@ table.tbl th.sorted,
   overflow-y: auto;
   line-height: 1.5;
   font-size: 12px;
+}
+/* 高频词条（≥50% 方案推荐）：加粗高亮 = 「优先留」 */
+.discstats-table .ds-hot {
+  color: var(--acc);
+  font-weight: 800;
+}
+/* 低频词条（<5% 方案推荐）：灰色弱化 = 个别方案特化，优先级低 */
+.discstats-table .ds-dim {
+  color: var(--dim);
+}
+/* 副词条单元格：可悬浮查看组合明细 */
+.discstats-table td.ds-combos .ds-sub {
+  cursor: help;
 }
 .discstats-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);

@@ -11,13 +11,13 @@ export function toggleDiscStatsSort(key) {
   sort.toggle(key);
 }
 
-const HEADERS = ['驱动盘', '匹配角色', '副词条组合', '4号位', '5号位', '6号位'];
-const SORTABLE = new Set(['驱动盘', '匹配角色', '副词条组合']);
-/** 各列排序取值：驱动盘按名，其余按去重后数量（越常用排越前） */
+const HEADERS = ['驱动盘', '匹配角色', '方案数', '副词条', '4号位', '5号位', '6号位'];
+const SORTABLE = new Set(['驱动盘', '匹配角色', '方案数']);
+/** 各列排序取值：驱动盘按名，匹配角色/方案数按数量（越多越常用排越前） */
 function sortVal(row, key) {
   if (key === '驱动盘') return row.name;
   if (key === '匹配角色') return row.characters.length;
-  if (key === '副词条组合') return row.subCombos.length;
+  if (key === '方案数') return row.count;
   return null;
 }
 /** 列表 → HTML：每项独立一行（逐项 escapeHtml 后再拼 <br>，避免把 <br> 一起转义） */
@@ -26,6 +26,18 @@ const joinBr = (items) => (items?.length ? items.map((x) => escapeHtml(x)).join(
 /** 悬浮详情：盘名 + 二/四件套效果（复用角色卡片驱动盘悬浮的构成方式，套件效果走 shared.discSetEffectsHtml） */
 function discTipHtml(name) {
   return `<b>${escapeHtml(name)}</b>${discSetEffectsHtml(library.discs?.[name])}`;
+}
+
+/** 频次列表 → HTML：每词条一行（<br> 分隔，与角色列/原组合列的换行逻辑一致）。三档区分：
+ *  ≥50% 加粗高亮（优先留）、<5% 灰色弱化（个别方案特化，优先级低）、中间档普通显示 */
+function freqHtml(list) {
+  if (!list?.length) return '—';
+  return list
+    .map((f) => {
+      const cls = f.ratio >= 0.5 ? 'ds-hot' : f.ratio < 0.05 ? 'ds-dim' : '';
+      return `<span${cls ? ` class="${cls}"` : ''}>${escapeHtml(f.name)} ${Math.round(f.ratio * 100)}%</span>`;
+    })
+    .join('<br>');
 }
 
 /** 渲染驱动盘推荐统计表（返回 HTML；空方案数据时返回提示） */
@@ -41,22 +53,27 @@ export function renderDiscStats() {
   }).join('');
   const body = rows
     .map((r) => {
-      const combos = r.subCombos.length ? r.subCombos.map((c) => escapeHtml(c.join('、'))).join('<br>') : '—';
+      // 副词条：主展示词条频次；悬浮显示原「组合明细」（每组合一行），保留搭配信息
+      const comboTip = r.subCombos.length ? r.subCombos.map((c) => c.join('、')).join('<br>') : '';
+      const subCell = r.subStats.length
+        ? `<span class="ds-sub" data-detail="${escapeHtml(comboTip)}" title="悬浮查看副词条组合明细">${freqHtml(r.subStats)}</span>`
+        : '—';
       const icon = library.discs?.[r.name]?.icon
         ? `<img class="wiki-ico ds-dico" src="${library.discs[r.name].icon}" alt="">`
         : '';
       return `<tr>
       <td class="wiki-name" data-detail="${escapeHtml(discTipHtml(r.name))}" title="悬浮查看详情"><span class="ds-dname">${escapeHtml(r.name)}</span>${icon}</td>
       <td class="ds-chars">${joinBr(r.characters)}</td>
-      <td class="ds-combos">${combos}</td>
-      <td class="ds-main">${joinBr(r.main4)}</td>
-      <td class="ds-main">${joinBr(r.main5)}</td>
-      <td class="ds-main">${joinBr(r.main6)}</td>
+      <td class="ds-count">${r.count || '—'}</td>
+      <td class="ds-combos">${subCell}</td>
+      <td class="ds-main">${freqHtml(r.main4)}</td>
+      <td class="ds-main">${freqHtml(r.main5)}</td>
+      <td class="ds-main">${freqHtml(r.main6)}</td>
     </tr>`;
     })
     .join('');
-  // 列宽下限（自动布局 + 单元格 nowrap）：长内容按行内项定宽，单个名字/组合/主属性保持单行
+  // 列宽下限（自动布局 + 单元格 nowrap）：长内容按行内项定宽，单个词条频次保持单行
   const colgroup =
-    '<colgroup><col style="width:110px"><col style="width:180px"><col style="width:260px"><col style="width:110px"><col style="width:110px"><col style="width:110px"></colgroup>';
+    '<colgroup><col style="width:110px"><col style="width:170px"><col style="width:70px"><col style="width:240px"><col style="width:120px"><col style="width:120px"><col style="width:120px"></colgroup>';
   return `<div class="discstats"><div class="wiki-wrap"><table class="discstats-table">${colgroup}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
