@@ -12,3 +12,12 @@ export async function apiRequest(url, opts) {
     clearTimeout(t);
   }
 }
+
+/** POST JSON（统一 Content-Type 头 + 序列化），返回解析后的响应 */
+export async function postJSON(url, body) {
+  return apiRequest(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}

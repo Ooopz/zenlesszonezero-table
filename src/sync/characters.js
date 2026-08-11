@@ -11,15 +11,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { fileURLToPath } from 'node:url';
-import { openBrowser } from '../lib/node.js';
-import { parseCookies, CLIPBOARD_SCRIPT } from '../lib/util.js';
-import { validateCharacters, warnIfInvalid } from '../lib/schema.js';
+import { DATA_DIR, isMain, writeDataFile, openBrowser } from '../lib/node.js';
+import { parseCookies, parseNum, CLIPBOARD_SCRIPT } from '../lib/util.js';
+import { validateCharacters } from '../lib/schema.js';
 import { pool } from './library.js';
+import { requestJson, fetchUid } from './http.js';
 
-// 项目根目录（本文件位于 src/sync/ 下，向上两级）
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DATA_DIR = path.join(ROOT, 'data');
 const COOKIE_FILE = path.join(DATA_DIR, '.cookie.json');
 
 // 参考 ZenlessZoneZero-Extractor/main.py 的请求头（未改动，保持原样可用）
@@ -94,38 +91,10 @@ async function fetchCookie() {
 
 // ---------------- API 调用 ----------------
 
-async function request(url, headers, cookies) {
-  const res = await fetch(url, {
-    headers: {
-      ...headers,
-      cookie: Object.entries(cookies)
-        .map(([k, v]) => `${k}=${v}`)
-        .join('; '),
-    },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = await res.json();
-  if (j.retcode !== 0) throw new Error(`retcode ${j.retcode}: ${j.message || j.msg || ''}`);
-  return j;
-}
-
-async function fetchUid(cookies) {
-  const j = await request(
-    'https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=nap_cn',
-    baseHeaders,
-    cookies
-  );
-  const list = j.data?.list || [];
-  if (!list.length) throw new Error('账号下没有绝区零角色，请确认 cookie 属于正确的米游社账号');
-  console.log(`   绑定角色 uid: ${list[0].game_uid}`);
-  return list[0].game_uid;
-}
-
 async function fetchCharacterList(cookies, uid) {
-  const j = await request(
+  const j = await requestJson(
     `https://api-takumi-record.mihoyo.com/event/game_record_zzz/api/zzz/avatar/basic?server=prod_gf_cn&role_id=${uid}`,
-    recordHeaders,
-    cookies
+    { headers: recordHeaders, cookies }
   );
   const list = j.data?.avatar_list || [];
   console.log(`   角色列表: ${list.length} 个`);
@@ -143,27 +112,20 @@ async function fetchCharacterDetail(cookies, uid, charId, page) {
     'x-rpc-geetest_ext': `{"viewUid":"0","gameId":8,"page":"v1.1.4_#/zzz/roles/${charId}/detail","isHost":1}`,
   };
   const url = `https://api-takumi-record.mihoyo.com/event/game_record_zzz/api/zzz/avatar/info?id_list[]=${charId}&need_wiki=true&server=prod_gf_cn&role_id=${uid}`;
-  return request(url, headers, cookies);
+  return requestJson(url, { headers, cookies });
 }
 
 // ---------------- 数据提取 ----------------
 
-/** 解析数值：带 % 的转成小数（如 "36%" → 0.36），空串/非法 → null */
-function parseNumber(value) {
-  if (value == null || value === '') return null;
-  const s = String(value);
-  const n = parseFloat(s) / (s.includes('%') ? 100 : 1);
-  return Number.isFinite(n) ? n : null;
-}
-
 /** 把 {property_name, base} 数组整理成 [{name, value}]。
- *  用数组而非对象：同一盘可能同时有「攻击力%」和「攻击力固定」两条同名词条，对象会互相覆盖。 */
+ *  用数组而非对象：同一盘可能同时有「攻击力%」和「攻击力固定」两条同名词条，对象会互相覆盖。
+ *  数值解析统一走 util.parseNum（带 % 转小数、非法/空 → null）。 */
 function collectStats(arr) {
   const out = [];
   for (const p of arr || []) {
     const name = p?.property_name;
     if (!name) continue;
-    const n = parseNumber(p?.base);
+    const n = parseNum(p?.base);
     if (n == null) continue;
     out.push({ name, value: n });
   }
@@ -180,7 +142,7 @@ export function extractCharacter(response) {
   for (const p of a.properties || []) {
     const name = p.property_name;
     if (!name) continue;
-    panel[name] = { base: parseNumber(p.base), bonus: parseNumber(p.add), final: parseNumber(p.final) };
+    panel[name] = { base: parseNum(p.base), bonus: parseNum(p.add), final: parseNum(p.final) };
   }
   const w = a.weapon || {};
   const wengine = {
@@ -284,7 +246,8 @@ export function readCookieCache() {
  *  opts.strict 为 true 时校验异常直接抛错（命令行 STRICT=1 开启）。 */
 export async function fetchMyCharacters(cookies, onProgress, { strict = false } = {}) {
   console.log('\n④ 获取 UID…');
-  const uid = await fetchUid(cookies);
+  const uid = await fetchUid(cookies, baseHeaders);
+  console.log(`   绑定角色 uid: ${uid}`);
 
   console.log('⑤ 获取角色列表…');
   const charList = await fetchCharacterList(cookies, uid);
@@ -325,9 +288,7 @@ export async function fetchMyCharacters(cookies, onProgress, { strict = false } 
   const stats = { characters: results.length };
 
   // 校验 + 写入 data/characters.json
-  warnIfInvalid('我的角色', validateCharacters(data), { strict });
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DATA_DIR, 'characters.json'), JSON.stringify(data, null, 2), 'utf-8');
+  writeDataFile('characters.json', data, { label: '我的角色', validate: validateCharacters, strict });
 
   return { data, stats, uid };
 }
@@ -341,10 +302,4 @@ async function main() {
 }
 
 // ESM 入口判断：仅当直接运行本文件时执行 main()
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  main().catch((e) => {
-    console.error('运行出错:', e.message);
-    process.exit(1);
-  });
-}
+isMain(import.meta, () => main());

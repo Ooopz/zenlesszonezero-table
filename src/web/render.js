@@ -27,8 +27,10 @@ import {
   targetPercents,
   targetGap,
 } from '../lib/calc.js';
-import { escapeHtml, escapeJsAttr, formatValue, renderRichText, compareValues } from '../lib/util.js';
+import { escapeHtml, escapeJsAttr, formatValue, renderRichText } from '../lib/util.js';
+import { createSort } from '../lib/sort.js';
 import { STAT, VIEWS } from '../lib/constants.js';
+import { discSetEffectsHtml, richItemHtml, skillIconForType } from './shared.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
 import { renderDiscStats, toggleDiscStatsSort } from './discstats.js';
 
@@ -73,18 +75,6 @@ function wengineInfo(character, R) {
     specialEffect: (wengine.specialEffect || libWengine?.specialEffect || '').replace(/<[^>]*>/g, ''),
   };
 }
-/** 套装 2/4 件套效果 HTML（悬浮详情共用） */
-function discSetEffectsHtml(discLib) {
-  return (
-    (discLib?.set2Text
-      ? `<br><span style="color:var(--green)">【2件套】${renderRichText(discLib.set2Text)}</span>`
-      : '') +
-    (discLib?.set4Text
-      ? `<br><span style="color:var(--orange)">【4件套】${renderRichText(discLib.set4Text)}</span>`
-      : '')
-  );
-}
-
 /** 单个驱动盘的悬浮详情：只显示 2/4 件套效果 */
 function discTooltip(disc) {
   const discLib = lookup(library.discs, discIndex, disc.set);
@@ -230,26 +220,16 @@ function characterCard(character) {
   }
   const totalProgress = rateCount ? Math.round((rateSum / rateCount) * 100) : null;
 
-  // 技能等级：类型图标 + 等级，悬浮图标显示完整详情（兼容旧数据：无 skills 时隐藏）
-  // 技能类型 → 静态图标（src/img/）
-  const skillTypeIcon = {
-    0: '/src/img/normal.png',
-    1: '/src/img/special.png',
-    2: '/src/img/dodge.png',
-    3: '/src/img/ultimate.png',
-    5: '/src/img/passive.png',
-    6: '/src/img/support.png',
-  };
+  // 技能等级：类型图标 + 等级，悬浮图标显示完整详情（兼容旧数据：无 skills 时隐藏）。
+  // 图标统一走 shared.skillIconForType（账号数字 type → 路径）
   // 技能显示顺序：普攻, 闪避, 特殊技, 支援, 大招, 被动
   const skillOrder = [0, 2, 1, 6, 3, 5];
   const skillsHtml = skillOrder
     .map((type) => {
       const s = (character.skills || []).find((x) => x.type === type);
       if (!s) return '';
-      const icon = skillTypeIcon[type] || '/src/img/passive.png';
-      const detail = (s.items || [])
-        .map((it) => `<b>${escapeHtml(it.title)}</b><br>${renderRichText(it.text)}`)
-        .join('<div class="tip-hr"></div>');
+      const icon = skillIconForType(type);
+      const detail = (s.items || []).map((it) => richItemHtml(it.title, it.text)).join('<div class="tip-hr"></div>');
       return `<span class="skill-cell"><img class="skill-icon" src="${icon}" alt="技能" data-detail="${escapeHtml(detail)}"><b class="slv">Lv.${s.level}</b></span>`;
     })
     .filter(Boolean)
@@ -282,7 +262,7 @@ function characterCard(character) {
                 .map((asi) => {
                   const simple = asi.awaken_simple_info ? renderRichText(asi.awaken_simple_info) : '';
                   const detail = (asi.skill_items || [])
-                    .map((si) => `<b>${escapeHtml(si.title)}</b><br>${renderRichText(si.text)}`)
+                    .map((si) => richItemHtml(si.title, si.text))
                     .join('<div class="tip-hr"></div>');
                   return simple + (simple && detail ? '<br>' : '') + detail;
                 })
@@ -356,15 +336,10 @@ function characterCard(character) {
 }
 
 // ---------- 统计表格视图 ----------
-// 表头排序状态（asc → desc → 恢复默认 三态）
-let tableSort = { col: null, dir: 1 };
+// 表头排序状态（asc → desc → 恢复默认 三态，统一走 src/lib/sort.js）
+const tableSort = createSort();
 function toggleTableSort(col) {
-  if (tableSort.col === col) {
-    if (tableSort.dir === 1) tableSort.dir = -1;
-    else tableSort = { col: null, dir: 1 };
-  } else {
-    tableSort = { col, dir: 1 };
-  }
+  tableSort.toggle(col);
 }
 /** 列当前值（达成率与排序共用）：账号实际值优先，否则 wiki 计算值；属性伤害取首项 */
 function statCurrent(R, s) {
@@ -411,88 +386,79 @@ function renderTable(list) {
   const header = `<tr>${colOrder
     .map((c) => {
       const sortable = SORTABLE_COLS.has(c);
-      const on = tableSort.col === c;
+      const on = tableSort.key === c;
       return `<th draggable="true" title="拖动可排序" data-col="${c}"${sortable ? ` data-sort="${c}"${on ? ' class="sorted"' : ''}` : ''}>${c}${on ? (tableSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
     })
     .join('')}</tr>`;
 
-  const rowObjs = rowOrder
-    .map((character) => {
-      const R = character.calculate();
-      const target = readCharTarget(character.name);
-      const libCharacter = R.libCharacter;
-      const {
-        wengine,
-        icon: wengineIcon,
-        baseAtk: wengineBaseAtk,
-        subStats: wengineSubStats,
-        specialEffect: wengineEffect,
-      } = wengineInfo(character, R);
-      const charValidSet = new Set(readValidStats(character.name));
-      const cell = {};
+  let rowObjs = rowOrder.map((character) => {
+    const R = character.calculate();
+    const target = readCharTarget(character.name);
+    const libCharacter = R.libCharacter;
+    const {
+      wengine,
+      icon: wengineIcon,
+      baseAtk: wengineBaseAtk,
+      subStats: wengineSubStats,
+      specialEffect: wengineEffect,
+    } = wengineInfo(character, R);
+    const charValidSet = new Set(readValidStats(character.name));
+    const cell = {};
 
-      // 角色：图标（点击加备注）+ 目标/有效配置按钮
-      const charIcon = character.icon || libCharacter?.icon || libCharacter?.portrait || '';
-      const charNote = readNote(character.name);
-      const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
-      cell['角色'] =
-        `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" loading="lazy" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
+    // 角色：图标（点击加备注）+ 目标/有效配置按钮
+    const charIcon = character.icon || libCharacter?.icon || libCharacter?.portrait || '';
+    const charNote = readNote(character.name);
+    const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
+    cell['角色'] =
+      `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" loading="lazy" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
 
-      // 音擎：图标 + 悬浮详情
-      const wengineDetail =
-        `<b>${wengine.name || '未佩戴'}</b>${wengine.refinement ? ` ★${wengine.refinement}` : ''}` +
-        (wengineBaseAtk != null ? `<br>基础攻击 ${formatValue(STAT.ATK, wengineBaseAtk)}` : '') +
-        (wengineSubStats.length
-          ? `<br>${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}`
-          : '') +
-        (wengineEffect
-          ? `<br><span style="color:var(--dim);font-size:12px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
-          : '');
-      cell['音擎'] =
-        `<td class="twe">${wengineIcon ? `<img class="t-ico" src="${wengineIcon}" data-detail="${escapeHtml(wengineDetail)}">` : wengine.name || '未佩戴'}</td>`;
+    // 音擎：图标 + 悬浮详情
+    const wengineDetail =
+      `<b>${wengine.name || '未佩戴'}</b>${wengine.refinement ? ` ★${wengine.refinement}` : ''}` +
+      (wengineBaseAtk != null ? `<br>基础攻击 ${formatValue(STAT.ATK, wengineBaseAtk)}` : '') +
+      (wengineSubStats.length
+        ? `<br>${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}`
+        : '') +
+      (wengineEffect
+        ? `<br><span style="color:var(--dim);font-size:12px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
+        : '');
+    cell['音擎'] =
+      `<td class="twe">${wengineIcon ? `<img class="t-ico" src="${wengineIcon}" data-detail="${escapeHtml(wengineDetail)}">` : wengine.name || '未佩戴'}</td>`;
 
-      // 驱动盘：紧凑图标（两列，第一列 1/2/3 号、第二列 4/5/6 号），悬浮显示完整详情
-      const discIcons = discOrder
-        .map((i) => (character.discs || [])[i])
-        .filter(Boolean)
-        .map((d) => {
-          const discLib = lookup(library.discs, discIndex, d.set);
-          const icon = d.icon || discLib?.icon || '';
-          if (!icon) return '<span class="d-ico" style="border-color:#444"></span>';
-          return `<img class="d-ico" src="${icon}" data-detail="${escapeHtml(discTooltipFull(d, charValidSet))}">`;
-        })
-        .join('');
-      cell['驱动盘'] = `<td class="tdisc"><div class="tdisc-ico">${discIcons || '未佩戴'}</div></td>`;
+    // 驱动盘：紧凑图标（两列，第一列 1/2/3 号、第二列 4/5/6 号），悬浮显示完整详情
+    const discIcons = discOrder
+      .map((i) => (character.discs || [])[i])
+      .filter(Boolean)
+      .map((d) => {
+        const discLib = lookup(library.discs, discIndex, d.set);
+        const icon = d.icon || discLib?.icon || '';
+        if (!icon) return '<span class="d-ico" style="border-color:#444"></span>';
+        return `<img class="d-ico" src="${icon}" data-detail="${escapeHtml(discTooltipFull(d, charValidSet))}">`;
+      })
+      .join('');
+    cell['驱动盘'] = `<td class="tdisc"><div class="tdisc-ico">${discIcons || '未佩戴'}</div></td>`;
 
-      // 副词条命中
-      const hits = character.hitCount();
-      const hitTip = gapAdviceHtml(character, R);
-      cell['副词条命中'] = `<td class="thit">${
-        hits != null ? `<span class="tv"${hitTip ? ` data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口"` : ''}>${hits}</span>` : '—'
-      }</td>`;
+    // 副词条命中
+    const hits = character.hitCount();
+    const hitTip = gapAdviceHtml(character, R);
+    cell['副词条命中'] = `<td class="thit">${
+      hits != null
+        ? `<span class="tv"${hitTip ? ` data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口"` : ''}>${hits}</span>`
+        : '—'
+    }</td>`;
 
-      // 属性列
-      for (const s of targetStats) cell[s] = cellStats(R, target, s);
+    // 属性列
+    for (const s of targetStats) cell[s] = cellStats(R, target, s);
 
-      // 各列排序取值（点击表头排序用）
-      const sortVals = { 角色: character.name, 音擎: wengine.name || R.libWengine?.name || '', 副词条命中: hits };
-      for (const s of targetStats) sortVals[s] = statCurrent(R, s);
+    // 各列排序取值（点击表头排序用）
+    const sortVals = { 角色: character.name, 音擎: wengine.name || R.libWengine?.name || '', 副词条命中: hits };
+    for (const s of targetStats) sortVals[s] = statCurrent(R, s);
 
-      const cells = colOrder.map((c) => cell[c]).join('');
-      return { html: `<tr draggable="true" data-char="${escapeHtml(character.name)}">${cells}</tr>`, sortVals };
-    });
-  if (tableSort.col) {
-    const col = tableSort.col,
-      dir = tableSort.dir;
-    const empty = (v) => v == null || v === '';
-    rowObjs.sort((a, b) => {
-      const va = a.sortVals[col],
-        vb = b.sortVals[col];
-      if (empty(va) && empty(vb)) return 0;
-      if (empty(va)) return 1; // 无值行（null/undefined/空串）始终排最后
-      if (empty(vb)) return -1;
-      return compareValues(va, vb) * dir;
-    });
+    const cells = colOrder.map((c) => cell[c]).join('');
+    return { html: `<tr draggable="true" data-char="${escapeHtml(character.name)}">${cells}</tr>`, sortVals };
+  });
+  if (tableSort.active) {
+    rowObjs = tableSort.apply(rowObjs, (row, key) => row.sortVals[key]);
   }
   grid.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="统计表">${header}${rowObjs.map((r) => r.html).join('')}</table></div>`;
 }

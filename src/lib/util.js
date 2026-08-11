@@ -26,6 +26,13 @@ export function parseCookies(cookieText) {
   return Object.keys(cookies).length ? cookies : null;
 }
 
+/** 对象 → cookie 字符串（parseCookies 的逆运算），请求头拼 cookie 用 */
+export function serializeCookies(cookies) {
+  return Object.entries(cookies || {})
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
+}
+
 /** 复制 cookie 用的剪贴板脚本（浏览器控制台执行），命令行与网页共用 */
 export const CLIPBOARD_SCRIPT =
   "var cookie=document.cookie;var ask=confirm('Cookie:'+cookie+'\\n\\nDo you want to copy the cookie to the clipboard?');if(ask==true){copy(cookie);msg=cookie}else{msg='Cancel'}";
@@ -60,6 +67,15 @@ export function formatValue(name, value) {
   return (Math.round(value * 10) / 10).toLocaleString('zh-CN');
 }
 
+/** 解析数值：带 % 转成小数（"36%" → 0.36），纯数字原样；空串/非法 → null。兼容数字/字符串输入 */
+export function parseNum(s) {
+  if (s == null || s === '') return null;
+  const str = String(s);
+  const n = parseFloat(str);
+  if (!Number.isFinite(n)) return null;
+  return str.includes('%') ? n / 100 : n;
+}
+
 /** 构建归一化索引 {归一化名: 原名} */
 export function buildIndex(lib) {
   const idx = {};
@@ -87,6 +103,11 @@ export function compareValues(a, b) {
   return String(a).localeCompare(String(b), 'zh');
 }
 
+/** 空值判定（排序时空值行恒排最后）：null / undefined / 空字符串 */
+export function isEmptyVal(v) {
+  return v == null || v === '';
+}
+
 // ---------- 属性名归一化 ----------
 /** 属性名别名 → 规范名（wiki 来源页面对不同角色用词不一：生命/生命力→生命值、攻击→攻击力、防御→防御力；
  *  部分页面用短名：暴击→暴击率、暴伤→暴击伤害；
@@ -107,6 +128,12 @@ const STAT_ALIASES = {
 /** 单个属性名归一化为规范名（未知名原样返回） */
 export function normalizeStatKey(k) {
   return STAT_ALIASES[k] || k;
+}
+
+/** 词条名归一：把「百分比」写法转成 % 变体（攻击力百分比 → 攻击力%）；其余原样返回。
+ *  来源接口（wiki/养成指南）对百分比词条命名不一，统一到 SUBSTAT 体系。 */
+export function substatName(name) {
+  return String(name || '').includes('百分比') ? name.replace('百分比', '%') : name;
 }
 /** 把对象的键按属性别名归一化为规范名（未知键原样保留，别名与规范名并存时规范名优先） */
 export function normalizeStatKeys(obj) {
@@ -129,4 +156,15 @@ export function renderRichText(text) {
     .replace(/<\/color>/gi, '</span>')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+}
+
+/** 解码 HTML 实体（核心技档位 data-name 属性值是编码后的嵌套 HTML，需还原成富文本）；空值返回空串 */
+export function decodeHtmlEntities(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }

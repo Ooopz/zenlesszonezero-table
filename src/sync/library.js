@@ -6,15 +6,10 @@
 //
 // 依赖 Node 18+（自带 fetch），无需安装任何包。
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { stripHtml, normalizeStatKeys } from '../lib/util.js';
-import { validateLibrary, warnIfInvalid } from '../lib/schema.js';
-
-// 项目根目录（本文件位于 src/sync/ 下，向上两级）
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DATA_DIR = path.join(ROOT, 'data');
+import { stripHtml, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
+import { validateLibrary } from '../lib/schema.js';
+import { isMain, writeDataFile } from '../lib/node.js';
+import { requestJson, retry } from './http.js';
 
 const API = 'https://api-takumi-static.mihoyo.com';
 const HEADERS = {
@@ -27,19 +22,6 @@ const HEADERS = {
 };
 
 // ---------------- 基础工具 ----------------
-
-async function fetchJSON(url, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const res = await fetch(url, { headers: HEADERS });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (e) {
-      if (i === retries - 1) throw e;
-      await new Promise((r) => setTimeout(r, 800 * (i + 1)));
-    }
-  }
-}
 
 /** 并发池：最多同时 limit 个，结果按下标对齐；onProgress 在每个任务结束后回调 (done, total)。
  *  导出供 characters.js 复用（角色详情抓取同样有网络往返，可并发提速）。 */
@@ -78,26 +60,27 @@ function parseComponentData(comp) {
 }
 
 /** 从 HTML 文本里抽出「名称：值」对，返回 {规范名: 数值}。值带 % 转成小数；
- *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力） */
-function parseStatPairs(html) {
+ *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力）。
+ *  导出供测试与潜在复用（wiki 成长表文本解析）。 */
+export function parseStatPairs(html) {
   const text = stripHtml(html);
   const out = {};
   const re = /([一-鿿A-Za-z]+)[：:]\s*(-?[\d.]+%?)/g;
   let m;
   while ((m = re.exec(text))) {
-    const v = m[2].includes('%') ? parseFloat(m[2]) / 100 : parseFloat(m[2]);
-    out[m[1]] = v;
+    out[m[1]] = parseNum(m[2]);
   }
   return normalizeStatKeys(out);
 }
 
 /** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值}。
- *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。 */
-function parseSignedStat(text) {
+ *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。
+ *  导出供测试与潜在复用（套装/音擎文本解析）。 */
+export function parseSignedStat(text) {
   const s = stripHtml(text);
   const m = s.match(/([一-鿿A-Za-z]+)([+\-＋－])([\d.]+%?)/);
   if (!m) return null;
-  let v = parseFloat(m[3]) / (m[3].includes('%') ? 100 : 1);
+  let v = parseNum(m[3]);
   if (m[2] === '-' || m[2] === '－') v = -v;
   return { [m[1]]: v };
 }
@@ -106,7 +89,10 @@ function parseSignedStat(text) {
 
 /** 第一步：内容列表 → {characters: [{key,id}], wengines: [...], discs: [...]} */
 async function fetchContentList() {
-  const jso = await fetchJSON(`${API}/common/blackboard/zzz_wiki/v1/home/content/list?app_sn=zzz_wiki&channel_id=2`);
+  const jso = await requestJson(`${API}/common/blackboard/zzz_wiki/v1/home/content/list?app_sn=zzz_wiki&channel_id=2`, {
+    headers: HEADERS,
+    retry: retry.simple(),
+  });
   const children = jso.data.list[0].children;
   // 实测分组: [0]=角色 [1]=音擎 [2]=邦布 [3]=驱动盘；用数量+抽样兜底，尽量不写死索引
   const groups = [
@@ -130,7 +116,7 @@ async function fetchContentList() {
 /** 第二步：抓 entry_page 详情 */
 async function fetchDetail(id) {
   const url = `${API}/hoyowiki/zzz/wapi/entry_page?app_sn=zzz_wiki&entry_page_id=${id}&lang=zh-cn`;
-  const jso = await fetchJSON(url);
+  const jso = await requestJson(url, { headers: HEADERS, retry: retry.simple() });
   return jso.data.page;
 }
 
@@ -263,13 +249,7 @@ function fetchWengineStats(page) {
       if (baseAtk != null || subMatch) {
         return {
           baseAtk: baseAtk != null ? baseAtk : null,
-          subStats: subMatch
-            ? {
-                [damageMapping[subMatch[1]] || subMatch[1]]: subMatch[2].includes('%')
-                  ? parseFloat(subMatch[2]) / 100
-                  : parseFloat(subMatch[2]),
-              }
-            : null,
+          subStats: subMatch ? { [damageMapping[subMatch[1]] || subMatch[1]]: parseNum(subMatch[2]) } : null,
           subStatsText: seg.match(/([一-鿿A-Za-z]+[+-][\d.]+%?)/)?.[0] || null,
           specialEffect,
         };
@@ -515,16 +495,6 @@ const coreStatAlias = {
   穿透率: '穿透率',
 };
 
-/** 解码 HTML 实体（核心技档位 data-name 属性值是编码后的嵌套 HTML，需还原成富文本） */
-function decodeHtmlEntities(s) {
-  return String(s)
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
 /** 核心技 A-F 档位开头的基础面板提升（如「暴击率提升4.8%」「基础攻击力提升25点」），
  *  按档存储为增量数组：第 i 项 = 第 i 档（A-F 顺序）给的基础提升，对应核心技等级 i+2
  *  （核心被动初始 1 级，每升一档 +1，满级 7 = A-F 全升）。基础提升固定位于档位文本开头，
@@ -755,7 +725,9 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
       raw.bangboos[x.key] = page;
       // 稀有度取自 fe_ext.c_44（仅稀有度）
       const rarity =
-        parseTagList(parseFe(page), 'c_44').find((t) => t.startsWith('稀有度'))?.split('/')[1] || '';
+        parseTagList(parseFe(page), 'c_44')
+          .find((t) => t.startsWith('稀有度'))
+          ?.split('/')[1] || '';
       return {
         name: stripHtml(page.name || x.key),
         key: x.key,
@@ -818,13 +790,10 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     bangboos: Object.keys(bangbooLib).length,
   };
 
-  // 校验 + 写入 data/
-  warnIfInvalid('属性库', validateLibrary(library), { strict });
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  // library.json 用紧凑格式：技能每级数值（growth）嵌套 5 层，pretty 缩进会膨胀到 ~11MB，紧凑仅 ~3.5MB
-  fs.writeFileSync(path.join(DATA_DIR, 'library.json'), JSON.stringify(library), 'utf-8');
-  // 原始响应快照（含全部未解析字段：介绍/技能/影画/CV/推荐角色等），日后备用
-  fs.writeFileSync(path.join(DATA_DIR, 'raw-library.json'), JSON.stringify(raw), 'utf-8');
+  // 校验 + 写入 data/。library.json 用紧凑格式：技能每级数值（growth）嵌套 5 层，
+  // pretty 缩进会膨胀到 ~11MB，紧凑仅 ~3.5MB；raw-library.json 为原始响应快照（日后备用）
+  writeDataFile('library.json', library, { label: '属性库', validate: validateLibrary, strict, pretty: false });
+  writeDataFile('raw-library.json', raw, { pretty: false });
 
   return { library, stats };
 }
@@ -840,10 +809,4 @@ async function main() {
 }
 
 // ESM 入口判断：仅当直接运行本文件时执行 main()
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  main().catch((e) => {
-    console.error('运行出错:', e);
-    process.exit(1);
-  });
-}
+isMain(import.meta, () => main());

@@ -88,20 +88,53 @@ function readDataJson(name, fallback) {
   }
 }
 
-// 同步耗时较长（属性库约需几十秒抓 180+ 个详情页），请求期间页面显示「正在同步…」，完成后返回结果再刷新。
-async function syncLibraryHandler(req, res) {
+// ---------- 同步 handler 统一骨架（busy 互斥锁 / 进度 syncState / cookie 解析 / try-catch-finally） ----------
+
+/** 跑一次同步：互斥锁 + 进度上报 + 错误处理 + cookie 来源统一（请求体 > 本地缓存）。
+ *  runSync(cookies, onProgress) 负责调用 fetch* 并返回 { stats }；内部自行写入 data/*.json。
+ *  progressShape：'step' 表示 fetch* 上报 {step,done,total}（library）；'count' 表示上报 (done,total)（characters/plans）。 */
+async function runSync(
+  req,
+  res,
+  {
+    kind,
+    label,
+    needBody = false,
+    resolveCookies = () => ({}),
+    run,
+    progressShape = 'step',
+    cacheOnBodyCookie = false,
+    emptyCookieError = '',
+  }
+) {
   if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
-  busy = '属性库';
-  syncState = { kind: SYNC_KINDS.LIBRARY, step: 'prepare', done: 0, total: 0 };
+  let body = null;
+  if (needBody) {
+    try {
+      body = await readBody(req);
+    } catch (e) {
+      return respond(res, 400, { ok: false, error: e.message });
+    }
+  }
+  busy = label;
+  syncState = { kind, step: 'prepare', done: 0, total: 0 };
   try {
-    // fetchLibrary 内部已写入 data/library.json 与 data/raw-library.json
-    const { stats } = await fetchLibrary((p) => {
-      syncState = { kind: SYNC_KINDS.LIBRARY, ...p };
-    });
-    console.log(`[更新数据库] 完成：角色 ${stats.characters} / 音擎 ${stats.wengines} / 驱动盘 ${stats.discs} / 邦布 ${stats.bangboos}`);
-    respond(res, 200, { ok: true, type: 'library', stats });
+    const cookies = resolveCookies(body);
+    if (cookies === null) return respond(res, 400, { ok: false, error: emptyCookieError });
+    const onProgress =
+      progressShape === 'count'
+        ? (done, total) => {
+            syncState = { kind, step: kind, done, total };
+          }
+        : (p) => {
+            syncState = { kind, ...p };
+          };
+    const { stats } = await run(cookies, onProgress);
+    if (cacheOnBodyCookie && body?.cookie && body.cookie.trim()) cacheCookies(cookies);
+    console.log(`[更新${label}] 完成`);
+    respond(res, 200, { ok: true, type: kind, stats });
   } catch (e) {
-    console.error('[更新数据库] 失败:', e.message);
+    console.error(`[更新${label}] 失败:`, e.message);
     respond(res, 500, { ok: false, error: e.message });
   } finally {
     busy = null;
@@ -109,72 +142,43 @@ async function syncLibraryHandler(req, res) {
   }
 }
 
-async function syncCharactersHandler(req, res) {
-  if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
-  let body;
-  try {
-    body = await readBody(req);
-  } catch (e) {
-    return respond(res, 400, { ok: false, error: e.message });
-  }
-  busy = '我的角色';
-  syncState = { kind: SYNC_KINDS.CHARACTERS, step: 'prepare', done: 0, total: 0 };
-  try {
-    // cookie 来源：请求体 > 本地缓存
-    let cookies = body.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
-    if (!cookies) cookies = readCookieCache();
-    if (!cookies)
-      return respond(res, 400, {
-        ok: false,
-        error: '没有可用的 cookie：请先在页面粘贴，或先运行 node sync-characters.js',
-      });
-    // fetchMyCharacters 内部已写入 data/characters.json
-    const { stats } = await fetchMyCharacters(cookies, (done, total) => {
-      syncState = { kind: SYNC_KINDS.CHARACTERS, step: SYNC_KINDS.CHARACTERS, done, total };
-    });
-    if (body.cookie && body.cookie.trim()) cacheCookies(cookies);
-    console.log(`[更新我的角色] 完成：${stats.characters} 个角色`);
-    respond(res, 200, { ok: true, type: 'characters', stats });
-  } catch (e) {
-    console.error('[更新我的角色] 失败:', e.message);
-    respond(res, 500, { ok: false, error: e.message });
-  } finally {
-    busy = null;
-    syncState = null;
-  }
-}
+/** cookie 来源：请求体 > 本地缓存；两者都没有返回 null（调用方回 400）。 */
+const cookieFromBodyOrCache = (body) => {
+  const c = body?.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
+  return c || readCookieCache();
+};
 
-async function syncPlansHandler(req, res) {
-  if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
-  let body;
-  try {
-    body = await readBody(req);
-  } catch (e) {
-    return respond(res, 400, { ok: false, error: e.message });
-  }
-  busy = '推荐方案';
-  syncState = { kind: SYNC_KINDS.PLANS, step: 'prepare', done: 0, total: 0 };
-  try {
-    // cookie 来源：请求体 > 本地缓存（养成指南登录态 e_nap_token 有效期短，允许弹窗重新粘贴）
-    let cookies = body.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
-    if (!cookies) cookies = readCookieCache();
-    if (!cookies)
-      return respond(res, 400, { ok: false, error: '没有可用的 cookie：请先在「同步数据」弹窗里粘贴 cookie' });
-    // fetchAllPlans 内部已写入 data/plans.json；全部抓取失败会抛错（含 e_nap_token 过期提示）
-    const { stats } = await fetchAllPlans(cookies, {}, (done, total) => {
-      syncState = { kind: SYNC_KINDS.PLANS, step: SYNC_KINDS.PLANS, done, total };
-    });
-    if (body.cookie && body.cookie.trim()) cacheCookies(cookies);
-    console.log(`[更新推荐方案] 完成：${stats.characters} 角色 / ${stats.plans} 方案`);
-    respond(res, 200, { ok: true, type: 'plans', stats });
-  } catch (e) {
-    console.error('[更新推荐方案] 失败:', e.message);
-    respond(res, 500, { ok: false, error: e.message });
-  } finally {
-    busy = null;
-    syncState = null;
-  }
-}
+// 三个同步动作（同步耗时较长，请求期间页面显示「正在同步…」）。fetch* 内部已写入 data/*.json。
+const syncLibraryHandler = (req, res) =>
+  runSync(req, res, {
+    kind: SYNC_KINDS.LIBRARY,
+    label: '数据库',
+    run: (_, onProgress) => fetchLibrary(onProgress),
+  });
+
+const syncCharactersHandler = (req, res) =>
+  runSync(req, res, {
+    kind: SYNC_KINDS.CHARACTERS,
+    label: '我的角色',
+    needBody: true,
+    progressShape: 'count',
+    cacheOnBodyCookie: true,
+    resolveCookies: cookieFromBodyOrCache,
+    emptyCookieError: '没有可用的 cookie：请先在页面粘贴，或先运行 node sync-characters.js',
+    run: (cookies, onProgress) => fetchMyCharacters(cookies, onProgress),
+  });
+
+const syncPlansHandler = (req, res) =>
+  runSync(req, res, {
+    kind: SYNC_KINDS.PLANS,
+    label: '推荐方案',
+    needBody: true,
+    progressShape: 'count',
+    cacheOnBodyCookie: true,
+    resolveCookies: cookieFromBodyOrCache,
+    emptyCookieError: '没有可用的 cookie：请先在「同步数据」弹窗里粘贴 cookie',
+    run: (cookies, onProgress) => fetchAllPlans(cookies, {}, onProgress),
+  });
 
 // ---------------- 路由 ----------------
 

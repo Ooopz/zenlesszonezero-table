@@ -11,6 +11,8 @@ import {
   atkWhiteValue,
   inBattleAtk,
   coreSkillBoostAt,
+  resolveStatCurrent,
+  firstDamageBonus,
 } from '../src/lib/calc.js';
 import { buildIndex } from '../src/lib/util.js';
 import { loadDataFile } from './helpers.js';
@@ -128,7 +130,8 @@ test('全库角色 coreSkillBoost 数据完整（核心技每档基础面板提�
 test('核心技提升提取：每档增量数组，满级累计 = 各档之和；数字档增强不计入', () => {
   const get = (n) => library.characters[n]?.coreSkillBoost || [];
   // 满级累计 = 各档增量之和（核心技等级 7 = A-F 全升）
-  const sum = (list, name) => (Array.isArray(list) ? list.reduce((s, it) => s + (it?.[name] || 0), 0) : list?.[name] || 0);
+  const sum = (list, name) =>
+    Array.isArray(list) ? list.reduce((s, it) => s + (it?.[name] || 0), 0) : list?.[name] || 0;
   const hasStat = (list, name) => (Array.isArray(list) ? list.some((it) => it && name in it) : name in (list || {}));
   const approx = (v, exp) => assert.ok(Math.abs(v - exp) < 1e-9, `期望 ≈${exp}，得到 ${v}`);
   approx(sum(get('诺姆·霍洛维尔'), '暴击率'), 0.144); // 暴击率提升 4.8%×3
@@ -163,6 +166,24 @@ test('全库角色核心被动满级数据 corePassiveMax 完整（末档内嵌�
   const lmInitial = lm.skills?.find((s) => s.type === '核心技')?.items?.[0]?.desc || '';
   assert.ok(lmInitial.length > 0, '蕾米埃尔应有核心技初始说明');
   assert.notEqual(lm.corePassiveMax, lmInitial, '蕾米埃尔满级核心被动描述应不同于初始档');
+});
+
+test('resolveStatCurrent 账号实际值优先；属性伤害加成取首个伤害加成键', () => {
+  const R = {
+    final: { 攻击力: 100, 冰属性伤害加成: 0.2, 火属性伤害加成: 0.1 },
+    actual: { 攻击力: { base: 1, bonus: 1, final: 150 } },
+  };
+  assert.equal(resolveStatCurrent(R, '攻击力'), 150, '账号实际值优先');
+  assert.equal(resolveStatCurrent(R, '生命值'), null, '无值返回 null');
+  assert.equal(resolveStatCurrent(R, '属性伤害加成'), 0.2, '属性伤害加成取首个伤害加成键');
+  assert.equal(resolveStatCurrent({ final: {} }, '属性伤害加成'), null, '无伤害加成返回 null');
+});
+
+test('firstDamageBonus 取首个伤害加成键值', () => {
+  assert.equal(firstDamageBonus({ 冰属性伤害加成: 0.2, 火属性伤害加成: 0.1 }), 0.2);
+  assert.equal(firstDamageBonus({ 攻击力: 100, 属性伤害提升: 0.3 }), 0.3, '含「伤害提升」后缀');
+  assert.equal(firstDamageBonus({ 攻击力: 100 }), null);
+  assert.equal(firstDamageBonus(null), null);
 });
 
 test('targetGap 未配置目标返回 null；属性伤害加成无法副词条补足', () => {
@@ -294,7 +315,11 @@ test('命破角色贯穿力独立派生（0.3×攻击 + 0.1×生命），穿透�
   const expected = Math.round(0.3 * R.final.攻击力 + 0.1 * R.final.生命值);
   assert.equal(R.final.贯穿力, expected, '命破最终贯穿力 = 0.3×攻击+0.1×生命');
   assert.equal(R.theoretical.final.贯穿力, expected, '命破理论贯穿力同为派生值');
-  assert.equal(R.theoretical.base.贯穿力, Math.round(0.3 * R.theoretical.base.攻击力 + 0.1 * R.theoretical.base.生命值), '贯穿力基础值同派生');
+  assert.equal(
+    R.theoretical.base.贯穿力,
+    Math.round(0.3 * R.theoretical.base.攻击力 + 0.1 * R.theoretical.base.生命值),
+    '贯穿力基础值同派生'
+  );
   // 命破角色无穿透率
   assert.equal(R.final.穿透率, null, '命破角色无穿透率');
   assert.equal(R.theoretical.final.穿透率, null);

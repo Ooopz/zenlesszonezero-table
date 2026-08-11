@@ -1,41 +1,27 @@
 // src/web/wiki.js —— Wiki 数据库视图：四个子面板（角色 / 驱动盘 / 音擎 / 邦布）平铺展示
 import { library } from './data.js';
-import { renderRichText, escapeHtml, escapeJsAttr, statEntries, formatValue, compareValues } from '../lib/util.js';
+import { renderRichText, escapeHtml, escapeJsAttr, statEntries, formatValue, isEmptyVal } from '../lib/util.js';
+import { createSort } from '../lib/sort.js';
 import { maxLevelStats, panelOrder } from '../lib/calc.js';
 import { STAT, SUBSTAT } from '../lib/constants.js';
+import { richItemHtml, skillIcon, registerZZZ } from './shared.js';
 
 export let wikiTab = 'characters';
 export function setWikiTab(key) {
   wikiTab = key;
-  wikiSort = { key: null, dir: 1 }; // 切换子面板时清空排序
+  wikiSort.reset(); // 切换子面板时清空排序
 }
 
-// ---------- 表头排序（asc → desc → 恢复默认 三态） ----------
-let wikiSort = { key: null, dir: 1 };
+// ---------- 表头排序（asc → desc → 恢复默认 三态，统一走 src/lib/sort.js） ----------
+const wikiSort = createSort();
 /** 点击表头切换排序：同列 asc→desc→无；新列从升序开始 */
 export function toggleWikiSort(key) {
-  if (wikiSort.key === key) {
-    if (wikiSort.dir === 1) wikiSort.dir = -1;
-    else wikiSort = { key: null, dir: 1 };
-  } else {
-    wikiSort = { key, dir: 1 };
-  }
+  wikiSort.toggle(key);
 }
 const RARITY_RANK = { S: 3, A: 2, B: 1 };
-/** 无值判定：null / undefined / 空字符串（空字符串也不参与正常排序） */
-const isEmptyVal = (v) => v == null || v === '';
 /** 对实体列表应用当前排序（无排序时原样返回；无值行始终排最后，不受升降序影响） */
 function sortRows(entities, val) {
-  if (!wikiSort.key) return entities;
-  const dir = wikiSort.dir;
-  return [...entities].sort((a, b) => {
-    const va = val(a, wikiSort.key),
-      vb = val(b, wikiSort.key);
-    if (isEmptyVal(va) && isEmptyVal(vb)) return 0;
-    if (isEmptyVal(va)) return 1;
-    if (isEmptyVal(vb)) return -1;
-    return compareValues(va, vb) * dir;
-  });
+  return wikiSort.apply(entities, val);
 }
 
 const TABS = [
@@ -73,7 +59,7 @@ const DISC_SORTABLE = new Set(['名称']);
 const BANG_SORTABLE = new Set(['名称', '稀有度']);
 
 function fmt(v) {
-  return v == null || v === '' ? '' : v;
+  return isEmptyVal(v) ? '' : v;
 }
 /** 单元格：merge 提供按列名取值的覆盖（如穿透率列合并显示命破角色的贯穿力） */
 function statCells(obj, keys, merge) {
@@ -109,12 +95,13 @@ function coreBoostHtml(c) {
   return parts.length ? `<div style="color:var(--green)">核心技满级提升：${parts.join('、')}</div>` : '';
 }
 
-/** 技能 items → HTML（角色/邦布共用）：name + 富文本 desc；wrap 时每条包一层，否则按 sep 连接 */
+/** 技能 items → HTML（角色/邦布共用）：name + 富文本 desc（条目结构走 shared.richItemHtml）；
+ *  wrap 时每条包一层，否则按 sep 连接 */
 function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } = {}) {
   return s && s.items?.length
     ? s.items
         .map((it) => {
-          const html = `<b>${escapeHtml(it.name)}</b>${it.desc ? `<br>${renderRichText(it.desc)}` : ''}`;
+          const html = richItemHtml(it.name, it.desc);
           return wrap ? `<div class="wiki-list">${html}</div>` : html;
         })
         .join(sep)
@@ -149,7 +136,9 @@ function skillGrowthTable(item) {
   };
   const head =
     `<th>等级</th>` +
-    groups.map((h) => `<th>${escapeHtml(h)}${isFixed(h) ? '<span class="sd-fixed">（固定）</span>' : ''}</th>`).join('');
+    groups
+      .map((h) => `<th>${escapeHtml(h)}${isFixed(h) ? '<span class="sd-fixed">（固定）</span>' : ''}</th>`)
+      .join('');
   const rows = growth
     .map((lvl) => {
       const cells = groups
@@ -194,8 +183,7 @@ export function openSkillDetail(charKey, type) {
   modal.classList.add('show');
 }
 // 内联 onclick 引用的函数需挂到全局
-window.ZZZ = window.ZZZ || {};
-window.ZZZ.skill = openSkillDetail;
+registerZZZ({ skill: openSkillDetail });
 /** 渲染表格；sortable 集合内的列头可点击排序（当前列加 data-sort 与 ▲/▼ 指示） */
 function table(headers, rows, sortable = new Set()) {
   const head = headers
@@ -243,17 +231,17 @@ function renderCharacters() {
       else if (t.includes('终结')) byType.ultimate = s;
       else byType.core = s;
     }
-    // 技能：一列横排 6 个图标（复用卡片视图技能图标），悬浮看详情、点击看每级数值
+    // 技能：一列横排 6 个图标（复用卡片视图技能图标，图标路径走 shared.skillIcon），悬浮看详情、点击看每级数值
     const skillDefs = [
-      { key: 'normal', label: '普攻', icon: '/src/img/normal.png' },
-      { key: 'dodge', label: '闪避', icon: '/src/img/dodge.png' },
-      { key: 'support', label: '支援', icon: '/src/img/support.png' },
-      { key: 'special', label: '特殊', icon: '/src/img/special.png' },
-      { key: 'ultimate', label: '终结', icon: '/src/img/ultimate.png' },
-      { key: 'core', label: '核心', icon: '/src/img/passive.png' },
+      { key: 'normal', label: '普攻' },
+      { key: 'dodge', label: '闪避' },
+      { key: 'support', label: '支援' },
+      { key: 'special', label: '特殊' },
+      { key: 'ultimate', label: '终结' },
+      { key: 'core', label: '核心' },
     ];
     const skillsHtml = skillDefs
-      .map(({ key, label, icon }) => {
+      .map(({ key, label }) => {
         const skill = byType[key];
         // 核心被动满级描述替换初始档说明：wiki 标注「此处数据为初始数据」仅指 A 档，满级取末档内嵌详情
         let tip;
@@ -269,7 +257,7 @@ function renderCharacters() {
         }
         // 仅该技能类型含每级数值数据（growth）时才可点击打开弹窗（核心技 A-F 档也算）
         const clickable = skill?.items?.some((it) => it.growth);
-        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(charKey)}','${escapeJsAttr(skill.type)}')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
+        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(charKey)}','${escapeJsAttr(skill.type)}')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${skillIcon(key)}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
       })
       .join('');
     // 影画：一列横排 6 个圆点徽标，悬浮看详情
@@ -277,9 +265,7 @@ function renderCharacters() {
     const cinemasHtml = [0, 1, 2, 3, 4, 5]
       .map((i) => {
         const m = cinemas[i];
-        const tip = m
-          ? `<b>${escapeHtml(m.name)}</b>${m.desc ? `<br>${renderRichText(m.desc)}` : ''}`
-          : `<b>影画 ${i + 1}</b>`;
+        const tip = m ? richItemHtml(m.name, m.desc) : `<b>影画 ${i + 1}</b>`;
         return `<span class="wiki-ms-dot" data-detail="${escapeHtml(tip)}">${i + 1}</span>`;
       })
       .join('');
@@ -327,15 +313,16 @@ function renderWengines() {
 
 function renderDiscs() {
   const headers = ['图标', '名称', '二件套', '四件套'];
-  const rows = sortRows(Object.values(library.discs), (d, key) => (key === '名称' ? d.name : d[key] ?? null)).map(
+  const rows = sortRows(Object.values(library.discs), (d, key) => (key === '名称' ? d.name : (d[key] ?? null))).map(
     (d) => {
-    return `<tr>
+      return `<tr>
       <td class="wiki-tight">${d.icon ? `<img class="wiki-ico" src="${d.icon}" alt="">` : ''}</td>
       <td class="wiki-name" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</td>
       <td class="wiki-sub">${d.set2Text ? renderRichText(d.set2Text) : ''}</td>
       <td class="wiki-long">${d.set4Text ? renderRichText(d.set4Text) : ''}</td>
     </tr>`;
-  });
+    }
+  );
   return table(headers, rows, DISC_SORTABLE);
 }
 

@@ -4,6 +4,10 @@ import {
   normalize,
   stripHtml,
   parseCookies,
+  serializeCookies,
+  parseNum,
+  isEmptyVal,
+  decodeHtmlEntities,
   formatValue,
   escapeHtml,
   escapeJsAttr,
@@ -29,6 +33,42 @@ test('parseCookies 解析与空值', () => {
   assert.deepEqual(parseCookies('a=1; b=2; c=3'), { a: '1', b: '2', c: '3' });
   assert.deepEqual(parseCookies(''), null);
   assert.deepEqual(parseCookies(';;;'), null);
+});
+
+test('serializeCookies 与 parseCookies 往返', () => {
+  assert.equal(serializeCookies({ a: '1', b: '2' }), 'a=1; b=2');
+  assert.equal(serializeCookies(null), '');
+  assert.equal(serializeCookies(undefined), '');
+  assert.deepEqual(parseCookies(serializeCookies({ 'x-rpc-page': 'v1.1.4_#/zzz', foo: 'bar=baz' })), {
+    'x-rpc-page': 'v1.1.4_#/zzz',
+    foo: 'bar=baz',
+  });
+});
+
+test('parseNum 百分比/纯数字/非法', () => {
+  assert.equal(parseNum('36%'), 0.36);
+  assert.equal(parseNum('36'), 36);
+  assert.equal(parseNum('+665'), 665);
+  assert.equal(parseNum('-13.8'), -13.8);
+  assert.equal(parseNum(''), null);
+  assert.equal(parseNum(null), null);
+  assert.equal(parseNum('abc'), null);
+});
+
+test('isEmptyVal null / undefined / 空串', () => {
+  assert.equal(isEmptyVal(null), true);
+  assert.equal(isEmptyVal(undefined), true);
+  assert.equal(isEmptyVal(''), true);
+  assert.equal(isEmptyVal(0), false);
+  assert.equal(isEmptyVal('0'), false);
+  assert.equal(isEmptyVal('攻击力'), false);
+});
+
+test('decodeHtmlEntities 还原嵌套 HTML 实体', () => {
+  assert.equal(decodeHtmlEntities('&lt;span&gt;A&amp;B&lt;/span&gt;'), '<span>A&B</span>');
+  assert.equal(decodeHtmlEntities('&quot;q&quot;&#39;s&#39;'), '"q"\'s\'');
+  assert.equal(decodeHtmlEntities(''), '');
+  assert.equal(decodeHtmlEntities(null), '');
 });
 
 test('formatValue 数值展示', () => {

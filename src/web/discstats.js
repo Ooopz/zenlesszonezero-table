@@ -1,17 +1,14 @@
 // src/web/discstats.js —— 独立视图「驱动盘统计」：按驱动盘聚合推荐方案的统计表
 import { plans, library } from './data.js';
 import { computeDiscStats } from '../lib/discstats.js';
-import { escapeHtml, renderRichText, compareValues } from '../lib/util.js';
+import { escapeHtml } from '../lib/util.js';
+import { createSort } from '../lib/sort.js';
+import { discSetEffectsHtml } from './shared.js';
 
-// 排序状态（三态：升序 → 降序 → 恢复默认），模式与 wiki/统计表一致
-let sort = { key: null, dir: 1 };
+// 排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js）
+const sort = createSort();
 export function toggleDiscStatsSort(key) {
-  if (sort.key === key) {
-    if (sort.dir === 1) sort.dir = -1;
-    else sort = { key: null, dir: 1 };
-  } else {
-    sort = { key, dir: 1 };
-  }
+  sort.toggle(key);
 }
 
 const HEADERS = ['驱动盘', '匹配角色', '副词条组合', '4号位', '5号位', '6号位'];
@@ -23,20 +20,12 @@ function sortVal(row, key) {
   if (key === '副词条组合') return row.subCombos.length;
   return null;
 }
-const isEmptyVal = (v) => v == null || v === '';
 /** 列表 → HTML：每项独立一行（逐项 escapeHtml 后再拼 <br>，避免把 <br> 一起转义） */
 const joinBr = (items) => (items?.length ? items.map((x) => escapeHtml(x)).join('<br>') : '—');
 
-/** 悬浮详情：盘名 + 二/四件套效果（复用角色卡片驱动盘悬浮的构成方式） */
+/** 悬浮详情：盘名 + 二/四件套效果（复用角色卡片驱动盘悬浮的构成方式，套件效果走 shared.discSetEffectsHtml） */
 function discTipHtml(name) {
-  const lib = library.discs?.[name];
-  const set2 = lib?.set2Text
-    ? `<br><span style="color:var(--green)">【2件套】${renderRichText(lib.set2Text)}</span>`
-    : '';
-  const set4 = lib?.set4Text
-    ? `<br><span style="color:var(--orange)">【4件套】${renderRichText(lib.set4Text)}</span>`
-    : '';
-  return `<b>${escapeHtml(name)}</b>${set2}${set4}`;
+  return `<b>${escapeHtml(name)}</b>${discSetEffectsHtml(library.discs?.[name])}`;
 }
 
 /** 渲染驱动盘推荐统计表（返回 HTML；空方案数据时返回提示） */
@@ -44,18 +33,7 @@ export function renderDiscStats() {
   if (!Object.keys(plans || {}).length) {
     return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
   }
-  const rows = computeDiscStats(plans, Object.keys(library.discs || {}));
-  if (sort.key) {
-    const { key, dir } = sort;
-    rows.sort((a, b) => {
-      const va = sortVal(a, key),
-        vb = sortVal(b, key);
-      if (isEmptyVal(va) && isEmptyVal(vb)) return 0;
-      if (isEmptyVal(va)) return 1;
-      if (isEmptyVal(vb)) return -1;
-      return compareValues(va, vb) * dir;
-    });
-  }
+  const rows = sort.apply(computeDiscStats(plans, Object.keys(library.discs || {})), sortVal);
   const head = HEADERS.map((h) => {
     if (!SORTABLE.has(h)) return `<th>${h}</th>`;
     const on = sort.key === h;

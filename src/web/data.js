@@ -2,7 +2,7 @@
 import { buildIndex, lookup, statEntries } from '../lib/util.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
-import { apiRequest } from './util.js';
+import { apiRequest, postJSON } from './util.js';
 
 // ---------- 数据（由 setData 注入） ----------
 // 注：这些是 export let，ESM 的 import 是活绑定（live binding），
@@ -104,11 +104,7 @@ export function saveColOrder(order) {
   saveUserConfig();
 }
 export async function saveUserConfig() {
-  apiRequest('/api/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ config: userConfig }),
-  });
+  postJSON('/api/config', { config: userConfig });
 }
 export async function loadUserConfig() {
   const j = await apiRequest('/api/config', { method: 'GET' });
@@ -139,4 +135,3 @@ export const dataCtx = {
   readCharTarget,
   readValidStats,
 };
-

@@ -18,15 +18,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATA_DIR, isMain, writeDataFile } from '../lib/node.js';
 import { readCookieCache } from './characters.js';
 import { pool } from './library.js';
-import { normalizeStatKey } from '../lib/util.js';
+import { normalizeStatKey, substatName, parseNum } from '../lib/util.js';
 import { PERCENT_STATS, mainStatName } from '../lib/constants.js';
-import { validatePlans, warnIfInvalid } from '../lib/schema.js';
+import { validatePlans } from '../lib/schema.js';
+import { requestJson, retry, fetchUid } from './http.js';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const DATA_DIR = path.join(ROOT, 'data');
 const ACCOUNT_FILE = path.join(DATA_DIR, 'characters.json');
 
 const UA =
@@ -56,7 +55,6 @@ const API = 'https://api-takumi.mihoyo.com/event/nap_cultivate_tool';
 const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/user'; // feed 端点域
 const MAX_PLANS = 100; // 每个角色方案上限（「切换方案」列表前 50 个）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // 仅供风控重试等待
 
 /** 设备指纹头：优先取 cookie 里养成指南会话的真实指纹（DEVICEFP / _MHYUUID，随 cookie 一起导出），
  *  缺失才回退到内置值。写死的伪造指纹会被风控以 retcode 10041 拒绝（实测 avatar_basic_list），
@@ -68,50 +66,13 @@ function deviceHeaders(cookies) {
   };
 }
 
-// 瞬时风控/限流重试：等待后重试可恢复（如刚跑完一次大同步再触发）。连续重试有上限，避免无限等待。
-const RETRY_DELAYS = [5000, 15000, 45000]; // 每次重试前等待：5s → 15s → 45s
-
-async function request(url, cookies) {
-  let attempt = 0;
-  for (;;) {
-    const res = await fetch(url, {
-      headers: {
-        ...planHeaders,
-        ...deviceHeaders(cookies),
-        cookie: Object.entries(cookies)
-          .map(([k, v]) => `${k}=${v}`)
-          .join('; '),
-      },
-    });
-    const j = await res.json().catch(() => null);
-    const retcode = j?.retcode;
-    // 429 / 10041：限流风控，指数退避后重试
-    if ((res.status === 429 || retcode === 10041) && attempt < RETRY_DELAYS.length) {
-      const delay = RETRY_DELAYS[attempt++];
-      console.warn(
-        `    ⚠ ${res.status === 429 ? `HTTP ${res.status}` : `retcode ${retcode}`}：请求被风控，等待 ${(delay / 1000).toFixed(0)}s 后重试（${attempt}/${RETRY_DELAYS.length}）`
-      );
-      await sleep(delay);
-      continue;
-    }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    if (retcode !== 0) {
-      throw new Error(`retcode ${retcode}：${j?.message || j?.msg || ''}`);
-    }
-    return j;
-  }
-}
-
-async function fetchUid(cookies) {
-  const j = await request(
-    `https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=nap_cn`,
-    cookies
-  );
-  // request() 用 nap_cultivate_tool 的响应结构检查 retcode；binding 接口 retcode 也是 0，可复用
-  const list = j.data?.list || [];
-  if (!list.length) throw new Error('账号下没有绝区零角色，请确认 cookie 属于正确的米游社账号');
-  return list[0].game_uid;
-}
+/** 养成指南接口请求：指纹头 + 瞬时风控（429 / retcode 10041）指数退避重试（5s → 15s → 45s） */
+const req = (url, cookies) =>
+  requestJson(url, {
+    headers: { ...planHeaders, ...deviceHeaders(cookies) },
+    cookies,
+    retry: retry.backoff(),
+  });
 
 // ---------------- 数据提取 ----------------
 
@@ -119,17 +80,17 @@ async function fetchUid(cookies) {
  *  同一角色不同方案对暴击率有的标 1 有的标 0，但值都是「45」这种百分比数值）。集合见 constants.PERCENT_STATS */
 const isPercentPanel = (name) => PERCENT_STATS.has(normalizeStatKey(name));
 
-/** 解析方案面板数值：百分比属性（如暴击率 45）转内部小数（/100）；无效返回 null */
+/** 解析方案面板数值：百分比属性（如暴击率 45）转内部小数（/100）；无效返回 null。
+ *  基础解析统一走 util.parseNum（值通常为整数如 "45"，不带 % 符号）。 */
 function parseValue(v, percent) {
-  if (v == null || v === '') return null;
-  const n = parseFloat(v);
-  if (!Number.isFinite(n)) return null;
-  return percent ? n / 100 : n;
+  const n = parseNum(v);
+  return n == null ? null : percent ? n / 100 : n;
 }
 
-/** 副词条推荐名 → 项目词条名体系：「攻击力百分比」→「攻击力%」，其余归一化 */
+/** 副词条推荐名 → 项目词条名体系：「攻击力百分比」→「攻击力%」，其余归一化。
+ *  百分比→% 规则统一走 util.substatName，再按属性别名归一化。 */
 function substatKey(name) {
-  return name.includes('百分比') ? name.replace('百分比', '%') : normalizeStatKey(name);
+  return normalizeStatKey(substatName(name));
 }
 
 /** 单个方案 → 精简结构。item 结构在 beta_plan_list 与 plan_detail 返回中一致。 */
@@ -187,7 +148,7 @@ async function fetchPlansFor(cookies, uid, avatarId) {
   let nextId = 0;
   while (plans.length < MAX_PLANS) {
     const q = `${R}&order=0&page_size=${FEED_PAGE}&next_id=${nextId}&follow_end=true&lang_end=false&avatar_id=${avatarId}`;
-    const j = await request(`${API_USER}/feed?${q}`, cookies);
+    const j = await req(`${API_USER}/feed?${q}`, cookies);
     const list = j.data?.list || [];
     for (const it of list) plans.push(it.plan);
     const { end, next_id } = j.data || {};
@@ -197,11 +158,11 @@ async function fetchPlansFor(cookies, uid, avatarId) {
 
   // avatar_simple_info 返回该角色在养成指南里关联的 plan_id（官方/使用中方案），
   // 未出现在 feed 列表时用 plan_detail 补上
-  const info = await request(`${API}/avatar_simple_info?avatar_id=${avatarId}&${R}`, cookies);
+  const info = await req(`${API}/avatar_simple_info?avatar_id=${avatarId}&${R}`, cookies);
   const pid = info.data?.plan_id;
   if (pid && pid !== '0' && !plans.some((p) => String(p.id) === String(pid))) {
     try {
-      const det = await request(`${API}/plan_detail?plan_id=${pid}&${R}`, cookies);
+      const det = await req(`${API}/plan_detail?plan_id=${pid}&${R}`, cookies);
       if (det.data?.plan) plans.push(det.data.plan);
     } catch (e) {
       console.error(`   ${avatarId} plan_detail(${pid}) 失败: ${e.message}`);
@@ -214,7 +175,7 @@ async function fetchPlansFor(cookies, uid, avatarId) {
  *  onlyAccount 为 true 时只抓 data/characters.json 里的账号角色；否则抓养成指南全部角色。
  *  strict 为 true 时校验异常抛错（命令行 STRICT=1 开启，网页同步保持 warn）。 */
 export async function fetchAllPlans(cookies, { onlyAccount = false, strict = false } = {}, onProgress) {
-  const uid = await fetchUid(cookies);
+  const uid = await fetchUid(cookies, { ...planHeaders, ...deviceHeaders(cookies) }, { retry: retry.backoff() });
   console.log(`uid: ${uid}`);
 
   let list;
@@ -223,7 +184,7 @@ export async function fetchAllPlans(cookies, { onlyAccount = false, strict = fal
     list = chars.map((c) => ({ id: String(c.id), name: c.name }));
     console.log(`仅账号角色 ${list.length} 个`);
   } else {
-    const ab = await request(`${API}/avatar_basic_list?uid=${uid}&region=prod_gf_cn`, cookies);
+    const ab = await req(`${API}/avatar_basic_list?uid=${uid}&region=prod_gf_cn`, cookies);
     // name 去空格，与 characters.json 的角色名对齐（星见 雅 → 星见雅），供前端按名匹配推荐方案
     list = (ab.data?.list || []).map((x) => ({
       id: String(x.avatar.id),
@@ -260,9 +221,7 @@ export async function fetchAllPlans(cookies, { onlyAccount = false, strict = fal
   for (const r of Object.values(out)) stats.plans += r.plans.length;
 
   // 校验 + 写入 data/plans.json（与 characters.js 的 fetchMyCharacters 同模式，供 server 端复用）
-  warnIfInvalid('推荐方案', validatePlans(out), { strict });
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(path.join(DATA_DIR, 'plans.json'), JSON.stringify(out, null, 2), 'utf-8');
+  writeDataFile('plans.json', out, { label: '推荐方案', validate: validatePlans, strict });
 
   return { data: out, uid, stats };
 }
@@ -282,10 +241,4 @@ async function main() {
   return { uid, stats };
 }
 
-const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isMain) {
-  main().catch((e) => {
-    console.error('运行出错:', e.message);
-    process.exit(1);
-  });
-}
+isMain(import.meta, () => main());

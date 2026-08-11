@@ -52,23 +52,28 @@ server.js /api/data →  读 data/*.json →  前端 fetch
 ### 分层
 
 - **`src/lib/`（双端共享纯模块，Node 与浏览器均可 import）**
-  - `util.js`：纯工具。⚠️ **禁止 import 任何 `node:` 模块**（浏览器直接 import 它）；Node 专属函数放 `node.js`。
-  - `schema.js`：数据键名唯一权威定义（`KEYS`）+ 校验（`validateLibrary` / `validateCharacters` / `warnIfInvalid`）。同步脚本写文件前调用校验，**只 warn 不中断**。
-  - `calc.js`：计算引擎。纯逻辑无 DOM 依赖，数据经 **`setCalcContext(ctx)` 注入**（浏览器在 `web/main.js`、测试在断言前调用）。含属性常量、副词条成长（`substatGrowthTable`，B 站 wiki 规则）、面板计算（`calculateCharacter`）、达成率。
+  - `constants.js`：固定字符串枚举（属性名 `STAT`/`SUBSTAT`、主/副词条选项、目标字段 `TARGET_KEYS`、456 主词条候选 `MAIN_STAT_OPTIONS`、`mainStatName`、同步类型、视图），各处引用枚举防拼写错误。
+  - `util.js`：纯工具。⚠️ **禁止 import 任何 `node:` 模块**（浏览器直接 import 它）；Node 专属函数放 `node.js`。含属性/词条归一（`normalizeStatKey`/`substatName`/`parseNum`）、名字匹配（`normalize`/`buildIndex`/`lookup`）、转义与富文本（`escapeHtml`/`escapeJsAttr`/`renderRichText`/`decodeHtmlEntities`）、展示（`formatValue`）、cookie（`parseCookies`/`serializeCookies`）、排序比较（`compareValues`/`isEmptyVal`）。
+  - `sort.js`：表头三态排序（升→降→复位）状态机 `createSort()`（`toggle`/`reset`/`apply`，空值行恒排最后）。wiki/统计表/方案表/驱动盘统计四处统一走它，表头 ▲/▼ 指示各视图自渲染。
+  - `schema.js`：数据键名唯一权威定义（`KEYS`）+ 校验（`validateLibrary` / `validateCharacters` / `validatePlans` / `warnIfInvalid`）。同步脚本写文件前调用校验，**只 warn 不中断**。
+  - `calc.js`：计算引擎。纯逻辑无 DOM 依赖，数据经 **`setCalcContext(ctx)` 注入**（浏览器在 `web/main.js`、测试在断言前调用）。含属性常量、副词条成长（`substatGrowthTable`，B 站 wiki 规则）、面板计算（`calculateCharacter`）、达成率（`statProgress`/`resolveStatCurrent`/`targetGap`）。
   - `models.js`：领域模型基类 `Character` / `Wengine` / `Disc`。构造时归一化数据、自动算派生属性（如副词条成长次数 `growth`）、组合关系（角色装备音擎+驱动盘）。浏览器把 wiki 与账号数据都实例化成这些基类。
-  - `node.js`：Node 专属（`openBrowser`）。
+  - `node.js`：Node 专属（`openBrowser` + 同步脚本样板 `ROOT`/`DATA_DIR`/`isMain`/`writeDataFile`）。
 - **`src/sync/`（可执行脚本，也被 server.js 复用导出函数）**
+  - `http.js`：米游社接口统一请求 `requestJson`（cookie 序列化 + HTTP/retcode 校验 + 可配置重试 `retry.simple/backoff`）、`fetchUid`、`sleep`，三个脚本共用。
   - `library.js`：并发池（6 worker）抓 180+ 个 wiki 详情页，解析出 `library.json`，同时把每个 entry_page 原始响应存 `raw-library.json` 快照。解析器对 wiki 页面结构高度脆弱，改动需谨慎。角色数据含 `coreSkillBoost`（核心技 A-F 档基础面板提升，如「暴击率提升4.8%」→ `{暴击率:0.144}`；开头锚定 + 属性名白名单过滤「额外/最多/造成的伤害」等，百分比攻击/生命归 `X%` 键；数字档核心被动增强不计入），供 wiki 核心技悬浮展示与 calc 百分比词条基准计入。
   - `characters.js`：串行拉取账号角色详情，`extractCharacter()` 做全量提取（面板/装备/技能/影画/皮肤/潜能觉醒/`equipPlan` 等）。含 cookie 缓存（`data/.cookie.json`）。
   - `plans.js`：抓米游社养成指南推荐方案 → `data/plans.json`（结构见「推荐方案数据」小节）。`extractPlan()` 提取 `sets`/`mainProps`/`subStats`/`panel`/`weapon`/`skills`/`team`。
 - **`src/web/`（浏览器端 ESM，无构建）**
   - `main.js`：入口，`fetch('/api/data')` → `setData()` → `setCalcContext(dataCtx)` → `initUi()`。
   - `data.js`：数据层。`export let` 活绑定（live binding），`setData` 重新赋值后各 import 方自动读到新值。维护索引、用户配置（目标/有效词条/行列序/视图）。
-  - `render.js`：渲染层。卡片/统计表格视图、悬浮提示（`data-detail` 属性 + 全局 mouseover 委托）、行/列拖拽排序、表头点击排序。**内联 `onclick` 引用的函数必须挂到 `window`**（`ui.js` 里注册 `openNote`/`openTargetSettings`/`openValidStats`）。
-  - `wiki.js`：数据库视图，四个子面板（角色/音擎/驱动盘/邦布），表头三态排序（升→降→默认）。**新增子面板 = `TABS` + `PANEL_RENDERERS` 各加一项**，渲染函数返回 `table(headers, rows, sortable)` 即自动获得排序、`data-detail` 悬浮、`.wiki-table` 样式。排序复用 `toggleWikiSort`/`sortRows` + `compareValues`（空值排最后），与 `render.js` 统计表、`ui.js` 方案表三份同构。子面板切换走 `window.ZZZ.wikiTab()`（注册在 `ui.js`）。
+  - `util.js`：浏览器端工具（`apiRequest` 带超时 / `postJSON`，供 data/ui 复用）。
+  - `shared.js`：浏览器端共享渲染辅助（纯 HTML 字符串，无 DOM/数据层依赖）：驱动盘 2/4 件套悬浮 `discSetEffectsHtml`、富文本条目 `richItemHtml`、技能图标 `skillIcon`/`skillIconForType`、全局注册 `registerZZZ`。
+  - `render.js`：渲染层。卡片/统计表格视图、悬浮提示（`data-detail` 属性 + 全局 mouseover 委托）、行/列拖拽排序、表头点击排序。**内联 `onclick` 引用的函数必须挂到 `window`**（`ui.js` 里注册 `openNote`/`openTargetSettings`）。
+  - `wiki.js`：数据库视图，四个子面板（角色/音擎/驱动盘/邦布），表头三态排序（升→降→默认）。**新增子面板 = `TABS` + `PANEL_RENDERERS` 各加一项**，渲染函数返回 `table(headers, rows, sortable)` 即自动获得排序、`data-detail` 悬浮、`.wiki-table` 样式。排序统一走 `lib/sort.js` 的 `createSort`（与 `render.js` 统计表、`ui.js` 方案表、`discstats.js` 四处同构）。子面板切换走 `window.ZZZ.wikiTab()`（注册在 `ui.js`）。
   - `ui.js`：交互层。同步按钮（经服务器）、目标/有效/备注弹窗、事件绑定、同步进度轮询（300ms 查 `/api/sync-progress`）。
   - `discstats.js`：独立视图「驱动盘推荐」渲染层。聚合逻辑在 `src/lib/discstats.js` 的 `computeDiscStats(plans, discNames)`（纯函数，可测），按驱动盘统计匹配角色 / 副词条组合（去重）/ 456 主属性。视图分发与表头排序委托在 `render.js`。
-- **`server.js`**：无框架 http 服务器。路由：`POST /api/sync-base`、`POST /api/sync-characters`、`GET /api/data`、`/api/config`（读写 `user-config.json`）、`/api/cookie`、`/api/cookie-status`、`/api/sync-progress`。`busy` 互斥锁防止两个同步同时写文件。
+- **`server.js`**：无框架 http 服务器。路由：`POST /api/sync-base`、`POST /api/sync-characters`、`GET /api/data`、`/api/config`（读写 `user-config.json`）、`/api/cookie`、`/api/cookie-status`、`/api/sync-progress`。`busy` 互斥锁防止两个同步同时写文件；三个同步 handler 共用 `runSync()` 骨架（busy 锁/进度上报/cookie 解析/错误处理）。
 
 ### 关键约定与坑
 
@@ -87,4 +92,4 @@ server.js /api/data →  读 data/*.json →  前端 fetch
 - 推荐套装与 456 主属性**不在**账号数据的 `equipPlan` 里——`equipPlan`（`a.equip_plan_info` 原样存储）只含有效副词条 `plan_effective_property_list`（消费见 `web/data.js` 的 `readValidStats`：`full_name` 含「百分比」则 `name+'%'`，再过 `SUBSTAT_TYPE_SET`）。推荐套装/主属性在 `plans.json`。
 - `library.json` 的 `discs` 区**键即套装名**（条目内 `name === key`），套装:条目 = **1:1**（一个套装 = 一条目，6 个槽位收在 `slotMainStats`，不是每块盘一条）；`set4` 恒为 `null`（四件套只有 `set4Text` HTML，无结构化数值），仅 `set2` 被解析成 `{属性: 数值}`。账号侧每块盘 `set` = `e.equip_suit?.name` + `slot`(1-6)，空槽补 `未佩戴驱动盘`。
 - 路由统一用 ASCII，避免中文路径被浏览器百分号编码后匹配失败（server.js 注释）。
-- eslint 按文件划分全局：`src/web/**`=browser；`server.js`/`src/sync/**`/`src/lib/node.js`/`test/**`=node；`src/lib/util.js`/`schema.js`/`calc.js`=两者。
+- eslint 按文件划分全局：`src/web/**`=browser；`server.js`/`src/sync/**`/`src/lib/node.js`/`test/**`=node；`src/lib/util.js`/`schema.js`/`calc.js`=两者（`sort.js` 纯逻辑无全局，落在基础块）。

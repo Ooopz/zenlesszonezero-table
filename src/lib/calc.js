@@ -200,9 +200,7 @@ function applyPiercing(panel, libCharacter) {
   panel.final['贯穿力'] = pierce(panel.final['攻击力'], panel.final['生命值']);
   panel.base['贯穿力'] = pierce(panel.base['攻击力'], panel.base['生命值']);
   panel.bonus['贯穿力'] =
-    panel.final['贯穿力'] != null && panel.base['贯穿力'] != null
-      ? panel.final['贯穿力'] - panel.base['贯穿力']
-      : null;
+    panel.final['贯穿力'] != null && panel.base['贯穿力'] != null ? panel.final['贯穿力'] - panel.base['贯穿力'] : null;
   panel.final['穿透率'] = null;
   panel.base['穿透率'] = null;
   panel.bonus['穿透率'] = null;
@@ -339,6 +337,20 @@ export function calculateCharacter(character) {
 }
 
 // ---------- 达成率 ----------
+/** 取最终面板里第一个伤害加成属性值（「属性伤害加成」目标与多伤害加成键的展示共用）。
+ *  按 R.final 的键顺序找首个 isDamageBonus 的键；无则 null。 */
+export function firstDamageBonus(final) {
+  for (const k of Object.keys(final || {})) if (isDamageBonus(k)) return final[k];
+  return null;
+}
+
+/** 面板属性的「当前值」：账号实际值优先，否则 wiki 计算值；「属性伤害加成」取首个伤害加成键。 */
+export function resolveStatCurrent(R, s) {
+  let current = R.actual?.[s]?.final ?? R.final[s];
+  if (s === '属性伤害加成') current = firstDamageBonus(R.final);
+  return current ?? null;
+}
+
 /** 达成率颜色：≥98% 绿，≥70% 黄，否则红 */
 export function rateColor(rate) {
   return rate >= 0.97 ? 'var(--green)' : rate >= 0.9 ? 'var(--acc2)' : 'var(--red)';
@@ -351,14 +363,7 @@ export function statProgress(character, R, name) {
   const targetVal = ctx.readCharTarget(character.name)[name];
   if (targetVal == null || targetVal === '' || !Number.isFinite(Number(targetVal)) || Number(targetVal) <= 0)
     return null;
-  let current = R.actual?.[name]?.final ?? R.final[name];
-  if (name === '属性伤害加成') {
-    for (const k of Object.keys(R.final))
-      if (isDamageBonus(k)) {
-        current = R.final[k];
-        break;
-      }
-  }
+  const current = resolveStatCurrent(R, name);
   if (current == null) return null;
   let targetInternal = Number(targetVal);
   if (targetPercents.has(name)) targetInternal = targetVal / 100;
@@ -420,14 +425,7 @@ export function targetGap(character, R) {
   const items = [];
   let total = 0;
   for (const name of names) {
-    let current = R.actual?.[name]?.final ?? R.final[name];
-    if (name === '属性伤害加成') {
-      for (const k of Object.keys(R.final))
-        if (isDamageBonus(k)) {
-          current = R.final[k];
-          break;
-        }
-    }
+    const current = resolveStatCurrent(R, name);
     if (current == null) continue;
     const targetInternal = targetPercents.has(name) ? Number(target[name]) / 100 : Number(target[name]);
     const gap = targetInternal - current;
