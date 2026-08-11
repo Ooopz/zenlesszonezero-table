@@ -23,9 +23,12 @@ function sortVal(row, key) {
 /** 列表 → HTML：每项独立一行（逐项 escapeHtml 后再拼 <br>，避免把 <br> 一起转义） */
 const joinBr = (items) => (items?.length ? items.map((x) => escapeHtml(x)).join('<br>') : '—');
 
-/** 悬浮详情：盘名 + 二/四件套效果（复用角色卡片驱动盘悬浮的构成方式，套件效果走 shared.discSetEffectsHtml） */
-function discTipHtml(name) {
-  return `<b>${escapeHtml(name)}</b>${discSetEffectsHtml(library.discs?.[name])}`;
+/** 悬浮详情：盘名 + 二/四件套效果 + 同效果二件套替代盘（复用角色卡片驱动盘悬浮的构成方式，套件效果走 shared.discSetEffectsHtml） */
+function discTipHtml(name, alternatives) {
+  const alt = alternatives?.length
+    ? `<br><span style="color:var(--dim)">同效果二件套：${alternatives.map((x) => escapeHtml(x)).join('、')}</span>`
+    : '';
+  return `<b>${escapeHtml(name)}</b>${discSetEffectsHtml(library.discs?.[name])}${alt}`;
 }
 
 /** 频次列表 → HTML：每词条一行（<br> 分隔，与角色列/原组合列的换行逻辑一致）。三档区分：
@@ -45,7 +48,9 @@ export function renderDiscStats() {
   if (!Object.keys(plans || {}).length) {
     return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
   }
-  const rows = sort.apply(computeDiscStats(plans, Object.keys(library.discs || {})), sortVal);
+  // 二件套同效果替代：把每个盘的结构化 set2 效果传给聚合层，2 件套推荐扩展到同效果组
+  const discSet2 = Object.fromEntries(Object.values(library.discs || {}).map((d) => [d.name, d.set2]));
+  const rows = sort.apply(computeDiscStats(plans, Object.keys(library.discs || {}), discSet2), sortVal);
   const head = HEADERS.map((h) => {
     if (!SORTABLE.has(h)) return `<th>${h}</th>`;
     const on = sort.key === h;
@@ -62,7 +67,7 @@ export function renderDiscStats() {
         ? `<img class="wiki-ico ds-dico" src="${library.discs[r.name].icon}" alt="">`
         : '';
       return `<tr>
-      <td class="wiki-name" data-detail="${escapeHtml(discTipHtml(r.name))}" title="悬浮查看详情"><span class="ds-dname">${escapeHtml(r.name)}</span>${icon}</td>
+      <td class="wiki-name" data-detail="${escapeHtml(discTipHtml(r.name, r.alternatives))}" title="悬浮查看详情"><span class="ds-dname">${escapeHtml(r.name)}</span>${icon}</td>
       <td class="ds-chars">${joinBr(r.characters)}</td>
       <td class="ds-count">${r.count || '—'}</td>
       <td class="ds-combos">${subCell}</td>

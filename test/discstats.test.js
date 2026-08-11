@@ -206,13 +206,112 @@ test('未知套装名（不在 discNames 内）跳过；无方案数据返回全
   assert.deepEqual(empty[0].subStats, []);
 });
 
-test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/频次不报错', () => {
+test('二件套同效果替代：方案推荐 A 的二件套时计入同效果组所有盘', () => {
+  const discSet2 = { 岩卫盘: { 防御力: 0.16 }, 钢壁盘: { 防御力: 0.16 }, 锐攻盘: { 攻击力: 0.1 } };
+  const rows = computeDiscStats(
+    {
+      a: {
+        name: '角色A',
+        plans: [
+          {
+            sets: [
+              { name: '震鼓盘', cnt: 4 },
+              { name: '岩卫盘', cnt: 2 },
+            ],
+            subStats: ['暴击率'],
+            mainProps: { 4: '暴击率' },
+          },
+        ],
+      },
+    },
+    ['岩卫盘', '钢壁盘', '锐攻盘'],
+    discSet2
+  );
+  const A = rows.find((r) => r.name === '岩卫盘');
+  const B = rows.find((r) => r.name === '钢壁盘');
+  const C = rows.find((r) => r.name === '锐攻盘');
+  // A 被直接推荐；B 因同效果（防御力0.16）作为替代品也被计入
+  assert.equal(A.count, 1);
+  assert.deepEqual(A.characters, ['角色A']);
+  assert.equal(B.count, 1);
+  assert.deepEqual(B.characters, ['角色A']);
+  assert.deepEqual(B.subStats, [{ name: '暴击率', count: 1, ratio: 1 }]); // 与 A 频次一致
+  assert.equal(C.count, 0); // 效果（攻击力0.1）不同，不计入
+  assert.deepEqual(A.alternatives, ['钢壁盘']);
+  assert.deepEqual(B.alternatives, ['岩卫盘']);
+  assert.deepEqual(C.alternatives, []);
+});
+
+test('方案内去重：4 件套 + 2 件套替代同时命中同盘只计一次', () => {
+  const discSet2 = { 岩卫盘: { 防御力: 0.16 }, 钢壁盘: { 防御力: 0.16 }, 锐攻盘: { 攻击力: 0.1 } };
+  const rows = computeDiscStats(
+    {
+      a: {
+        name: '角色A',
+        plans: [
+          {
+            sets: [
+              { name: '岩卫盘', cnt: 4 },
+              { name: '钢壁盘', cnt: 2 },
+              { name: '锐攻盘', cnt: 2 },
+            ],
+            subStats: ['暴击率'],
+            mainProps: {},
+          },
+        ],
+      },
+    },
+    ['岩卫盘', '钢壁盘', '锐攻盘'],
+    discSet2
+  );
+  const A = rows.find((r) => r.name === '岩卫盘');
+  const B = rows.find((r) => r.name === '钢壁盘');
+  // A 被 4 件套直接计入 + B 的 2 件套替代扩展 → 方案级去重后只计 1 次
+  assert.equal(A.count, 1);
+  assert.equal(A.characters.length, 1);
+  assert.equal(B.count, 1);
+});
+
+test('set2 为 null 的二件套不扩展替代（无效果不可替代）', () => {
+  const discSet2 = { 无华盘: null, 虚空盘: null };
+  const rows = computeDiscStats(
+    { a: { name: '角色A', plans: [{ sets: [{ name: '无华盘', cnt: 2 }], subStats: ['暴击率'], mainProps: {} }] } },
+    ['无华盘', '虚空盘'],
+    discSet2
+  );
+  const N = rows.find((r) => r.name === '无华盘');
+  const M = rows.find((r) => r.name === '虚空盘');
+  assert.equal(N.count, 1);
+  assert.equal(M.count, 0); // null 效果不成组，不扩展
+  assert.deepEqual(N.alternatives, []);
+  assert.deepEqual(M.alternatives, []);
+});
+
+test('同属性不同数值的 set2 不算同效果', () => {
+  const discSet2 = { 甲盘: { 防御力: 0.16 }, 乙盘: { 防御力: 0.1 } };
+  const rows = computeDiscStats(
+    { a: { name: '角色A', plans: [{ sets: [{ name: '甲盘', cnt: 2 }], subStats: [], mainProps: {} }] } },
+    ['甲盘', '乙盘'],
+    discSet2
+  );
+  const 甲 = rows.find((r) => r.name === '甲盘');
+  const 乙 = rows.find((r) => r.name === '乙盘');
+  assert.equal(甲.count, 1);
+  assert.equal(乙.count, 0);
+  assert.deepEqual(甲.alternatives, []);
+  assert.deepEqual(乙.alternatives, []);
+});
+
+test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/频次/替代不报错', () => {
   const plans = loadDataFile('plans.json', 'npm run sync:plans');
   const lib = loadDataFile('library.json', 'npm run sync:library');
-  const rows = computeDiscStats(plans, Object.keys(lib.discs || {}));
+  const discSet2 = Object.fromEntries(Object.values(lib.discs || {}).map((d) => [d.name, d.set2]));
+  const rows = computeDiscStats(plans, Object.keys(lib.discs || {}), discSet2);
   assert.equal(rows.length, Object.keys(lib.discs).length);
   for (const r of rows) {
     assert.ok(Number.isInteger(r.count) && r.count >= 0);
+    assert.ok(Array.isArray(r.alternatives));
+    assert.ok(!r.alternatives.includes(r.name)); // 替代不含自己
     assert.ok(Array.isArray(r.characters));
     assert.ok(Array.isArray(r.subCombos));
     // 副词条组合本身无重复
@@ -224,4 +323,9 @@ test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/�
       assert.ok(f.ratio >= 0 && f.ratio <= 1);
     }
   }
+  // 同效果组（棘刺玫瑰/灵魂摇滚 = 防御力0.16 二件套）替代互指
+  const j = rows.find((r) => r.name === '棘刺玫瑰');
+  const l = rows.find((r) => r.name === '灵魂摇滚');
+  assert.ok(j.alternatives.includes('灵魂摇滚'));
+  assert.ok(l.alternatives.includes('棘刺玫瑰'));
 });
