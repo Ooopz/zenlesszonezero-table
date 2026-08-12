@@ -15,8 +15,8 @@ import { requestJson, retry } from './http.js';
 
 // ---------- 图片本地化（原 library-img.js 合并进来） ----------
 const IMG_DIR = path.join(DATA_DIR, 'img');
-/** 文件名安全化：保留中文/字母/数字/连字符/下划线，其余替换为 _ */
-const safe = (n) => String(n || '未知').replace(/[^\w一-龥-]/g, '_');
+/** 文件名安全化：保留中文/字母/数字/连字符/下划线/罗马数字（ⅠⅡⅢ…，否则「残响」-Ⅰ/Ⅱ/Ⅲ 型会冲突），其余替换为 _ */
+const safe = (n) => String(n || '未知').replace(/[^\w一-龥-ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]/g, '_');
 /** 图片下载（或本地路径规范化）：已是 /data/img/ 的引用统一小写扩展名并修正到实际存在的文件 */
 const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 async function img(url, base) {

@@ -218,7 +218,7 @@ function relicTip(sets) {
 function renderWorkshopGrad() {
   const data = workshopGrad.roles || [];
   if (!data.length) {
-    return '<div class="empty">暂无工坊配装统计。<br><button class="mini" onclick="ZZZ.syncWorkshop()">更新工坊配装</button>（或运行 <b>node src/sync/workshop-grad.js</b>）</div>';
+    return '<div class="empty">暂无工坊配装统计。<br><button class="mini" onclick="ZZZ.syncWorkshop()">更新工坊配装</button>（或运行 <b>node src/sync/workshop.js</b>）</div>';
   }
   const gradVal = (r, key) => (key === '角色' ? r.name : null);
   const rows = recSort.apply(data, gradVal).map((r) => {

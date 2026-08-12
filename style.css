@@ -198,7 +198,7 @@ button:active {
   left: 50%;
   top: 64px;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 40;
   background: #111;
   border: 1px solid var(--acc);
   color: var(--txt);
@@ -683,6 +683,22 @@ textarea {
   border-radius: 4px;
   white-space: pre;
   overflow: auto;
+}
+/* 同步中心：复制脚本直接显示的代码块（非文本框，便于框选） */
+.snippet {
+  width: 100%;
+  margin: 8px 0;
+  background: #0a0a0a;
+  color: #8f8;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  user-select: text;
+  cursor: text;
 }
 .modal {
   position: fixed;
@@ -1404,6 +1420,72 @@ table.tbl th.sorted,
 }
 .rec-table.grad-table .ws-item em {
   font-size: 12px;
+}
+/* 同步中心弹窗：数据新鲜度 / 同步选项 / 进度 */
+.sync-fresh {
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  font-size: 13px;
+  color: var(--dim);
+}
+.sync-fresh .fresh-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 26px;
+}
+.sync-fresh b {
+  color: var(--txt);
+  font-weight: 700;
+}
+.sync-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.sync-opts label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.sync-opts input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--acc);
+}
+.sync-progress {
+  min-height: 22px;
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--acc);
+  font-weight: 700;
+  white-space: pre-wrap;
+}
+/* 同步中心：失败原因区（更新失败时在面板内展示，不弹独立窗口） */
+.sync-errors {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--red);
+  border-radius: 4px;
+  background: rgba(229, 72, 77, 0.08);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sync-errors-title {
+  color: var(--red);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.sync-errors-item b {
+  color: var(--txt);
+}
+.sync-errors-item span {
+  color: var(--red);
 }
 .wiki-ico {
   width: 34px;

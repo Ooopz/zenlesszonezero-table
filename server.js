@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openBrowser } from './src/lib/node.js';
-import { parseCookies } from './src/lib/util.js';
+import { parseCookies, serializeCookies } from './src/lib/util.js';
 import { SYNC_KINDS } from './src/lib/constants.js';
 import { fetchLibrary } from './src/sync/library.js';
 import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
@@ -82,6 +82,15 @@ function respond(res, code, obj) {
 }
 
 /** 读 data/ 下的 JSON（不存在或非法时返回 fallback） */
+/** 数据文件最后修改时间（ms；不存在返回 null），供同步中心展示数据新鲜度 */
+function mtimeOf(name) {
+  try {
+    return fs.statSync(path.join(ROOT, 'data', name)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 function readDataJson(name, fallback) {
   try {
     return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', name), 'utf-8'));
@@ -217,6 +226,20 @@ const server = http.createServer(async (req, res) => {
       return respond(res, 200, { ok: true, cached: !!readCookieCache() });
     if (req.method === 'GET' && url === '/api/sync-progress')
       return respond(res, 200, { ok: true, progress: syncState });
+    if (req.method === 'GET' && url === '/api/sync-status') {
+      const cached = readCookieCache();
+      return respond(res, 200, {
+        ok: true,
+        cookie: cached ? serializeCookies(cached) : '', // 明文 cookie，供同步中心粘贴栏显示
+        files: {
+          library: mtimeOf('library.json'),
+          characters: mtimeOf('characters.json'),
+          plans: mtimeOf('plans.json'),
+          workshop: mtimeOf('workshop.json'),
+          workshopGrad: mtimeOf('workshop-grad.json'),
+        },
+      });
+    }
     if (req.method === 'GET' && url === '/api/config') {
       const config = readDataJson('user-config.json', null);
       return respond(res, 200, { ok: true, config: config || { charTargets: {}, validStats: {} } });

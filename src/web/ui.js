@@ -32,13 +32,18 @@ function notify(msg, seconds = 4) {
 }
 
 // ---------- 服务器一键同步 ----------
-/** 同步进度轮询：同步期间定时查询 /api/sync-progress 并刷新提示条 */
+/** 同步进度轮询：同步期间定时查询 /api/sync-progress，更新提示条与同步中心弹窗内进度 */
 let syncPollTimer = null;
 function stopSyncPolling() {
   if (syncPollTimer) {
     clearInterval(syncPollTimer);
     syncPollTimer = null;
   }
+}
+/** 更新同步中心弹窗内进度区（打开时）；未打开则忽略 */
+function progress(msg) {
+  const el = document.getElementById('syncProgress');
+  if (el) el.textContent = msg;
 }
 function startSyncPolling(kind) {
   stopSyncPolling();
@@ -53,94 +58,105 @@ function startSyncPolling(kind) {
     else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
     else if (p.step === SYNC_KINDS.PLANS) msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
     else if (p.step === 'rank') msg = `正在爬取排名 ${p.done}/${p.total}…`;
-    else if (p.step === 'fetch') msg = `正在拉取配装 ${p.done}/${p.total}…`;
-    else if (p.step === 'grad') msg = `正在更新全服统计 ${p.done}/${p.total}…`;
-    notify(msg, 60);
+    else if (p.step === 'fetch') msg = `正在拉取工坊配装 ${p.done}/${p.total}…`;
+    else if (p.step === 'grad') msg = `正在更新工坊统计 ${p.done}/${p.total}…`;
+    progress(msg);
   }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
 }
 
-/** 更新数据库（需本地服务器） */
-async function syncLibrary() {
-  notify('正在更新数据库…（约 1 分钟，请稍候）', 60);
-  startSyncPolling(SYNC_KINDS.LIBRARY);
-  const j = await apiRequest('/api/sync-base', { method: 'POST' });
+/** 统一同步请求：执行一个同步并返回 {ok, data}（由调用方决定刷新/汇总） */
+async function runSync(label, kind, url, body) {
+  startSyncPolling(kind);
+  const j = body ? await postJSON(url, body) : await apiRequest(url, { method: 'POST' });
   stopSyncPolling();
-  if (j && j.ok) {
-    notify(
-      `属性库同步完成：角色${j.stats.characters} / 音擎${j.stats.wengines} / 驱动盘${j.stats.discs} / 邦布${j.stats.bangboos}，即将刷新`
-    );
-    setTimeout(() => location.reload(), 900);
+  return { ok: !!(j && j.ok), data: j };
+}
+const syncBase = () => runSync('数据库', SYNC_KINDS.LIBRARY, '/api/sync-base');
+const syncCharacters = (cookie) =>
+  runSync('我的角色', SYNC_KINDS.CHARACTERS, '/api/sync-characters', { cookie: cookie || '' });
+const syncPlans = (cookie) => runSync('推荐方案', SYNC_KINDS.PLANS, '/api/sync-plans', { cookie: cookie || '' });
+const syncWorkshopData = () => runSync('工坊数据', SYNC_KINDS.WORKSHOP, '/api/sync-workshop');
+
+/** 打开同步中心弹窗：填充数据新鲜度 + 当前 cookie 明文 */
+async function openSyncCenter() {
+  const j = await apiRequest('/api/sync-status', { method: 'GET' });
+  document.getElementById('syncCookieSnippet').textContent = CLIPBOARD_SCRIPT;
+  document.getElementById('syncCookieInput').value = j && j.cookie ? j.cookie : '';
+  document.getElementById('syncFreshness').innerHTML =
+    j && j.ok ? renderFreshness(j.files) : '⚠ 未检测到本地服务器：请先运行 npm start';
+  document.getElementById('syncProgress').textContent = '';
+  document.getElementById('syncErrors').innerHTML = '';
+  document.getElementById('syncModal').classList.add('show');
+}
+/** 距现在的时间描述（数据新鲜度） */
+function ago(ms) {
+  if (ms == null) return '未更新';
+  const d = Date.now() - ms;
+  const day = Math.floor(d / 86400000);
+  const h = Math.floor(d / 3600000);
+  const m = Math.floor(d / 60000);
+  if (day > 0) return `${day} 天前`;
+  if (h > 0) return `${h} 小时前`;
+  return m > 0 ? `${m} 分钟前` : '刚刚';
+}
+function renderFreshness(files) {
+  const labels = {
+    library: '数据库',
+    characters: '我的角色',
+    plans: '推荐方案',
+    workshop: '工坊配装',
+    workshopGrad: '工坊统计',
+  };
+  const items = Object.entries(files || {}).map(
+    ([k, v]) => `<span class="fresh-item">${labels[k] || k}：<b>${ago(v)}</b></span>`
+  );
+  return `<div class="fresh-row">${items.join('')}</div>`;
+}
+/** 按勾选同步（可多选）：串行执行、失败隔离，最后汇总并刷新 */
+async function runSelectedSyncs() {
+  const checked = [...document.querySelectorAll('.sync-chk:checked')].map((c) => c.dataset.key);
+  if (!checked.length) return notify('未勾选任何同步', 6);
+  const cookie = document.getElementById('syncCookieInput').value.trim();
+  const labels = { wiki: '数据库', characters: '我的角色', plans: '推荐方案', workshop: '工坊数据' };
+  const results = [];
+  for (const key of checked) {
+    const label = labels[key] || key;
+    progress(`正在更新${label}…`);
+    let r;
+    if (key === 'wiki') r = await syncBase();
+    else if (key === 'characters') r = await syncCharacters(cookie);
+    else if (key === 'plans') r = await syncPlans(cookie);
+    else r = await syncWorkshopData();
+    const error = r.ok ? '' : (r.data && r.data.error) || '网络错误';
+    results.push({ label, ok: r.ok, error });
+    if (!r.ok) progress(`正在更新${label}…失败：${error}`);
+  }
+  const summary = results.map((r) => `${r.label}${r.ok ? '✓' : '✗'}`).join(' ');
+  progress(`同步完成：${summary}`);
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    // 有失败项 → 在更新面板内展示失败详情（面板保持打开，便于调整后重试）
+    document.getElementById('syncErrors').innerHTML =
+      `<div class="sync-errors-title">以下数据更新失败，可查看原因后重试：</div>` +
+      failed
+        .map(
+          (f) =>
+            `<div class="sync-errors-item"><b>${escapeHtml(f.label)}</b>：<span>${escapeHtml(f.error)}</span></div>`
+        )
+        .join('');
   } else {
-    notify('同步失败：' + (j && j.error ? j.error : '未检测到本地服务器，请先运行 npm start'), 10);
+    notify(`同步完成：${summary}，即将刷新`);
+    setTimeout(() => location.reload(), 1200);
   }
 }
 
-/** 更新工坊配装统计（爬取 api.zzzmap.com，无需 cookie） */
-async function syncWorkshop() {
-  notify('正在更新工坊数据…（首次全量较久，请稍候）', 60);
-  startSyncPolling(SYNC_KINDS.WORKSHOP);
-  const j = await apiRequest('/api/sync-workshop', { method: 'POST' });
-  stopSyncPolling();
-  if (j && j.ok) {
-    notify(`工坊数据更新完成（${j.stats.roles} 角色全服统计），即将刷新`);
-    setTimeout(() => location.reload(), 900);
-  } else {
-    notify('更新失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 10);
-  }
-}
-
-// 角色同步弹窗
-async function openRoleSync() {
-  document.getElementById('cookieSnippet').value = CLIPBOARD_SCRIPT;
-  const info = document.getElementById('cookieInfo');
-  const j = await apiRequest('/api/cookie-status', { method: 'GET' });
-  if (j && j.ok) {
-    info.textContent = j.cached
-      ? '已缓存 cookie，可点击「用缓存的 cookie 同步」一键更新。'
-      : '尚未缓存 cookie，粘贴一次即可（之后会缓存）。';
-  } else {
-    info.textContent = '⚠ 未检测到本地服务器：请先运行 npm start，再打开本页。';
-  }
-  document.getElementById('rolesyncModal').classList.add('show');
-}
-async function syncCharacters(cookie) {
-  notify('正在同步角色…', 60);
-  startSyncPolling(SYNC_KINDS.CHARACTERS);
-  const j = await postJSON('/api/sync-characters', { cookie: cookie || '' });
-  stopSyncPolling();
-  if (j && j.ok) {
-    notify(`角色同步完成：${j.stats.characters} 个角色，即将刷新`);
-    setTimeout(() => location.reload(), 900);
-  } else {
-    notify('同步失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 10);
-  }
-}
-
-/** 方案更新指南弹窗：提示养成指南 cookie（e_nap_token 有效期短）并给出复制脚本 */
-async function openPlansSync() {
-  document.getElementById('plansCookieSnippet').value = CLIPBOARD_SCRIPT;
-  const info = document.getElementById('plansCookieInfo');
-  const j = await apiRequest('/api/cookie-status', { method: 'GET' });
-  info.textContent =
-    j && j.ok && j.cached
-      ? '已缓存 cookie，可直接「用缓存的 cookie 同步」（注意养成指南登录态 e_nap_token 可能已过期）。'
-      : '尚未缓存 cookie：打开上方养成指南页面执行脚本，粘贴一次即可（之后会缓存）。';
-  document.getElementById('plansyncModal').classList.add('show');
-}
-
-/** 同步推荐方案（米游社养成指南「切换方案」列表，每角色前 50 个）。
- *  cookie 传空串时用服务器缓存的 cookie；e_nap_token 过期会由服务器明确报错而非静默 0。 */
-async function syncPlans(cookie) {
-  notify('正在同步推荐方案…（每角色最多 50 个方案，约 1-2 分钟）', 120);
-  startSyncPolling(SYNC_KINDS.PLANS);
-  const j = await postJSON('/api/sync-plans', { cookie: cookie || '' });
-  stopSyncPolling();
-  if (j && j.ok) {
-    notify(`推荐方案同步完成：${j.stats.characters} 角色 / ${j.stats.plans} 个方案，即将刷新`);
-    setTimeout(() => location.reload(), 900);
-  } else {
-    notify('同步失败：' + (j && j.error ? j.error : '无法连接本地服务器（请先运行 npm start）'), 12);
-  }
+/** 保存 cookie 到本地（data/.cookie.json），不触发同步 */
+async function saveCookie() {
+  const cookie = document.getElementById('syncCookieInput').value.trim();
+  if (!cookie) return notify('cookie 为空，粘贴后保存', 6);
+  const j = await postJSON('/api/cookie', { cookie });
+  if (j && j.ok) notify('cookie 已保存');
+  else notify('保存失败：' + ((j && j.error) || '无法连接本地服务器'), 10);
 }
 
 /** 复制代码到剪贴板（指南脚本/命令） */
@@ -398,7 +414,7 @@ export function initUi() {
   // Esc 关闭当前弹窗
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    for (const id of ['targetModal', 'noteModal', 'helpModal', 'rolesyncModal', 'skillModal']) {
+    for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal']) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('show');
     }
@@ -437,23 +453,16 @@ export function initUi() {
     togglePlanSort(th.dataset.sort);
     renderPlanTable(currentTargetChar);
   });
-  // 同步下拉：触发器开合，外部点击收起，菜单项分发到三个同步动作
-  const syncTrigger = document.getElementById('syncBtn');
-  const syncDropdown = document.querySelector('.sync-dropdown');
-  syncTrigger.addEventListener('click', () => syncDropdown.classList.toggle('open'));
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.sync-menu')) syncDropdown.classList.remove('open');
-  });
-  document.querySelectorAll('.sync-dropdown button').forEach((b) =>
-    b.addEventListener('click', () => {
-      syncDropdown.classList.remove('open');
-      const act = b.dataset.action;
-      if (act === SYNC_KINDS.LIBRARY) syncLibrary();
-      else if (act === SYNC_KINDS.CHARACTERS) openRoleSync();
-      else if (act === SYNC_KINDS.PLANS) openPlansSync();
-      else if (act === SYNC_KINDS.WORKSHOP) syncWorkshop();
-    })
-  );
+  // 同步中心：点「同步数据」打开弹窗；「更新」执行勾选的同步
+  document.getElementById('syncBtn').addEventListener('click', openSyncCenter);
+  document.getElementById('syncRun').addEventListener('click', runSelectedSyncs);
+  document
+    .getElementById('syncClose')
+    .addEventListener('click', () => document.getElementById('syncModal').classList.remove('show'));
+  document
+    .getElementById('syncCopy')
+    .addEventListener('click', () => copyText(document.getElementById('syncCookieSnippet').textContent, '脚本'));
+  document.getElementById('syncCookieSave').addEventListener('click', saveCookie);
   // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
   document.querySelectorAll('.view-tab').forEach((b) =>
     b.addEventListener('click', () => {
@@ -477,40 +486,15 @@ export function initUi() {
       setMyTab(key);
       render();
     },
-    syncWorkshop: () => syncWorkshop(),
-  });
-  document
-    .getElementById('rolesyncClose')
-    .addEventListener('click', () => document.getElementById('rolesyncModal').classList.remove('show'));
-  document
-    .getElementById('rolesyncCopy')
-    .addEventListener('click', () => copyText(document.getElementById('cookieSnippet').value, '脚本'));
-  document.getElementById('rolesyncNow').addEventListener('click', () => {
-    const cookie = document.getElementById('cookieInput').value.trim();
-    if (!cookie) return notify('请先粘贴 cookie', 6);
-    document.getElementById('rolesyncModal').classList.remove('show');
-    syncCharacters(cookie);
-  });
-  document.getElementById('rolesyncCached').addEventListener('click', () => {
-    document.getElementById('rolesyncModal').classList.remove('show');
-    syncCharacters('');
-  });
-  // 方案同步指南弹窗
-  document
-    .getElementById('plansyncClose')
-    .addEventListener('click', () => document.getElementById('plansyncModal').classList.remove('show'));
-  document
-    .getElementById('plansyncCopy')
-    .addEventListener('click', () => copyText(document.getElementById('plansCookieSnippet').value, '脚本'));
-  document.getElementById('plansyncNow').addEventListener('click', () => {
-    const cookie = document.getElementById('plansCookieInput').value.trim();
-    if (!cookie) return notify('请先粘贴 cookie', 6);
-    document.getElementById('plansyncModal').classList.remove('show');
-    syncPlans(cookie);
-  });
-  document.getElementById('plansyncCached').addEventListener('click', () => {
-    document.getElementById('plansyncModal').classList.remove('show');
-    syncPlans('');
+    syncWorkshop: () =>
+      syncWorkshopData().then((r) => {
+        if (r.ok) {
+          notify('工坊数据已更新，即将刷新');
+          setTimeout(() => location.reload(), 900);
+        } else {
+          notify('更新失败：' + ((r.data && r.data.error) || '无法连接本地服务器'), 10);
+        }
+      }),
   });
   document
     .getElementById('helpBtn')
