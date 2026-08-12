@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extractCharacter } from '../src/sync/characters.js';
+import { isMaxedRole } from '../src/sync/workshop.js';
 import { validateCharacter } from '../src/lib/schema.js';
 import { loadDataFile } from './helpers.js';
 
@@ -124,4 +125,44 @@ test('extractCharacter 提取皮肤 / 元素代码 / 音擎特效标题', () => 
 test('全量提取结果能通过 schema 校验', () => {
   const c = extractCharacter(AVATAR_INFO);
   assert.deepEqual(validateCharacter(c), []);
+});
+
+// ---------- isMaxedRole：爬取过滤（角色/音擎≥60、驱动盘恰 6 块全 15 级，兼容 mys/2025 两源） ----------
+const mysRole = (level, wpnLevel, discLevels) => ({
+  level,
+  item_json: { weapon: { level: wpnLevel }, equip: discLevels.map((lv) => ({ level: lv })) },
+});
+const role2025 = (level, wpnLevel, discLevels) => ({
+  level,
+  item_json: {
+    Weapon: { Level: wpnLevel },
+    EquippedList: discLevels.map((lv) => (lv == null ? { Equipment: null } : { Equipment: { Level: lv } })),
+  },
+});
+
+test('isMaxedRole：练满角色通过（mys/2025 两源）', () => {
+  assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15, 15])), true, 'mys 源合格');
+  assert.equal(isMaxedRole(role2025(60, 60, [15, 15, 15, 15, 15, 15])), true, '2025 源合格');
+});
+
+test('isMaxedRole：角色不满 60 级排除', () => {
+  assert.equal(isMaxedRole(mysRole(59, 60, [15, 15, 15, 15, 15, 15])), false);
+});
+
+test('isMaxedRole：音擎不满 60 级 / 无音擎排除', () => {
+  assert.equal(isMaxedRole(mysRole(60, 59, [15, 15, 15, 15, 15, 15])), false, '音擎 59 级');
+  assert.equal(isMaxedRole(role2025(60, null, [15, 15, 15, 15, 15, 15])), false, '2025 无音擎');
+  assert.equal(isMaxedRole(mysRole(60, null, [15, 15, 15, 15, 15, 15])), false, 'mys 无音擎');
+});
+
+test('isMaxedRole：驱动盘不是 6 块 15 级排除', () => {
+  assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15])), false, '只 5 块盘');
+  assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15, 14])), false, '某盘 14 级');
+  assert.equal(isMaxedRole(role2025(60, 60, [15, 15, 15, 15, 15, null])), false, '2025 有未装备槽');
+});
+
+test('isMaxedRole：无 item_json / 非角色对象排除', () => {
+  assert.equal(isMaxedRole(null), false);
+  assert.equal(isMaxedRole({ level: 60 }), false);
+  assert.equal(isMaxedRole({ level: 60, item_json: null }), false);
 });

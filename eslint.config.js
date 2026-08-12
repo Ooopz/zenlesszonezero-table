@@ -4,7 +4,7 @@ import globals from 'globals';
 import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default [
-  { ignores: ['node_modules/**', 'data/**', 'package-lock.json'] },
+  { ignores: ['node_modules/**', 'data/**', 'src/vendor/**', 'package-lock.json'] },
   js.configs.recommended,
   // 关闭与 Prettier 冲突的格式类规则（格式交给 Prettier）
   eslintConfigPrettier,

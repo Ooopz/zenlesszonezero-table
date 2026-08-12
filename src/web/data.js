@@ -1,5 +1,6 @@
 // src/web/data.js —— 数据层：由 main.js 注入数据（不再从 DOM 内嵌块读取），维护索引/配置/过滤
-import { buildIndex, lookup, statEntries } from '../lib/util.js';
+import { statEntries } from '../lib/util.js';
+import { buildNameIndex, CATEGORY } from '../lib/names.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
 import { apiRequest, postJSON } from './util.js';
@@ -18,8 +19,9 @@ export let plansByName = {};
 /** 工坊全服配装统计：{ roles: [{ item_id, name, weapons, relics }] }（src/sync/workshop-grad.js 爬取） */
 export let workshopGrad = { roles: [] };
 
-/** 工坊配装汇总：{ wengines, discs, panels }（src/sync/workshop-stats.js 生成，基于 workshop.json） */
-export let workshopStats = { wengines: [], discs: [], panels: [] };
+/** 工坊配装汇总：{ wengines, discs, panels, discDetails }（src/sync/workshop-stats.js 生成，基于 workshop.json；
+ *  discDetails 为驱动盘单盘真实统计，供统计视图「驱动盘」面板工坊真实列） */
+export let workshopStats = { wengines: [], discs: [], panels: [], discDetails: [] };
 
 /** 注入属性库 / 我的角色 / 推荐方案 / 工坊配装统计 / 工坊配装汇总（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
 export function setData(lib, chars, plansData, gradData, statsData) {
@@ -35,7 +37,7 @@ export function setData(lib, chars, plansData, gradData, statsData) {
   plansByName = {};
   for (const v of Object.values(plans)) if (v && v.name) plansByName[v.name] = v;
   workshopGrad = gradData || { roles: [] };
-  workshopStats = statsData || { wengines: [], discs: [], panels: [] };
+  workshopStats = statsData || { wengines: [], discs: [], panels: [], discDetails: [] };
   rebuildIndex();
 }
 
@@ -44,11 +46,11 @@ export let charIndex = {},
   wengineIndex = {},
   discIndex = {};
 function rebuildIndex() {
-  charIndex = buildIndex(library.characters || {});
-  wengineIndex = buildIndex(library.wengines || {});
-  discIndex = buildIndex(library.discs || {});
+  charIndex = buildNameIndex(library.characters || {}, CATEGORY.CHAR);
+  wengineIndex = buildNameIndex(library.wengines || {}, CATEGORY.WENGINE);
+  discIndex = buildNameIndex(library.discs || {}, CATEGORY.DISC);
 }
-export { lookup, statEntries };
+export { statEntries };
 
 // ---------- 元素颜色（属性展示用） ----------
 export const elementColors = {

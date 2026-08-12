@@ -1146,6 +1146,7 @@ table.tbl {
 }
 .wiki-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -1237,7 +1238,7 @@ table.tbl th.sorted,
 .wiki-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);
 }
-/* 驱动盘统计表（独立视图）：沿用 wiki 表格外观，滚动容器复用 .wiki-wrap */
+/* 统计视图表格（驱动盘/音擎/配队/角色数值/工坊配装共用视觉） */
 .discstats {
   grid-column: 1/-1;
   min-width: 0; /* 允许收缩，宽表格横向溢出收进 .wiki-wrap 滚动 */
@@ -1245,78 +1246,15 @@ table.tbl th.sorted,
 .discstats-table {
   border-collapse: collapse;
   font-size: 13px;
-  /* 自动布局 + 单元格 nowrap：列宽按 colgroup/最长行内项定，不随视口拉伸；
-     行内项由渲染时的 <br> 分隔，单个名字/词条频次始终单行不换行 */
-  min-width: 950px;
+  min-width: 950px; /* 驱动盘表信息密集，横向滚动 */
 }
-.discstats-table th,
-.discstats-table td {
-  border: 1px solid var(--line);
-  padding: 4px 8px;
-  text-align: center;
-  white-space: nowrap;
-}
-.discstats-table th {
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: var(--card2);
-  color: var(--acc);
-  font-weight: 800;
-  font-size: 12px;
-}
-.discstats-table th[data-sort] {
-  cursor: pointer;
-  user-select: none;
-}
-.discstats-table th.sorted {
-  color: var(--txt);
-}
-.discstats-table td.wiki-name {
-  font-weight: 800;
-  color: var(--txt);
-}
-/* 驱动盘列：名称在上、图标在下居中；整格悬浮显示二/四件套详情 */
-.discstats-table td.wiki-name .ds-dname {
-  display: block;
-}
-.discstats-table td.wiki-name .ds-dico {
-  display: block;
-  margin: 3px auto 0;
-}
-/* 匹配角色 / 副词条 / 456 号位：nowrap 保证单个名字/词条频次不被挤换行；单元格限高滚动避免行被撑得很高 */
-.discstats-table td.ds-chars,
-.discstats-table td.ds-combos,
-.discstats-table td.ds-main {
-  white-space: nowrap;
-  text-align: left;
-  max-height: 140px;
-  overflow-y: auto;
-  line-height: 1.5;
-  font-size: 12px;
-}
-/* 高频词条（≥50% 方案推荐）：加粗高亮 = 「优先留」 */
-.discstats-table .ds-hot {
-  color: var(--acc);
-  font-weight: 800;
-}
-/* 低频词条（<5% 方案推荐）：灰色弱化 = 个别方案特化，优先级低 */
-.discstats-table .ds-dim {
-  color: var(--dim);
-}
-/* 副词条单元格：可悬浮查看组合明细 */
-.discstats-table td.ds-combos .ds-sub {
-  cursor: help;
-}
-.discstats-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
-}
-/* 推荐视图统计表（音擎/配队/角色数值子面板）：复用驱动盘统计表视觉；内容列沿用 .ds-chars/.ds-count/.ds-main */
 .rec-table {
   border-collapse: collapse;
   font-size: 13px;
   min-width: 720px;
 }
+.discstats-table th,
+.discstats-table td,
 .rec-table th,
 .rec-table td {
   border: 1px solid var(--line);
@@ -1324,6 +1262,7 @@ table.tbl th.sorted,
   text-align: center;
   white-space: nowrap;
 }
+.discstats-table th,
 .rec-table th {
   position: sticky;
   top: 0;
@@ -1333,19 +1272,121 @@ table.tbl th.sorted,
   font-weight: 800;
   font-size: 12px;
 }
+.discstats-table th[data-sort],
 .rec-table th[data-sort] {
   cursor: pointer;
   user-select: none;
 }
+.discstats-table th.sorted,
 .rec-table th.sorted {
   color: var(--txt);
 }
+.discstats-table td.wiki-name,
 .rec-table td.wiki-name {
   font-weight: 800;
   color: var(--txt);
 }
+.discstats-table tbody tr:hover td,
 .rec-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.045);
+}
+/* 计数/数值格（方案推荐/全服使用/属性区间/使用角色数）：居中 + 等宽数字 + 限高滚动 */
+.discstats-table td.ds-count,
+.discstats-table td.ds-main,
+.rec-table td.ds-count,
+.rec-table td.ds-main {
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+/* 角色/词条列表格（匹配角色/推荐角色/副词条/456主属性）：左对齐 + 限高滚动 */
+.discstats-table td.ds-chars,
+.discstats-table td.ds-combos,
+.rec-table td.ds-chars,
+.rec-table td.ds-combos {
+  white-space: nowrap;
+  text-align: left;
+  max-height: 140px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-size: 12px;
+}
+/* 驱动盘名称格：名称在上、图标在下居中（.ws-ico 统一图标类） */
+.discstats-table td.wiki-name .ds-dname {
+  display: block;
+}
+.discstats-table td.wiki-name .ws-ico {
+  display: block;
+  margin: 3px auto 0;
+}
+/* 高频词条（≥50% 方案推荐）：加粗高亮 = 「优先留」；低频 <5% 灰色弱化 */
+.discstats-table .ds-hot {
+  color: var(--acc);
+  font-weight: 800;
+}
+.discstats-table .ds-dim {
+  color: var(--dim);
+}
+.discstats-table td.ds-combos .ds-sub {
+  cursor: help;
+}
+/* 工坊真实下行：方案/工坊两口径的分隔（顶部分隔线）+ 弱化色 */
+.discstats-table .ds-wsline {
+  display: block;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+  color: var(--dim);
+}
+/* 456 冷门主词条（候选里方案/工坊都没出现）：灰色删除线 */
+.discstats-table .ds-cold {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--dim);
+  opacity: 0.75;
+}
+.discstats-table .ds-cold del {
+  text-decoration: line-through;
+}
+/* 占比小字（方案推荐/全服使用列的数字旁） */
+.ds-ratio {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 400;
+}
+/* 推荐角色列：角色名旁标注推荐次数 */
+.ds-rolecnt {
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 400;
+}
+/* 方案 vs 实况差异分析（工坊配装面板） */
+.ds-same {
+  color: var(--green);
+  font-weight: 800;
+}
+.ds-diff {
+  color: var(--orange);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 推荐 vs 实况对比色标 */
+.ds-flag-rare {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--red);
+}
+.ds-flag-pop {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--green);
 }
 /* 工坊配装统计：音擎/驱动盘图标（名称左对齐，进度条右对齐） */
 .rec-table .ws-item {
@@ -1380,6 +1421,7 @@ table.tbl th.sorted,
   min-width: 36px;
   text-align: right;
   font-weight: 800;
+  font-size: 12px;
 }
 .rec-table .tbar {
   display: inline-block;
@@ -1395,21 +1437,16 @@ table.tbl th.sorted,
   display: block;
   height: 100%;
 }
-/* 工坊配装：整体字体调大 */
+/* 工坊配装（grad-table）：每角色 Top 音擎/套装，整体字号稍大 */
 .rec-table.grad-table {
   font-size: 14px;
 }
-/* 角色列：图标 + 名字居中横排，角色图标放大（长宽约音擎图标 3 倍） */
 .rec-table.grad-table td.wiki-name {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* 左对齐 */
   gap: 8px;
-}
-.rec-table.grad-table .ws-ico.grad-role {
-  width: 78px;
-  height: 78px;
-  border-radius: 6px;
+  text-align: left;
 }
 .rec-table.grad-table td.ds-main {
   font-size: 14px;
@@ -1420,6 +1457,130 @@ table.tbl th.sorted,
 }
 .rec-table.grad-table .ws-item em {
   font-size: 12px;
+}
+/* 角色面板对标（角色数值子面板）：每属性一列分布带 */
+.rec-table td.pd-cell {
+  padding: 3px 6px;
+  min-width: 90px;
+  vertical-align: middle;
+  line-height: 1.2;
+}
+.rec-table td.pd-cell .pd-empty {
+  color: var(--dim);
+}
+.pd-cell-inner {
+  cursor: help;
+}
+/* 分布带：推荐框上半(绿)/样本框下半(橙)共用整体 [min,max] 刻度（同轴可比，左右界按数值定位），圆点标均值/中位、我的竖线 */
+.pd-track {
+  position: relative;
+  height: 14px;
+  background: #141414;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.pd-track > span {
+  position: absolute;
+}
+/* 框体：左右界 = 各源 min/max */
+.band-box {
+  box-sizing: border-box;
+}
+.band-rec {
+  top: 0;
+  height: 50%;
+  background: rgba(127, 216, 164, 0.18);
+  border: 1px solid var(--green);
+}
+.band-ws {
+  top: 50%;
+  height: 50%;
+  background: rgba(255, 155, 92, 0.12);
+  border: 1px dashed var(--orange);
+}
+/* 圆点：均值 / 中位数（各居自己半层） */
+.band-dot {
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  z-index: 2;
+}
+.band-rec-dot {
+  top: 25%;
+  background: var(--green);
+}
+.band-ws-dot {
+  top: 75%;
+  background: var(--orange);
+}
+.band-mine {
+  top: -3px;
+  height: 20px;
+  width: 0;
+  border-left: 2px solid var(--acc);
+}
+/* 底部数值行：推荐中位 / 样本中位 / 我的 */
+.pd-vals {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pd-rec {
+  color: var(--green);
+}
+.pd-ws {
+  color: var(--orange);
+}
+.pd-mine {
+  color: var(--acc);
+  font-weight: 800;
+}
+/* 统计视图图表面板（对标总览/角色详情/分布分析） */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+  gap: 14px;
+  padding: 4px;
+}
+.chart-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.chart-card h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--acc);
+  font-weight: 800;
+}
+.chart-init {
+  width: 100%;
+}
+/* 图表面板顶部的角色选择 */
+.chart-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.chart-select select {
+  background: var(--card2);
+  color: var(--txt);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.chart-select label {
+  color: var(--dim);
+  font-size: 13px;
 }
 /* 同步中心弹窗：数据新鲜度 / 同步选项 / 进度 */
 .sync-fresh {

@@ -19,7 +19,7 @@ import {
 } from './data.js';
 import { render, setMyTab } from './render.js';
 import { setWikiTab } from './wiki.js';
-import { setRecommendTab } from './recommend.js';
+import { setRecommendTab, setSelectedRole } from './recommend.js';
 
 // ---------- 提示条 ----------
 const statusEl = document.getElementById('status');
@@ -463,7 +463,7 @@ export function initUi() {
     .getElementById('syncCopy')
     .addEventListener('click', () => copyText(document.getElementById('syncCookieSnippet').textContent, '脚本'));
   document.getElementById('syncCookieSave').addEventListener('click', saveCookie);
-  // 视图切换（卡片 / 统计 / 数据库）：独立一组，切视图并同步 URL 与配置
+  // 视图切换（我的角色 / 数据库 / 统计）：独立一组，切视图并同步 URL 与配置
   document.querySelectorAll('.view-tab').forEach((b) =>
     b.addEventListener('click', () => {
       userConfig.view = b.dataset.view;
@@ -480,6 +480,10 @@ export function initUi() {
     },
     recommendTab: (key) => {
       setRecommendTab(key);
+      render();
+    },
+    selectRole: (name) => {
+      setSelectedRole(name); // 角色详情/分布分析面板的角色下拉
       render();
     },
     myTab: (key) => {

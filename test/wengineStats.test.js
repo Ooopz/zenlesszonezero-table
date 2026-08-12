@@ -25,6 +25,7 @@ test('按音擎聚合：推荐次数 / 主备计数 / 推荐角色去重', () =>
   assert.equal(a.mainCount, 3);
   assert.equal(a.backupCount, 0);
   assert.deepEqual(a.characters, ['安比', '妮可']); // 角色去重
+  assert.deepEqual(a.roleCounts, { 安比: 2, 妮可: 1 }); // 每角色推荐次数
   const b = rows.find((r) => r.name === '德玛拉电池Ⅱ型');
   assert.equal(b.count, 3);
   assert.equal(b.mainCount, 0);

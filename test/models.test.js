@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Character, Wengine, Disc, toInstances } from '../src/lib/models.js';
-import { buildIndex } from '../src/lib/util.js';
+import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { setCalcContext } from '../src/lib/calc.js';
 import { loadDataFile } from './helpers.js';
 
@@ -16,9 +16,9 @@ const library = {
 
 setCalcContext({
   library,
-  charIndex: buildIndex(library.characters),
-  wengineIndex: buildIndex(library.wengines),
-  discIndex: buildIndex(library.discs),
+  charIndex: buildNameIndex(library.characters, CATEGORY.CHAR),
+  wengineIndex: buildNameIndex(library.wengines, CATEGORY.WENGINE),
+  discIndex: buildNameIndex(library.discs, CATEGORY.DISC),
   readCharTarget: () => ({}),
   readValidStats: () => [],
 });

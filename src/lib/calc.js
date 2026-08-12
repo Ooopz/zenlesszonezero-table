@@ -1,7 +1,8 @@
 // src/lib/calc.js —— 计算引擎：属性常量 + 词条成长 + 面板计算 + 达成率
 // 纯逻辑、无 DOM/Node 依赖；需要数据的函数通过 setCalcContext 注入上下文，
 // 因此浏览器（web/main.js 注入）与 Node（测试/批量分析）都能使用。
-import { statEntries, formatValue, lookup } from './util.js';
+import { statEntries, formatValue } from './util.js';
+import { resolveEntry, CATEGORY } from './names.js';
 import {
   STAT,
   PANEL_ORDER,
@@ -207,15 +208,15 @@ function applyPiercing(panel, libCharacter) {
 }
 
 export function calculateCharacter(character) {
-  const { library, charIndex, wengineIndex, discIndex } = ctx;
-  const libCharacter = lookup(library.characters, charIndex, character.name) || {};
+  const { charIndex, wengineIndex, discIndex } = ctx;
+  const libCharacter = resolveEntry(CATEGORY.CHAR, charIndex, character.name) || {};
   // wiki 基础值 = 初始 ∪ 满级（满级只含生命/攻击/防御，其余在初始里）。
   // Character 实例构造时已把扁平初始属性归一化到实例，纯对象亦可直接取。
   const baseSource = {};
   for (const s of panelOrder) if (libCharacter[s] != null) baseSource[s] = libCharacter[s];
   if (libCharacter['基础攻击力'] != null) baseSource['基础攻击力'] = libCharacter['基础攻击力'];
   for (const [k, v] of Object.entries(libCharacter.maxLevel || {})) baseSource[k] = v;
-  const libWengine = lookup(library.wengines, wengineIndex, character.wengine?.name);
+  const libWengine = resolveEntry(CATEGORY.WENGINE, wengineIndex, character.wengine?.name);
   const wengine = character.wengine || {};
 
   // 核心技（核心被动）当前等级：账号 skills 里 type=5；缺失时默认满级 7
@@ -275,7 +276,7 @@ export function calculateCharacter(character) {
   for (const d of character.discs || []) if (d.set) setCount[d.set] = (setCount[d.set] || 0) + 1;
   const countedSets = new Set();
   for (const d of character.discs || []) {
-    const discLib = lookup(library.discs, discIndex, d.set);
+    const discLib = resolveEntry(CATEGORY.DISC, discIndex, d.set);
     for (const t of statEntries(d.mainStats)) {
       accumulate(t.name, t.value);
       recordSource(t.name, `盘${d.slot}主`, t.value);

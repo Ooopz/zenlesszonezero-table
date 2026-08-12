@@ -4,9 +4,7 @@ import {
   myCharacters,
   userConfig,
   elementColors,
-  library,
   discIndex,
-  lookup,
   statEntries,
   readNote,
   readValidStats,
@@ -16,6 +14,7 @@ import {
   saveRowOrder,
   saveColOrder,
 } from './data.js';
+import { resolveEntry, CATEGORY } from '../lib/names.js';
 import {
   progressCell,
   rateColor,
@@ -33,7 +32,7 @@ import { STAT, VIEWS } from '../lib/constants.js';
 import { discSetEffectsHtml, richItemHtml, skillIconForType } from './shared.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
 import { toggleDiscStatsSort } from './discstats.js';
-import { renderRecommend, toggleRecommendSort } from './recommend.js';
+import { renderRecommend, toggleRecommendSort, mountRecommendCharts } from './recommend.js';
 
 // ---------- 悬浮提示 ----------
 const tipEl = document.createElement('div');
@@ -78,13 +77,13 @@ function wengineInfo(character, R) {
 }
 /** 单个驱动盘的悬浮详情：只显示 2/4 件套效果 */
 function discTooltip(disc) {
-  const discLib = lookup(library.discs, discIndex, disc.set);
+  const discLib = resolveEntry(CATEGORY.DISC, discIndex, disc.set);
   return `<b>${disc.set}</b>` + discSetEffectsHtml(discLib);
 }
 
 /** 驱动盘详情数据（卡片盘面 / 表格悬浮共用）：库引用、主词条、副词条行、命中数、套装效果 */
 function discDetail(d, validSet) {
-  const discLib = lookup(library.discs, discIndex, d.set);
+  const discLib = resolveEntry(CATEGORY.DISC, discIndex, d.set);
   const main =
     statEntries(d.mainStats)
       .map((t) => `${t.name} ${formatValue(t.name, t.value)}`)
@@ -431,7 +430,7 @@ function renderTable(list, container) {
       .map((i) => (character.discs || [])[i])
       .filter(Boolean)
       .map((d) => {
-        const discLib = lookup(library.discs, discIndex, d.set);
+        const discLib = resolveEntry(CATEGORY.DISC, discIndex, d.set);
         const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
         if (!icon) return '<span class="d-ico" style="border-color:#444"></span>';
         return `<img class="d-ico" src="${icon}" data-detail="${escapeHtml(discTooltipFull(d, charValidSet))}">`;
@@ -530,14 +529,14 @@ grid.addEventListener('click', (e) => {
   render();
 });
 
-// ---------- 我的角色视图（卡片 / 统计 二级子页面） ----------
+// ---------- 我的角色视图（卡片 / 汇总 二级子页面） ----------
 let myTab = 'card';
 export function setMyTab(key) {
   myTab = key;
 }
 const MY_TABS = [
   { key: 'card', label: '卡片' },
-  { key: 'table', label: '统计' },
+  { key: 'table', label: '汇总' },
 ];
 /** 我的角色视图外壳：子面板 tabs + 内容容器（bodyContent 可选，放空态提示等） */
 function myCharsShell(bodyContent = '') {
@@ -567,9 +566,10 @@ export function render() {
   if (view === VIEWS.RECOMMEND || view === 'discstats') {
     // discstats 兼容旧 user-config 存留的视图值
     grid.innerHTML = renderRecommend();
+    mountRecommendCharts();
     return;
   }
-  // 我的角色：卡片 / 统计 二级子页面
+  // 我的角色：卡片 / 汇总 二级子页面
   if (!myCharacters.length) {
     grid.innerHTML = myCharsShell(
       '<div class="empty">还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。</div>'

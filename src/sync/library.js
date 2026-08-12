@@ -8,7 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { stripHtml, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
+import { stripHtml, normalizeStatKey, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
 import { validateLibrary } from '../lib/schema.js';
 import { isMain, writeDataFile, DATA_DIR } from '../lib/node.js';
 import { requestJson, retry } from './http.js';
@@ -326,7 +326,7 @@ function fetchWengineStats(page) {
       if (baseAtk != null || subMatch) {
         return {
           baseAtk: baseAtk != null ? baseAtk : null,
-          subStats: subMatch ? { [damageMapping[subMatch[1]] || subMatch[1]]: parseNum(subMatch[2]) } : null,
+          subStats: subMatch ? { [normalizeStatKey(subMatch[1])]: parseNum(subMatch[2]) } : null,
           subStatsText: seg.match(/([一-鿿A-Za-z]+[+-][\d.]+%?)/)?.[0] || null,
           specialEffect,
         };
@@ -350,19 +350,6 @@ function fetchWengineStats(page) {
     specialEffect,
   };
 }
-
-/** 套装效果里的「X伤害」统一成「X属性伤害加成」，与面板/账号接口的属性名对齐 */
-const damageMapping = {
-  物理伤害: '物理伤害加成',
-  火属性伤害: '火属性伤害加成',
-  冰属性伤害: '冰属性伤害加成',
-  电属性伤害: '电属性伤害加成',
-  雷属性伤害: '电属性伤害加成',
-  以太伤害: '以太伤害加成',
-  流明伤害: '流明伤害加成',
-  虚属性伤害: '虚属性伤害加成',
-  物理属性伤害: '物理伤害加成',
-};
 
 /** 驱动盘：fe_ext.c_46 的 2/4 件套效果 */
 /** 驱动盘圆形光盘图标：modules 里出现次数最多的图片（圆形图标多尺寸变体，区别于方形主图 icon_url）。
@@ -397,7 +384,7 @@ function fetchDiscSet(page) {
       const parsed = parseSignedStat(item.value) || null;
       if (parsed) {
         const key = Object.keys(parsed)[0];
-        out.set2 = { [damageMapping[key] || key]: parsed[key] };
+        out.set2 = { [normalizeStatKey(key)]: parsed[key] };
       } else {
         out.set2 = null;
       }

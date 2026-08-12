@@ -55,7 +55,11 @@ function serveStatic(req, res) {
       res.writeHead(404);
       return res.end('Not Found');
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    // no-store：彻底禁止缓存，任何改动强刷后必然加载最新资源（如 JS 修复不生效的常见原因）
+    res.writeHead(200, {
+      'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream',
+      'Cache-Control': 'no-store',
+    });
     res.end(data);
   });
 }
@@ -77,7 +81,7 @@ function readBody(req) {
   });
 }
 function respond(res, code, obj) {
-  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
 
@@ -219,7 +223,7 @@ const server = http.createServer(async (req, res) => {
         characters: readDataJson('characters.json', []),
         plans: readDataJson('plans.json', {}),
         workshopGrad: readDataJson('workshop-grad.json', { roles: [] }),
-        workshopStats: readDataJson('workshop-stats.json', { wengines: [], discs: [], panels: [] }),
+        workshopStats: readDataJson('workshop-stats.json', { wengines: [], discs: [], panels: [], discDetails: [] }),
       });
     }
     if (req.method === 'GET' && url === '/api/cookie-status')

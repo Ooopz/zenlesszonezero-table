@@ -15,12 +15,38 @@ import {
   compareValues,
   normalizeStatKey,
   normalizeStatKeys,
+  romanNumeralUnicode,
+  normalizeRomanKey,
 } from '../src/lib/util.js';
 
 test('normalize 去 HTML 与标点，只留中文数字', () => {
   assert.equal(normalize('<p>蕾米埃尔·丹</p>'), '蕾米埃尔丹');
   assert.equal(normalize('星见雅'), '星见雅');
   assert.equal(normalize(null), '');
+});
+
+test('romanNumeralUnicode ASCII 罗马数字 → Unicode（工坊源与 wiki 源对齐）', () => {
+  assert.equal(romanNumeralUnicode('德玛拉电池II型'), '德玛拉电池Ⅱ型');
+  assert.equal(romanNumeralUnicode('防暴者VI型'), '防暴者Ⅵ型');
+  assert.equal(romanNumeralUnicode('残响-III型'), '残响-Ⅲ型');
+  assert.equal(romanNumeralUnicode('残响IV型'), '残响Ⅳ型');
+  assert.equal(romanNumeralUnicode('震星迪斯科'), '震星迪斯科', '无罗马数字原样');
+  assert.equal(romanNumeralUnicode(null), '');
+});
+
+test('normalizeRomanKey 罗马数字归一化并保留（工坊音擎名 → wiki 规范名匹配键）', () => {
+  // ASCII（工坊）与 Unicode（wiki）罗马数字同键
+  assert.equal(normalizeRomanKey('德玛拉电池II型'), normalizeRomanKey('德玛拉电池Ⅱ型'));
+  assert.equal(normalizeRomanKey('防暴者VI型'), normalizeRomanKey('防暴者Ⅵ型'));
+  // 括号差异 + 罗马数字（工坊「残响-II型」→ wiki「「残响」-Ⅱ型」）
+  assert.equal(normalizeRomanKey('残响-II型'), normalizeRomanKey('「残响」-Ⅱ型'));
+  assert.equal(normalizeRomanKey('残响III型'), normalizeRomanKey('「残响」-Ⅲ型'));
+  assert.equal(normalizeRomanKey('残响-I型'), normalizeRomanKey('「残响」-Ⅰ型'));
+  // Ⅰ/Ⅱ/Ⅲ 不互相碰撞（normalize 会把罗马数字全剥掉导致歧义）
+  assert.notEqual(normalizeRomanKey('残响-I型'), normalizeRomanKey('残响-II型'));
+  assert.notEqual(normalizeRomanKey('残响-II型'), normalizeRomanKey('残响III型'));
+  // 无罗马数字时与 normalize 一致（去 HTML/标点，留中文数字）
+  assert.equal(normalizeRomanKey('震星迪斯科'), normalize('震星迪斯科'));
 });
 
 test('stripHtml 去标签并折叠空白', () => {
@@ -126,6 +152,33 @@ test('compareValues 数字 / 字符串 / null 比较', () => {
   assert.ok(compareValues(null, 5) > 0, 'null 排最后');
   assert.ok(compareValues(5, null) < 0);
   assert.ok(compareValues(undefined, 1) > 0, 'undefined 也排最后');
+});
+
+test('normalizeStatKey 元素伤害别名 → 伤害加成', () => {
+  assert.equal(normalizeStatKey('风属性伤害'), '风属性伤害加成', '呼啸沙龙 set2 泄漏修复');
+  assert.equal(normalizeStatKey('物理伤害'), '物理伤害加成');
+  assert.equal(normalizeStatKey('物理属性伤害'), '物理伤害加成');
+  assert.equal(normalizeStatKey('雷属性伤害'), '电属性伤害加成', '雷→电');
+  assert.equal(normalizeStatKey('以太伤害'), '以太伤害加成');
+  assert.equal(normalizeStatKey('流明伤害'), '流明伤害加成');
+  assert.equal(normalizeStatKey('风属性伤害加成'), '风属性伤害加成', '规范名原样保留');
+  assert.equal(normalizeStatKey('施加的护盾值'), '施加的护盾值', '特殊效果不归一');
+});
+
+test('normalizeStatKey workshop 词条变体 → 统一属性名（并入属性别名表）', () => {
+  assert.equal(normalizeStatKey('暴击率百分比'), '暴击率');
+  assert.equal(normalizeStatKey('暴击伤害百分比'), '暴击伤害');
+  assert.equal(normalizeStatKey('攻击力百分比'), '攻击力%');
+  assert.equal(normalizeStatKey('生命值百分比'), '生命值%');
+  assert.equal(normalizeStatKey('防御力百分比'), '防御力%');
+  assert.equal(normalizeStatKey('穿透率百分比'), '穿透率');
+  assert.equal(normalizeStatKey('能量回复百分比'), '能量自动回复');
+  assert.equal(normalizeStatKey('异常掌控百分比'), '异常掌控');
+  assert.equal(normalizeStatKey('冲击力百分比'), '冲击力');
+  assert.equal(normalizeStatKey('电伤加成百分比'), '电属性伤害加成');
+  assert.equal(normalizeStatKey('物伤加成百分比'), '物理伤害加成');
+  assert.equal(normalizeStatKey('以太加伤百分比'), '以太伤害加成');
+  assert.equal(normalizeStatKey('攻击力'), '攻击力', '扁平名原样');
 });
 
 test('normalizeStatKey 把属性别名映射到规范名', () => {

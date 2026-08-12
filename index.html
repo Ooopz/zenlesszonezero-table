@@ -15,7 +15,7 @@
       <nav class="view-switch" role="group" aria-label="视图切换">
         <button class="view-tab on" data-view="mychars">我的角色</button>
         <button class="view-tab" data-view="wiki">数据库</button>
-        <button class="view-tab" data-view="recommend">推荐</button>
+        <button class="view-tab" data-view="recommend">统计</button>
       </nav>
       <div class="sync-menu">
         <button id="syncBtn">同步数据</button>
@@ -51,8 +51,8 @@
           「当前/目标」的达成率进度条与总体达成率。每个角色各自保存。
         </p>
         <p>
-          <b>统计表格：</b>点「统计表格」切换到一览视图，每个角色一行（角色/音擎/驱动盘/各属性值），
-          属性值下方有小进度条显示该角色的达成率；再点「卡片视图」切回。表头/行可拖动排序。
+          <b>汇总表格：</b>点「汇总」切换到一览视图，每个角色一行（角色/音擎/驱动盘/各属性值），
+          属性值下方有小进度条显示该角色的达成率；再点「卡片」切回。表头/行可拖动排序。
         </p>
         <p>
           <b>数据库视图：</b>查看角色/音擎/驱动盘/邦布的静态基础数据。角色行技能图标可<b>点击</b>弹出
@@ -192,6 +192,7 @@
 
     <!-- 数据块：由同步脚本写回 -->
 
+    <script src="/src/vendor/echarts.min.js"></script>
     <script type="module" src="/src/web/main.js"></script>
   </body>
 </html>

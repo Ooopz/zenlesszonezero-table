@@ -14,7 +14,7 @@ import {
   resolveStatCurrent,
   firstDamageBonus,
 } from '../src/lib/calc.js';
-import { buildIndex } from '../src/lib/util.js';
+import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { loadDataFile } from './helpers.js';
 
 const library = loadDataFile('library.json', 'npm run sync:library（或网页「更新数据库」）');
@@ -22,9 +22,9 @@ const characters = loadDataFile('characters.json', 'npm run sync:characters（�
 
 setCalcContext({
   library,
-  charIndex: buildIndex(library.characters),
-  wengineIndex: buildIndex(library.wengines),
-  discIndex: buildIndex(library.discs),
+  charIndex: buildNameIndex(library.characters, CATEGORY.CHAR),
+  wengineIndex: buildNameIndex(library.wengines, CATEGORY.WENGINE),
+  discIndex: buildNameIndex(library.discs, CATEGORY.DISC),
   readCharTarget: () => ({}),
   readValidStats: () => [],
 });

@@ -4,11 +4,8 @@
 // 这些方案推荐的主/副词条出现频次（出现得越多的词条越通用、越值得留）、以及 4/5/6 号位主属性频次。
 // 二件套按「效果」替代：同一 set2 效果的盘可互相替代（如 棘刺玫瑰/灵魂摇滚 都是 防御力0.16），
 // 方案推荐二件套效果 X 时计入所有 set2 为 X 的盘（传 discSet2 时启用）。四件套效果无结构化数值，保持按套装名。
-import { normalize } from './util.js';
-
-// 已知套装名别名（养成指南与 wiki 用词差异），键为 normalized 变体 → library 侧规范名。
-// 例：米游社养成指南个别方案把「棘刺玫瑰」写作「荆棘玫瑰」（同一张防御力套装）。
-const DISC_ALIASES = { 荆棘玫瑰: '棘刺玫瑰' };
+// 套装名解析统一走 src/lib/names.js 的 resolver（normalize + 别名，如 荆棘玫瑰→棘刺玫瑰、尾随空格）。
+import { buildNameIndex, resolveName, CATEGORY } from './names.js';
 
 /** set2 效果 → 规范化组键：null/空 → null（无二件套效果，自成组不扩展）；否则属性键排序后序列化 */
 function set2Key(s2) {
@@ -46,9 +43,10 @@ function freqList(freq, total) {
  *   驱动盘未被任何方案采用时 count 为 0、各数组为空。
  */
 export function computeDiscStats(plans, discNames, discSet2) {
+  const index = buildNameIndex(discNames || [], CATEGORY.DISC);
   const acc = new Map();
   for (const name of discNames || []) {
-    acc.set(normalize(name), {
+    acc.set(name, {
       name,
       count: 0,
       chars: new Set(),
@@ -74,30 +72,29 @@ export function computeDiscStats(plans, discNames, discSet2) {
       // 一个方案推荐的副词条/主属性属于整套配装，对方案里的每个套装都计入
       // 副词条组合去重：先排序再序列化，忽略组内顺序（如 暴击率/暴击伤害/攻击力% 与 暴击伤害/暴击率/攻击力% 视为同一组合）
       const comboKey = Array.isArray(p.subStats) && p.subStats.length ? JSON.stringify([...p.subStats].sort()) : null;
-      // 收集本方案「计入口盘」（normalize 名，Set 去重）：4 件套按套装名；
+      // 收集本方案「计入口盘」（规范名，Set 去重）：4 件套按套装名；
       // 2 件套按 set2 效果扩展到同效果组。方案级去重避免重复计数：
       // 方案内两个同效果 2 件套只计一次；同一盘被 4 件套 + 2 件套替代同时命中只计一次。
       const hit = new Set();
       for (const s of p.sets) {
         if (!s || typeof s.name !== 'string' || (s.cnt !== 2 && s.cnt !== 4)) continue; // 只统计 2/4 件套
-        // 套装名去标点归一化匹配（plans 与 library 名称可能有空白/标点差异，如「雪兔梦游仙境 」尾随空格）；
-        // 归一化后仍未命中的再查已知别名（如 荆棘玫瑰→棘刺玫瑰）
-        const key = DISC_ALIASES[normalize(s.name)] || normalize(s.name);
-        if (!acc.has(key)) continue; // 未知套装名（不在库内）跳过
+        // 套装名经 resolver 解析为标准盘名（别名/尾随空格/标点差异）；未命中跳过
+        const name = resolveName(CATEGORY.DISC, index, s.name)?.name;
+        if (!name || !acc.has(name)) continue;
         if (s.cnt === 4 || !groupByKey) {
-          hit.add(key);
+          hit.add(name);
           continue;
         }
         // 2 件套：set2 为 null（无二件套效果）→ 仅自己；否则扩展到同效果组所有盘
-        const k = set2Key(discSet2?.[acc.get(key).name]);
+        const k = set2Key(discSet2?.[name]);
         if (k == null) {
-          hit.add(key);
+          hit.add(name);
           continue;
         }
-        for (const other of groupByKey.get(k) || []) hit.add(normalize(other));
+        for (const other of groupByKey.get(k) || []) hit.add(other);
       }
-      for (const hk of hit) {
-        const a = acc.get(hk);
+      for (const hn of hit) {
+        const a = acc.get(hn);
         a.count += 1;
         a.chars.add(v.name);
         if (comboKey) a.combos.add(comboKey);
@@ -117,7 +114,7 @@ export function computeDiscStats(plans, discNames, discSet2) {
       if (k != null) alternatives = (groupByKey.get(k) || []).filter((nm) => nm !== a.name);
     }
     return {
-      name: a.name, // 用 library 侧规范名，避免 normalize 键（如去尾随空格）污染展示
+      name: a.name, // library 规范名
       alternatives,
       count: a.count,
       characters: [...a.chars],

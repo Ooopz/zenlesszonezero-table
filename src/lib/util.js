@@ -16,6 +16,19 @@ export function normalize(text) {
   return stripHtml(text).replace(/[^一-鿿0-9]/g, '');
 }
 
+/** 罗马数字 ASCII → Unicode（II→Ⅱ、VI→Ⅵ 等）。工坊源音擎名用 ASCII 罗马数字、wiki/方案用 Unicode，
+ *  统一到 Unicode 使与 library 键一致。 */
+const ROMAN_ASCII = { VIII: 'Ⅷ', III: 'Ⅲ', VII: 'Ⅶ', IV: 'Ⅳ', II: 'Ⅱ', VI: 'Ⅵ', IX: 'Ⅸ', V: 'Ⅴ', I: 'Ⅰ', X: 'Ⅹ' };
+export function romanNumeralUnicode(s) {
+  return String(s || '').replace(/VIII|III|VII|IV|II|VI|IX|V|I|X/g, (m) => ROMAN_ASCII[m] || m);
+}
+/** 名字匹配键：在 normalize 基础上把罗马数字统一为 Unicode 并保留（Unicode 罗马数字不在 [一-鿿] 区，需显式保留）。
+ *  用于把工坊源音擎名（ASCII 罗马数字 / 括号差异，如「残响-II型」）解析到 wiki 规范名（「残响」-Ⅱ型），
+ *  同时区分 Ⅰ/Ⅱ/Ⅲ 不互相碰撞（normalize 会全部剥掉罗马数字导致 Ⅰ/Ⅱ/Ⅲ 歧义）。 */
+export function normalizeRomanKey(s) {
+  return romanNumeralUnicode(s).replace(/[^一-鿿0-9ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]/g, '');
+}
+
 /** cookie 字符串 → 对象；空返回 null */
 export function parseCookies(cookieText) {
   const cookies = {};
@@ -124,6 +137,35 @@ const STAT_ALIASES = {
   闪能自动积累: STAT.ENERGY,
   闪能自动累积: STAT.ENERGY,
   闪能自动累计: STAT.ENERGY,
+  // 元素/属性「X伤害」→「X伤害加成」（并入原 library.js damageMapping，单一权威；
+  // 不加泛化「伤害→伤害加成」以免误伤技能文本）。修呼啸沙龙 set2 的「风属性伤害」泄漏。
+  物理伤害: '物理伤害加成',
+  物理属性伤害: '物理伤害加成',
+  火属性伤害: '火属性伤害加成',
+  冰属性伤害: '冰属性伤害加成',
+  电属性伤害: '电属性伤害加成',
+  雷属性伤害: '电属性伤害加成',
+  风属性伤害: '风属性伤害加成',
+  以太伤害: '以太伤害加成',
+  流明伤害: '流明伤害加成',
+  虚属性伤害: '虚属性伤害加成',
+  // workshop 词条名变体（工坊 2025 源带「百分比」后缀、伤害加成用简写；统一到 plans/constants 体系，
+  // 供 workshopStats.discStatName 复用。mys 源的 攻击/生命/防御 百分比形态按值带 % 判定，不在此表）
+  攻击力百分比: '攻击力%',
+  生命值百分比: '生命值%',
+  防御力百分比: '防御力%',
+  暴击率百分比: STAT.CR,
+  暴击伤害百分比: STAT.CD,
+  穿透率百分比: STAT.PEN_RATE,
+  异常掌控百分比: STAT.ANOMALY_CTRL,
+  能量回复百分比: STAT.ENERGY,
+  冲击力百分比: STAT.IMPACT,
+  物伤加成百分比: '物理伤害加成',
+  火伤加成百分比: '火属性伤害加成',
+  冰伤加成百分比: '冰属性伤害加成',
+  电伤加成百分比: '电属性伤害加成',
+  以太加伤百分比: '以太伤害加成',
+  风伤加成百分比: '风属性伤害加成',
 };
 /** 单个属性名归一化为规范名（未知名原样返回） */
 export function normalizeStatKey(k) {

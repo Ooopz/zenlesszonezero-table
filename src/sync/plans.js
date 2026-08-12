@@ -22,11 +22,47 @@ import { DATA_DIR, isMain, writeDataFile } from '../lib/node.js';
 import { readCookieCache } from './characters.js';
 import { pool } from './library.js';
 import { normalizeStatKey, substatName, parseNum } from '../lib/util.js';
+import { buildNameIndex, canonicalName, CATEGORY } from '../lib/names.js';
 import { PERCENT_STATS, mainStatName } from '../lib/constants.js';
 import { validatePlans } from '../lib/schema.js';
 import { requestJson, retry, fetchUid } from './http.js';
 
 const ACCOUNT_FILE = path.join(DATA_DIR, 'characters.json');
+
+// ---------- 名称权威（写时归一） ----------
+// library.json 为标准名权威源；缺失/损坏时降级为不归一（名称保持接口原样），并在同步时提示。
+let libNameIndex = null;
+try {
+  const lib = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'library.json'), 'utf8'));
+  libNameIndex = {
+    char: buildNameIndex(lib.characters || {}, CATEGORY.CHAR),
+    wengine: buildNameIndex(lib.wengines || {}, CATEGORY.WENGINE),
+    disc: buildNameIndex(lib.discs || {}, CATEGORY.DISC),
+  };
+} catch {
+  console.warn('⚠️ library.json 缺失/损坏，推荐方案名称跳过归一（建议先 npm run sync:library）');
+}
+
+/** 方案写时归一：角色名 / 音擎主备 / 套装名 / 配队成员统一解析为 library 标准名。
+ *  extractPlan 保持纯函数，此层只在写 data/plans.json 前对已提取方案做名称固化。 */
+function normalizePlansOutput(entry) {
+  if (!libNameIndex) return entry;
+  // 写时归一一律关 fuzzy（plans 名是全名，精确/别名/归一化键已足够，避免子串误匹配）
+  const cn = (cat, idx, raw) => (raw ? canonicalName(cat, idx, raw, { fuzzy: false }) || raw : raw);
+  return {
+    ...entry,
+    name: cn(CATEGORY.CHAR, libNameIndex.char, entry.name),
+    plans: (entry.plans || []).map((p) => ({
+      ...p,
+      weapon: {
+        main: cn(CATEGORY.WENGINE, libNameIndex.wengine, p.weapon?.main ?? null),
+        backup: cn(CATEGORY.WENGINE, libNameIndex.wengine, p.weapon?.backup ?? null),
+      },
+      sets: (p.sets || []).map((s) => ({ ...s, name: cn(CATEGORY.DISC, libNameIndex.disc, s.name) })),
+      team: (p.team || []).map((t) => cn(CATEGORY.CHAR, libNameIndex.char, t)),
+    })),
+  };
+}
 
 const UA =
   'Mozilla/5.0 (Linux; Android 9; 23113RKC6C Build/PQ3A.190605.06200901; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 miHoYoBBS/2.75.2';
@@ -216,7 +252,7 @@ export async function fetchAllPlans(cookies, { onlyAccount = false, strict = fal
       '推荐方案抓取全部失败：养成指南登录态（e_nap_token）可能已过期，请从养成指南页面重新导出 cookie 后重试'
     );
   const out = {};
-  for (const r of success) out[r.id] = { name: r.name, plans: r.plans };
+  for (const r of success) out[r.id] = normalizePlansOutput({ name: r.name, plans: r.plans });
   const stats = { characters: Object.keys(out).length, plans: 0 };
   for (const r of Object.values(out)) stats.plans += r.plans.length;
 
