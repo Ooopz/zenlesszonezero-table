@@ -388,74 +388,6 @@ export function distShapeOption(items) {
   };
 }
 
-/** 每属性独立子图的推荐三档山脊图（堆叠面积），3 列多行布局 */
-export function ridgeMultiOption(items) {
-  // items: [{attr, cats, series:[{name, data}]}]
-  const n = items.length;
-  if (!n) return {};
-  const COLS = 3;
-  const rows = Math.ceil(n / COLS);
-  const padX = 4;
-  const padY = 7;
-  const gw = (100 - padX * (COLS + 1)) / COLS;
-  const gh = (100 - padY * (rows + 1)) / rows;
-  const grids = items.map((_, i) => ({
-    left: `${padX + (i % COLS) * (gw + padX)}%`,
-    top: `${padY + Math.floor(i / COLS) * (gh + padY)}%`,
-    width: `${gw}%`,
-    height: `${gh}%`,
-    containLabel: true,
-  }));
-  const titles = items.map((item, i) => ({
-    text: item.attr,
-    left: `${padX + (i % COLS) * (gw + padX) + gw / 2}%`,
-    top: `${padY + Math.floor(i / COLS) * (gh + padY) - 2}%`,
-    textAlign: 'center',
-    textStyle: { color: '#8b8a83', fontSize: 11 },
-  }));
-  const xAxes = items.map((item, i) => ({
-    gridIndex: i, type: 'category', data: item.cats,
-    axisLine: { lineStyle: { color: '#2b2b2b' } }, axisLabel: { show: false }, axisTick: { show: false },
-  }));
-  const yAxes = items.map((_, i) => ({
-    gridIndex: i, type: 'value', axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false },
-  }));
-  const COLORS = ['#7fd8a4', '#f7d41d', '#ff9b5c'];
-  const series = [];
-  items.forEach((item, i) => {
-    (item.series || []).forEach((s, si) => {
-      series.push({
-        name: s.name, type: 'line', gridIndex: i, xAxisIndex: i, yAxisIndex: i,
-        data: s.data, smooth: true, stack: 'tier', areaStyle: { opacity: 0.5 },
-        symbol: 'circle', symbolSize: 4,
-        itemStyle: { color: COLORS[si] || CHART_COLORS.blue },
-        lineStyle: { color: COLORS[si] || CHART_COLORS.blue },
-      });
-    });
-  });
-  // K 线式悬浮：鼠标在 x 轴位置即显示该箱低/中/高三档曲线值（axis 触发）
-  return {
-    title: titles,
-    grid: grids,
-    xAxis: xAxes,
-    yAxis: yAxes,
-    tooltip: {
-      ...DARK_TOOLTIP,
-      trigger: 'axis',
-      formatter: (params) => {
-        const arr = Array.isArray(params) ? params : [params];
-        if (!arr.length) return '';
-        const it = items[Math.floor(arr[0].seriesIndex / 3)];
-        const v = it?.cats?.[arr[0].dataIndex];
-        const valLine = v != null ? `数值 <b>${v}</b><br>` : '';
-        const rows = arr.map((p) => `${p.marker}${p.seriesName} <b>${p.value}</b>`).join('<br>');
-        return `${it?.attr || ''}<br>${valLine}${rows}`;
-      },
-    },
-    series,
-  };
-}
-
 /** 推荐山脊图：三档密度（堆叠面积） */
 export function ridgeOption(seriesData, cats) {
   // seriesData: [{name:'低档', data:number[]}, ...]，cats: 数值分箱标签
@@ -542,5 +474,151 @@ export function dualAxisOption(bins, recCounts, playerDensity) {
       { name: '推荐值频次', type: 'bar', data: recCounts, barWidth: 12, itemStyle: { color: 'rgba(247,212,29,0.5)' } },
       { name: '玩家密度', type: 'line', yAxisIndex: 1, data: playerDensity, smooth: true, symbol: 'none', lineStyle: { color: CHART_COLORS.green } },
     ],
+  };
+}
+
+/** 面板属性对 2D 密度散点（方案二）：把聚合的密度网格（computePanelScatter 输出，各轴已 min-max 归一）渲染为按密度上色的散点。
+ *  grid = {xName,yName,xMin,xMax,yMin,yMax,N,data:[[xi,yi,count]]}；
+ *  每个非零 cell 一个点，坐标反算实际值（xMin + bin中点×span），visualMap 按 count 上色；轴显示实际值。 */
+export function densityScatterOption(grid, title = '') {
+  const N = grid.N;
+  const spanX = grid.xMax - grid.xMin || 1;
+  const spanY = grid.yMax - grid.yMin || 1;
+  const maxCount = grid.data.reduce((m, d) => Math.max(m, d[2]), 1);
+  const pts = grid.data.map(([xi, yi, count]) => [
+    +(grid.xMin + ((xi + 0.5) / N) * spanX).toFixed(4),
+    +(grid.yMin + ((yi + 0.5) / N) * spanY).toFixed(4),
+    count,
+  ]);
+  return {
+    title: { text: title, left: 'center', top: 4, textStyle: { color: '#eee', fontSize: 13 } },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => `<b>${grid.xName}</b> ${p.value[0]}<br><b>${grid.yName}</b> ${p.value[1]}<br>样本 ${p.value[2]}`,
+    },
+    grid: { left: 52, right: 18, top: 34, bottom: 36 },
+    xAxis: {
+      type: 'value',
+      name: grid.xName,
+      nameLocation: 'middle',
+      nameGap: 26,
+      nameTextStyle: { color: '#8b8a83', fontSize: 11 },
+      min: 'dataMin',
+      max: 'dataMax',
+      axisLine: AXIS_LINE,
+      axisLabel: AXIS_LABEL,
+      splitLine: SPLIT_LINE,
+    },
+    yAxis: {
+      type: 'value',
+      name: grid.yName,
+      nameTextStyle: { color: '#8b8a83', fontSize: 11 },
+      min: 'dataMin',
+      max: 'dataMax',
+      axisLine: { show: false },
+      axisLabel: AXIS_LABEL,
+      splitLine: SPLIT_LINE,
+    },
+    series: [
+      {
+        type: 'scatter',
+        large: true,
+        symbolSize: 9,
+        data: pts,
+        emphasis: { focus: 'series', itemStyle: { borderColor: '#fff' } },
+      },
+    ],
+    visualMap: {
+      min: 1,
+      max: maxCount,
+      dimension: 2,
+      calculable: false,
+      orient: 'vertical',
+      right: 4,
+      top: 'middle',
+      inRange: { color: ['#333', CHART_COLORS.green, CHART_COLORS.acc] },
+      textStyle: { color: '#8b8a83' },
+    },
+  };
+}
+
+/** 推荐三档范围条：每属性一行横向 bar（低配/毕业/高配 median + 我的值）。
+ *  items = [{attr, low:{median}, mid:{median}, high:{median}, mine}]；一眼看出「攻略毕业多少、我达标没」。
+ *  绿=低配、金=毕业、橙=高配、红=我的。 */
+export function tierRangeOption(items) {
+  const n = items.length;
+  if (!n) return {};
+  const COLS = 3;
+  const rows = Math.ceil(n / COLS);
+  const padX = 4;
+  const padY = 8;
+  const gw = (100 - padX * (COLS + 1)) / COLS;
+  const gh = (100 - padY * (rows + 1)) / rows;
+  // 子图格子位置（数字，拼 % 用）；grids/titles 共享同一份坐标
+  const pos = (i) => ({
+    left: padX + (i % COLS) * (gw + padX),
+    top: padY + Math.floor(i / COLS) * (gh + padY),
+  });
+  const grids = items.map((_, i) => ({
+    left: `${pos(i).left}%`,
+    top: `${pos(i).top}%`,
+    width: `${gw}%`,
+    height: `${gh}%`,
+    containLabel: true,
+  }));
+  const titles = items.map((item, i) => ({
+    text: item.attr,
+    left: `${pos(i).left + gw / 2}%`,
+    top: `${pos(i).top - 2}%`,
+    textAlign: 'center',
+    textStyle: { color: '#8b8a83', fontSize: 11 },
+  }));
+  const cats = ['低配', '毕业', '高配', '我的'];
+  const yAxes = items.map((_, i) => ({
+    gridIndex: i,
+    type: 'category',
+    data: cats,
+    axisLine: { show: false },
+    axisLabel: AXIS_LABEL,
+    axisTick: { show: false },
+  }));
+  const COLORS = ['#7fd8a4', '#f7d41d', '#ff9b5c', '#e5484d'];
+  const xAxes = [];
+  const series = [];
+  items.forEach((item, i) => {
+    // 四档值只构建一次：xAxis 算 max 与 series 推 bar 共用
+    const vals = [item.low?.median, item.mid?.median, item.high?.median, item.mine];
+    const valid = vals.filter((v) => v != null && Number.isFinite(v));
+    xAxes.push({
+      gridIndex: i,
+      type: 'value',
+      min: 0,
+      max: valid.length ? Math.max(...valid) : 1,
+      axisLine: AXIS_LINE,
+      axisLabel: { ...AXIS_LABEL, fontSize: 9 },
+      splitLine: SPLIT_LINE,
+    });
+    vals.forEach((v, di) => {
+      if (v == null || !Number.isFinite(v)) return;
+      series.push({
+        name: cats[di],
+        type: 'bar',
+        gridIndex: i,
+        xAxisIndex: i,
+        yAxisIndex: i,
+        data: [cats[di], +v.toFixed(2)],
+        barWidth: 10,
+        itemStyle: { color: COLORS[di], opacity: di === 3 ? 1 : 0.85 },
+        label: { show: true, position: 'right', color: '#eee', fontSize: 9, formatter: (p) => p.value[1] },
+      });
+    });
+  });
+  return {
+    title: titles,
+    grid: grids,
+    xAxis: xAxes,
+    yAxis: yAxes,
+    tooltip: { ...DARK_TOOLTIP, trigger: 'item', formatter: (p) => `${p.name}：<b>${p.value[1]}</b>` },
+    series,
   };
 }

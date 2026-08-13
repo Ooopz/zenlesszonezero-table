@@ -4,7 +4,7 @@
 import { computeDist, pearson } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
-import { mainStatName } from './constants.js';
+import { mainStatName, SUBSTAT_TYPE_SET } from './constants.js';
 
 /** 面板 final 值归一化：百分比字符串（"31.4%" → 0.314）与数值字符串/数字统一为数字；空串/纯空白 → null（缺失，不污染 min/count） */
 function parsePanelFinal(v) {
@@ -90,6 +90,37 @@ export function computeWorkshopStats(entries) {
  * @param {string[][]} [pairs]  要计算的属性对（默认 攻击-防御/攻击-生命/防御-生命/暴击率-暴击伤害）
  * @returns {Object<string, Object<string, number>>}  角色 id → {`属性A_属性B`: r}
  */
+/** 逐条目解析 panel → 每角色 / 全体 的属性对配对样本（computePanelCorrelations 与 computePanelScatter 共用一次遍历）。
+ *  每对累加器自带属性名（无需靠 key 反解）。@returns {{perRole:Map<string,Map<string,{x,y,xv,yv}>>, global:Map<string,{x,y,xv,yv}>}} */
+function collectPanelPairs(entries, pairs) {
+  const perRole = new Map(); // role -> Map<key, {x,y,xv,yv}>
+  const global = new Map(); // key -> {x,y,xv,yv}
+  for (const [x, y] of pairs) global.set(`${x}_${y}`, { x, y, xv: [], yv: [] });
+  for (const e of entries || []) {
+    if (!e || !Array.isArray(e.panel)) continue;
+    const vals = {};
+    for (const p of e.panel) {
+      if (!p || p.name == null) continue;
+      const v = parsePanelFinal(p.final);
+      if (v != null) vals[p.name] = v;
+    }
+    const role = String(e.role_id);
+    for (const [x, y] of pairs) {
+      if (vals[x] == null || vals[y] == null) continue;
+      const key = `${x}_${y}`;
+      let r = perRole.get(role);
+      if (!r) perRole.set(role, (r = new Map()));
+      let pr = r.get(key);
+      if (!pr) r.set(key, (pr = { x, y, xv: [], yv: [] }));
+      pr.xv.push(vals[x]);
+      pr.yv.push(vals[y]);
+      global.get(key).xv.push(vals[x]);
+      global.get(key).yv.push(vals[y]);
+    }
+  }
+  return { perRole, global };
+}
+
 export function computePanelCorrelations(entries, pairs) {
   const PAIRS = pairs || [
     ['攻击力', '防御力'],
@@ -97,27 +128,11 @@ export function computePanelCorrelations(entries, pairs) {
     ['防御力', '生命值'],
     ['暴击率', '暴击伤害'],
   ];
-  const acc = new Map(); // 角色 -> { "A_B": {a:[], b:[]} }
-  for (const e of entries || []) {
-    const vals = {};
-    for (const p of e.panel || []) {
-      const v = parsePanelFinal(p.final);
-      if (v != null) vals[p.name] = v;
-    }
-    for (const [a, b] of PAIRS) {
-      if (vals[a] == null || vals[b] == null) continue;
-      let r = acc.get(e.role_id);
-      if (!r) acc.set(e.role_id, (r = {}));
-      const key = `${a}_${b}`;
-      if (!r[key]) r[key] = { a: [], b: [] };
-      r[key].a.push(vals[a]);
-      r[key].b.push(vals[b]);
-    }
-  }
+  const { perRole } = collectPanelPairs(entries, PAIRS);
   const out = {};
-  for (const [role, pairs_] of acc) {
+  for (const [role, pairs_] of perRole) {
     out[role] = {};
-    for (const [key, p] of Object.entries(pairs_)) out[role][key] = pearson(p.a, p.b);
+    for (const [key, p] of pairs_) out[role][key] = pearson(p.xv, p.yv);
   }
   return out;
 }
@@ -174,6 +189,7 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
   const roleNameMap = opts.roleNameMap || null;
   const acc = new Map(); // 规范盘名 → 内部聚合
   const resolveSuit = (raw) => canonicalName(CATEGORY.DISC, discIndex, raw, { fuzzy: false });
+  const isEff = (n) => SUBSTAT_TYPE_SET.has(n); // 有效副词条判定（统一名 ∈ SUBSTAT 集合）
 
   for (const e of entries || []) {
     if (!e || !Array.isArray(e.equips)) continue;
@@ -194,45 +210,140 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
             main456: { 4: new Map(), 5: new Map(), 6: new Map() },
             mainDenom: { 4: 0, 5: 0, 6: 0 },
             subs: new Map(),
+            effDist: new Map(), // 有效词条数(0-4) → 盘数
+            combos: new Map(), // 副词条组合 key → 盘数
+            mainSub: { 4: new Map(), 5: new Map(), 6: new Map() }, // 槽 → 主词条 → Map<副词条,次数>
           })
         );
       a.equips += 1;
       a.chars.add(roleName);
       const slot = slotOf(eq);
-      if (Array.isArray(eq.subs)) {
-        // —— 2025 源：main[0] = 真实主词条，subs = 副词条 ——
-        if (slot >= 4 && slot <= 6) {
-          a.mainDenom[slot] += 1;
-          const m = Array.isArray(eq.main) && eq.main[0];
-          if (m && m.name) {
-            // mainStatName 兜底：2025 边缘数据槽 4/5/6 可能返回扁平 攻击力 → 攻击力%
-            const name = mainStatName(discStatName(m.name, m.value));
-            a.main456[slot].set(name, (a.main456[slot].get(name) || 0) + 1);
-          }
-        }
-        for (const s of eq.subs || []) {
-          if (s && s.name) {
-            const n = discStatName(s.name, s.value);
-            a.subs.set(n, (a.subs.get(n) || 0) + 1);
-          }
-        }
-      } else {
-        // —— mys 源：main[] 即副词条（主词条缺失）——
-        for (const s of eq.main || []) {
-          if (s && s.name) {
-            const n = discStatName(s.name, s.value);
-            a.subs.set(n, (a.subs.get(n) || 0) + 1);
-          }
+      const is2025 = Array.isArray(eq.subs);
+      // 归一化的副词条列表（2025 源 subs；mys 源 main[] 即副词条）
+      const subNames = (is2025 ? eq.subs : eq.main || [])
+        .map((s) => (s && s.name ? discStatName(s.name, s.value) : null))
+        .filter(Boolean);
+      // 主词条（2025 源 main[0]；mys 源主词条丢失）——mn 只算一次，主词条频次与 ×副词条协同共用
+      const main = is2025 && Array.isArray(eq.main) && eq.main[0];
+      const mn = main && main.name ? mainStatName(discStatName(main.name, main.value)) : null;
+      if (is2025 && slot >= 4 && slot <= 6) {
+        a.mainDenom[slot] += 1;
+        if (mn) {
+          a.main456[slot].set(mn, (a.main456[slot].get(mn) || 0) + 1);
+          let bySub = a.mainSub[slot].get(mn);
+          if (!bySub) a.mainSub[slot].set(mn, (bySub = new Map()));
+          for (const n of subNames) bySub.set(n, (bySub.get(n) || 0) + 1);
         }
       }
+      // 有效词条数分布 + 副词条组合（原地排序序列化去重；effCount/comboKey 各算一次）
+      const effCount = subNames.filter(isEff).length;
+      a.effDist.set(effCount, (a.effDist.get(effCount) || 0) + 1);
+      if (subNames.length) {
+        subNames.sort();
+        const comboKey = JSON.stringify(subNames);
+        a.combos.set(comboKey, (a.combos.get(comboKey) || 0) + 1);
+      }
+      // 副词条频率（跨槽聚合）
+      for (const n of subNames) a.subs.set(n, (a.subs.get(n) || 0) + 1);
     }
   }
-  return [...acc.values()].map((a) => ({
-    name: a.name,
-    equips: a.equips,
-    characters: [...a.chars].sort(),
-    main456: { 4: freqPairs(a.main456[4]), 5: freqPairs(a.main456[5]), 6: freqPairs(a.main456[6]) },
-    mainDenom: a.mainDenom,
-    subs: freqPairs(a.subs),
-  }));
+  return [...acc.values()].map((a) => {
+    const effDist = {};
+    for (const [k, v] of a.effDist) effDist[k] = v;
+    const subCombos = [...a.combos.entries()]
+      .map(([k, count]) => ({ combo: JSON.parse(k), count }))
+      .sort((x, y) => y.count - x.count)
+      .slice(0, 8);
+    const mainSubCross = {};
+    for (const slot of [4, 5, 6]) {
+      const s = {};
+      for (const [mn, bySub] of a.mainSub[slot]) {
+        s[mn] = Object.fromEntries([...bySub.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6));
+      }
+      if (Object.keys(s).length) mainSubCross[slot] = s;
+    }
+    return {
+      name: a.name,
+      equips: a.equips,
+      characters: [...a.chars].sort(),
+      main456: { 4: freqPairs(a.main456[4]), 5: freqPairs(a.main456[5]), 6: freqPairs(a.main456[6]) },
+      mainDenom: a.mainDenom,
+      subs: freqPairs(a.subs),
+      effDist, // {0:n,1:n,2:n,3:n,4:n} 有效词条数分布
+      subCombos, // [{combo:词条[], count}] 副词条组合 Top8（降序）
+      mainSubCross, // {4:{主词条:{副词条:次数}},...} 主词条×副词条协同（仅 2025 源）
+    };
+  });
+}
+
+// ---------- 面板属性对 2D 密度（方案二：暴击率×暴伤、攻击×暴伤 的玩家真实 trade-off） ----------
+// 前端拿不到逐条 panel（workshop.json 764MB 不下发），散点必须在聚合时降采样为 2D 密度网格。
+// 网格内 x/y 均为各自 min-max 归一到 [0,1]（攻击与双暴量纲不同，归一后才同轴可比），
+// 原始范围存 xMin/xMax/yMin/yMax 供前端 tooltip 反算实际值。
+
+/** 2D 密度网格：x/y 数组 → {min/max, N, data:[[xi,yi,count]]}（xi/yi 为 [0,N-1] 归一网格坐标；
+ *  前端按均匀 bin 反算实际值，故只需存 N 而非 bin 边界数组） */
+function bin2D(xv, yv, N) {
+  const n = xv.length;
+  if (!n) return null;
+  let minX = xv[0], maxX = xv[0], minY = yv[0], maxY = yv[0];
+  for (let i = 1; i < n; i++) {
+    if (xv[i] < minX) minX = xv[i];
+    if (xv[i] > maxX) maxX = xv[i];
+    if (yv[i] < minY) minY = yv[i];
+    if (yv[i] > maxY) maxY = yv[i];
+  }
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const grid = new Map();
+  for (let i = 0; i < n; i++) {
+    const xi = Math.min(N - 1, Math.floor(((xv[i] - minX) / spanX) * N));
+    const yi = Math.min(N - 1, Math.floor(((yv[i] - minY) / spanY) * N));
+    const k = xi * N + yi;
+    grid.set(k, (grid.get(k) || 0) + 1);
+  }
+  return {
+    xMin: +minX.toFixed(4),
+    xMax: +maxX.toFixed(4),
+    yMin: +minY.toFixed(4),
+    yMax: +maxY.toFixed(4),
+    N,
+    data: [...grid.entries()].map(([k, count]) => [Math.floor(k / N), k % N, count]),
+  };
+}
+
+/**
+ * 每角色 / 全体 的面板属性对 2D 密度网格（供密度散点图）。
+ * @param {object[]} entries  workshop.json 的 entries（panel 为 [{name, base, add, final}]）
+ * @param {string[][]} [pairs]  属性对（默认 暴击率×暴击伤害、攻击力×暴击伤害；攻击将按粒度 min-max 归一）
+ * @returns {{perRole:Object<string,Object<string,Grid>>, global:Object<string,Grid>}}
+ *   Grid = {xName,yName,xMin,xMax,yMin,yMax,N,data:[[xi,yi,count]]}
+ *   perRole 按 role_id；攻击归一范围随粒度（该角色 / 全体）。
+ */
+export function computePanelScatter(entries, pairs) {
+  const PAIRS = pairs || [
+    ['暴击率', '暴击伤害'],
+    ['攻击力', '暴击伤害'],
+  ];
+  const { perRole: perRoleAcc, global: globalAcc } = collectPanelPairs(entries, PAIRS);
+  const N = 24;
+  const toGrid = (g) => {
+    const b = bin2D(g.xv, g.yv, N);
+    return b ? { xName: g.x, yName: g.y, ...b } : null;
+  };
+  const perRole = {};
+  for (const [role, pairs_] of perRoleAcc) {
+    const o = {};
+    for (const [key, g] of pairs_) {
+      const grid = toGrid(g);
+      if (grid) o[key] = grid;
+    }
+    if (Object.keys(o).length) perRole[role] = o;
+  }
+  const global = {};
+  for (const [key, g] of globalAcc) {
+    const grid = toGrid(g);
+    if (grid) global[key] = grid;
+  }
+  return { perRole, global };
 }

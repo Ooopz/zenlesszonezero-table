@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { computeWorkshopDiscStats, discStatName } from '../src/lib/workshopStats.js';
+import { computeWorkshopDiscStats, computePanelScatter, discStatName } from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { streamJsonArrayElements } from '../src/lib/node.js';
 import { loadDataFile } from './helpers.js';
@@ -147,4 +147,77 @@ test('真实数据冒烟：workshop.json 全量聚合不抛错、计数合法', 
     }
     assert.ok(d.subs.length > 0);
   }
+});
+
+test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 / 主词条×副词条协同', () => {
+  const discIndex = buildNameIndex(['静听嘉音', '棘刺玫瑰'], CATEGORY.DISC);
+  const entries = [
+    // —— 2025 源盘（id 末位=槽4）：主词条 + 4 个有效副词条 ——
+    {
+      uid: 'u1',
+      role_id: '1341',
+      equips: [
+        {
+          id: '11114',
+          suit: '静听嘉音',
+          main: [{ name: '暴击率百分比', value: 2400 }],
+          subs: [
+            { name: '攻击力百分比', value: 480 },
+            { name: '暴击伤害百分比', value: 480 },
+            { name: '暴击率百分比', value: 480 },
+            { name: '异常精通', value: 12 },
+          ],
+        },
+      ],
+    },
+    // —— mys 源盘（name 末尾 [1]）：main[] 即副词条（主词条丢失），攻击力 按值带 % 判百分比 ——
+    {
+      uid: 'u2',
+      role_id: '1341',
+      equips: [{ name: '静听嘉音[1]', suit: '静听嘉音', main: [{ name: '攻击力', value: '6%' }, { name: '暴击率', value: '4.8%' }] }],
+    },
+  ];
+  const out = computeWorkshopDiscStats(entries, discIndex, {});
+  const 静听 = out.find((d) => d.name === '静听嘉音');
+  assert.ok(静听, '应聚合出盘');
+  // 有效词条数分布：2025 盘 4 有效（攻击%/暴伤/暴率/异常精通）、mys 盘 2 有效（攻击%/暴率）
+  assert.deepEqual(静听.effDist, { 4: 1, 2: 1 });
+  // 副词条组合：两盘各一个组合（归一名排序去重）
+  assert.ok(静听.subCombos.length >= 2);
+  assert.equal(静听.subCombos[0].count, 1);
+  assert.equal(new Set(静听.subCombos[0].combo).size, 4, '2025 盘组合含 4 词条');
+  // 主词条×副词条协同：仅 2025 槽4 盘（主词条 暴击率）有；mys 盘无主词条不参与
+  assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1, 暴击率: 1, 异常精通: 1 });
+  assert.ok(!静听.mainSubCross[1], '槽1 无协同（非 456 / mys 盘）');
+  // 幂等
+  assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, {}), out);
+});
+
+test('computePanelScatter：每角色/全体 2D 密度网格（攻击归一、幂等）', () => {
+  const entries = [
+    { role_id: '1011', panel: [{ name: '暴击率', final: '0.5' }, { name: '暴击伤害', final: '1.0' }, { name: '攻击力', final: '3000' }] },
+    { role_id: '1011', panel: [{ name: '暴击率', final: '0.6' }, { name: '暴击伤害', final: '1.5' }, { name: '攻击力', final: '3200' }] },
+    { role_id: '1011', panel: [{ name: '暴击率', final: '0.7' }, { name: '暴击伤害', final: '1.8' }, { name: '攻击力', final: '3400' }] },
+    { role_id: '1031', panel: [{ name: '暴击率', final: '40%' }, { name: '暴击伤害', final: '120%' }, { name: '攻击力', final: '2800' }] },
+  ];
+  const out = computePanelScatter(entries);
+  // 每角色（含攻击归一的攻击×暴伤）
+  const r1011 = out.perRole['1011'];
+  assert.ok(r1011, '1011 应有 perRole 数据');
+  assert.ok(r1011['暴击率_暴击伤害'].data.length > 0);
+  assert.ok(r1011['攻击力_暴击伤害'].data.length > 0);
+  assert.equal(r1011['攻击力_暴击伤害'].xName, '攻击力');
+  assert.ok(r1011['攻击力_暴击伤害'].xMin <= r1011['攻击力_暴击伤害'].xMax);
+  // 全体
+  assert.ok(out.global['暴击率_暴击伤害'].data.length > 0);
+  assert.ok(out.global['攻击力_暴击伤害'].data.length > 0);
+  // 网格坐标合法（xi/yi ∈ [0,23]）
+  for (const g of [r1011['暴击率_暴击伤害'], out.global['攻击力_暴击伤害']]) {
+    for (const [xi, yi, count] of g.data) {
+      assert.ok(xi >= 0 && xi < 24 && yi >= 0 && yi < 24);
+      assert.ok(count > 0);
+    }
+  }
+  // 幂等
+  assert.deepEqual(computePanelScatter(entries), out);
 });

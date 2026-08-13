@@ -96,8 +96,8 @@ export function computeDist(arr) {
     outliers = 0;
     for (let i = 0; i < n; i++) if (s[i] < p5 || s[i] > p95) outliers++;
   }
-  // 直方图（等宽分箱，供分布形态展示）
-  const HIST_BINS = 16;
+  // 直方图（等宽分箱，供分布形态展示；细一点更能看出分布峰/谷）
+  const HIST_BINS = 32;
   const hbins = new Array(HIST_BINS + 1);
   const hcounts = new Array(HIST_BINS).fill(0);
   const hspan = s[n - 1] - s[0] || 1;

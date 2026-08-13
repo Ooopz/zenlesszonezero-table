@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeStatKey, normalizeStatKeys } from '../lib/util.js';
 import { buildNameIndex, canonicalName, CATEGORY } from '../lib/names.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
-import { computeWorkshopStats, computePanelCorrelations, computeWorkshopDiscStats } from '../lib/workshopStats.js';
+import { computeWorkshopStats, computePanelCorrelations, computeWorkshopDiscStats, computePanelScatter } from '../lib/workshopStats.js';
 import { DATA_DIR } from '../lib/node.js';
 
 const LIBRARY_FILE = path.join(DATA_DIR, 'library.json');
@@ -160,11 +160,13 @@ export function rebuildStats(entries, prevMeta, discIndex, roleNameMap) {
   const stats = computeWorkshopStats(entries);
   const panelCorr = computePanelCorrelations(entries);
   const discDetails = computeWorkshopDiscStats(entries, discIndex, { roleNameMap }); // 驱动盘单盘真实统计
+  const panelScatter = computePanelScatter(entries); // 面板属性对 2D 密度（供密度散点图）
   return {
     meta: { scrapedAt: prevMeta?.scrapedAt || new Date().toISOString(), entries: entries.length },
     ...stats,
     discDetails,
     panelCorr,
+    panelScatter,
   };
 }
 

@@ -1351,6 +1351,13 @@ table.tbl th.sorted,
 .discstats-table .ds-cold del {
   text-decoration: line-through;
 }
+/* 有效词条数分布小字（驱动盘面板，工坊真实下行下方） */
+.discstats-table .ds-eff {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--dim);
+}
 /* 占比小字（方案推荐/全服使用列的数字旁） */
 .ds-ratio {
   display: inline-block;

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { computeWorkshopStats, computePanelCorrelations, computeWorkshopDiscStats } from '../lib/workshopStats.js';
+import { computeWorkshopStats, computePanelCorrelations, computeWorkshopDiscStats, computePanelScatter } from '../lib/workshopStats.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
@@ -402,7 +402,8 @@ function buildWorkshopStats(roleNameMap) {
   const stats = computeWorkshopStats(entries);
   const panelCorr = computePanelCorrelations(entries); // 属性相关（按角色，同条目配对）
   const discDetails = computeWorkshopDiscStats(entries, libDiscs, { roleNameMap }); // 驱动盘单盘真实统计（供统计→驱动盘面板）
-  const data = { meta: { scrapedAt: new Date().toISOString(), entries: entries.length }, ...stats, discDetails, panelCorr };
+  const panelScatter = computePanelScatter(entries); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
+  const data = { meta: { scrapedAt: new Date().toISOString(), entries: entries.length }, ...stats, discDetails, panelCorr, panelScatter };
   fs.writeFileSync(STATS_FILE, JSON.stringify(data));
   return data;
 }

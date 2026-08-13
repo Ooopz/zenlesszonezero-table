@@ -21,7 +21,8 @@ import {
   consensusScatterOption,
   violinBoxOption,
   distShapeOption,
-  ridgeMultiOption,
+  densityScatterOption,
+  tierRangeOption,
 } from './charts.js';
 
 export let recommendTab = 'detail';
@@ -137,11 +138,18 @@ function wsRoleIdMap() {
   if (_roleIdRoles !== roles) {
     _roleIdRoles = roles;
     _roleIdCache = new Map((roles || []).map((r) => [String(r.item_id), r.name]));
+    _roleIdByName = new Map((roles || []).map((r) => [r.name, String(r.item_id)]));
   }
   return _roleIdCache;
 }
+let _roleIdByName = null;
 let _wsPanelRoles = null;
 let _wsPanelCache = null;
+/** 角色名 → role_id（workshop-stats 的 panels/panelScatter 按 role_id 键；grad name→id 缓存反查） */
+function roleIdFor(name) {
+  if (!_roleIdByName) wsRoleIdMap();
+  return _roleIdByName?.get(name) ?? null;
+}
 /** 角色名 → 玩家真实样本面板统计（workshop-stats.panels；{count,min,max,mean,median}）。
  *  key 对齐到 plans 角色名（grad 名可能是简称/缇提差异，需匹配到账号/plans 一致的名字）。 */
 function wsPanelMap() {
@@ -296,6 +304,18 @@ function approxPercentile(v, dist) {
   }
   return 50;
 }
+/** 密度散点卡片（方案二）：对每个属性对网格注册一张密度散点图并返回卡片 HTML（角色面板/角色总览共用）。
+ *  fullWidth 时卡片占整行（单角色图），否则流式排列（全局图）。 */
+function scatterCardsHtml(prefix, grid, subtitle, fullWidth) {
+  return Object.entries(grid)
+    .map(([key, g]) => {
+      const id = `${prefix}-${key}`;
+      registerChart(id, densityScatterOption(g, `${g.xName} × ${g.yName} · ${subtitle}`));
+      const cls = fullWidth ? ' style="grid-column:1/-1"' : '';
+      return `<div class="chart-card"${cls}><h3>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)} · ${escapeHtml(subtitle)}（密度=样本量，悬浮看坐标）</h3>${chartBox(id, 420)}</div>`;
+    })
+    .join('');
+}
 function renderOverview() {
   if (!Object.keys(plans || {}).length)
     return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
@@ -343,9 +363,14 @@ function renderOverview() {
     .join('');
 
   registerChart('overview-heat', heatmapOption(heatRows, heatAttrs));
+
+  // 面板属性对 trade-off：全体玩家真实配比（暴击率×暴伤、攻击×暴伤）全局密度散点
+  const scatterCards = scatterCardsHtml('overview-scatter', workshopStats.panelScatter?.global || {}, '全体玩家配比', false);
+
   return `<div class="chart-grid">
     <div class="chart-card" style="grid-column:1/-1"><h3>我的角色 · 面板达标（色=我的玩家百分位，悬浮看是否达推荐中档）</h3>${chartBox('overview-heat', 720)}</div>
     ${consensusCards}
+    ${scatterCards}
   </div>`;
 }
 
@@ -402,47 +427,31 @@ function renderRoleDetail() {
   const shapeH = Math.max(340, Math.ceil(shapeItems.length / 3) * 340);
   registerChart('detail-shape', distShapeOption(shapeItems));
 
-  // 3. 推荐三档分布（山脊图）：每属性一个子图（有玩家分布的属性全部列出）
-  const role = Object.values(plans).find((v) => v.name === name);
-  const BINS = 10;
-  const ridgeItems = [];
+  // 3. 推荐三档目标（低配/毕业/高配 median + 我的值横向条；三档中位数复用 computeRecTierStats 口径）
+  const tierItems = [];
   for (const a of violinAttrs) {
-    const t = { low: [], mid: [], high: [] };
-    for (const p of role?.plans || []) {
-      const q = (p.panel || []).find((x) => x.name === a);
-      if (q) {
-        if (q.low != null) t.low.push(q.low);
-        if (q.mid != null) t.mid.push(q.mid);
-        if (q.high != null) t.high.push(q.high);
-      }
-    }
-    const all = [...t.low, ...t.mid, ...t.high];
-    if (!all.length) continue;
-    const mn = Math.min(...all);
-    const mx = Math.max(...all);
-    const span = mx - mn || 1;
-    const cats = Array.from({ length: BINS }, (_, i) => Math.round(mn + (span * (i + 0.5)) / BINS));
-    const hists = ['low', 'mid', 'high']
-      .map((k, ti) => {
-        if (!t[k].length) return null;
-        const kmn = Math.min(...t[k]);
-        const kmx = Math.max(...t[k]);
-        const kspan = kmx - kmn || 1;
-        const counts = new Array(BINS).fill(0);
-        for (const x of t[k]) counts[Math.min(BINS - 1, Math.floor(((x - kmn) / kspan) * BINS))]++;
-        return { name: `推荐${['低', '中', '高'][ti]}档`, data: counts };
-      })
-      .filter(Boolean);
-    if (hists.length) ridgeItems.push({ attr: a, cats, series: hists });
+    const recA = rec[a];
+    if (!recA?.low && !recA?.mid && !recA?.high) continue;
+    tierItems.push({
+      attr: a,
+      low: { median: recA?.low?.median ?? null },
+      mid: { median: recA?.mid?.median ?? null },
+      high: { median: recA?.high?.median ?? null },
+      mine: myFinal?.[a] ?? null,
+    });
   }
-  registerChart('detail-ridge', ridgeMultiOption(ridgeItems));
-  const ridgeH = Math.max(300, Math.ceil(ridgeItems.length / 3) * 240);
+  registerChart('detail-tiers', tierRangeOption(tierItems));
+  const tiersH = Math.max(240, Math.ceil(tierItems.length / 3) * 200);
+
+  // 面板属性对 trade-off：该角色玩家真实配比（暴击率×暴伤、攻击×暴伤）密度散点
+  const scatterCards = scatterCardsHtml('detail-scatter', workshopStats.panelScatter?.perRole?.[roleIdFor(name)] || {}, '玩家真实配比', true);
 
   return `<div class="chart-grid">
     ${roleSelectHtml(name)}
     <div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(name)} · 玩家分布箱线 / 推荐三档 / 我的</h3>${chartBox('detail-violin', 440)}</div>
     <div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(name)} · 玩家数值分布形态（直方图 + 密度）</h3>${chartBox('detail-shape', shapeH)}</div>
-    <div class="chart-card" style="grid-column:1/-1"><h3>推荐三档分布（山脊，各属性）</h3>${chartBox('detail-ridge', ridgeH)}</div>
+    <div class="chart-card" style="grid-column:1/-1"><h3>推荐三档目标（绿=低配 · 金=毕业 · 橙=高配 · 红=我的）</h3>${chartBox('detail-tiers', tiersH)}</div>
+    ${scatterCards}
   </div>`;
 }
 

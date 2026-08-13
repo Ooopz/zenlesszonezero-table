@@ -72,10 +72,44 @@ function coldMainsHtml(slot, planMains, wsMains) {
   return `<span class="ds-cold">未用主词条：${cold.map((n) => `<del>${escapeHtml(n)}</del>`).join('、')}</span>`;
 }
 
-/** 456 单元格：上行=方案推荐 freq、下行=工坊真实 freq（.ds-wsline 分隔）+ 冷门主词条标灰 */
+/** 有效词条数分布小字：discDetails.effDist {0..4:盘数} → "有效词条 4有效x% · 3有效y%"（分母=该盘物理盘数） */
+function effHtml(d) {
+  const eff = d?.effDist;
+  if (!eff) return '';
+  const total = Object.values(eff).reduce((s, v) => s + v, 0);
+  if (!total) return '';
+  const p = (k) => Math.round(((eff[k] || 0) / total) * 100);
+  return `<span class="ds-eff">有效词条 4有效${p(4)}% · 3有效${p(3)}% · 2有效${p(2)}%</span>`;
+}
+
+/** 工坊副词条组合 Top 悬浮（discDetails.subCombos） */
+function wsCombosTip(d) {
+  if (!d?.subCombos?.length) return null;
+  return `工坊词条组合 Top：<br>${d.subCombos.map((c) => `${escapeHtml(c.combo.join('、'))} ×${c.count}`).join('<br>')}`;
+}
+
+/** 主词条×副词条协同悬浮（该槽；仅 2025 源有主词条的样本） */
+function mainSubTip(slot, wsDetail) {
+  const cross = wsDetail?.mainSubCross?.[slot];
+  if (!cross || !Object.keys(cross).length) return null;
+  const lines = Object.entries(cross).map(([main, bySub]) => {
+    // 与聚合层 mainSubCross 的 Top6 截断一致（数据层已截 6）
+    const subs = Object.entries(bySub)
+      .slice(0, 6)
+      .map(([n, c]) => `${escapeHtml(n)}×${c}`)
+      .join('、');
+    return `<b>${escapeHtml(main)}</b> → ${subs}`;
+  });
+  return `工坊主词条×副词条（2025源样本）：<br>${lines.join('<br>')}`;
+}
+
+/** 456 单元格：上行=方案推荐 freq、下行=工坊真实 freq（.ds-wsline 分隔，悬浮看主词条×副词条协同）+ 冷门主词条标灰 */
 function mainCellHtml(planList, wsDetail, slot) {
   const wsLine = freqWsHtml(wsDetail?.main456?.[slot], wsDetail?.mainDenom?.[slot]);
-  return `${freqHtml(planList)}${wsLine ? `<span class="ds-wsline">${wsLine}</span>` : ''}${coldMainsHtml(slot, planList, wsDetail?.main456?.[slot])}`;
+  const wsTip = mainSubTip(slot, wsDetail);
+  return `${freqHtml(planList)}${
+    wsLine ? `<span class="ds-wsline"${wsTip ? ` data-detail="${escapeHtml(wsTip)}" title="悬浮看主词条×副词条"` : ''}>${wsLine}</span>` : ''
+  }${coldMainsHtml(slot, planList, wsDetail?.main456?.[slot])}`;
 }
 
 /** 渲染驱动盘统计表（返回 HTML；空方案数据时返回提示） */
@@ -109,6 +143,8 @@ export function renderDiscStats() {
         ? `<span class="ds-sub" data-detail="${escapeHtml(comboTip)}" title="悬浮查看副词条组合明细">${freqHtml(r.subStats)}</span>`
         : '—';
       const wsSubLine = freqWsHtml(r.wsDetail?.subs, r.wsDetail?.equips);
+      const wsSubTip = wsCombosTip(r.wsDetail); // 工坊词条组合 Top（悬浮）
+      const effLine = effHtml(r.wsDetail); // 有效词条数分布（小字）
       const icon = library.discs?.[r.name]?.icon
         ? `<img class="ws-ico" src="${library.discs[r.name].icon}" alt="">`
         : '';
@@ -118,7 +154,9 @@ export function renderDiscStats() {
       <td class="ds-count">${r.gradCount ? `${r.gradCount}<span class="ds-ratio">${(r.gradRatio * 100).toFixed(1)}%</span>` : '—'}</td>
       <td class="ds-count">${r.wsEquips ? `${r.wsEquips}<span class="ds-ratio">${((r.wsEquips / totalWsDiscs) * 100).toFixed(1)}%</span>` : '—'}</td>
       <td class="ds-chars">${joinBr(r.characters)}</td>
-      <td class="ds-combos">${subCell}${wsSubLine ? `<span class="ds-wsline">${wsSubLine}</span>` : ''}</td>
+      <td class="ds-combos">${subCell}${
+        wsSubLine ? `<span class="ds-wsline"${wsSubTip ? ` data-detail="${escapeHtml(wsSubTip)}" title="悬浮看工坊词条组合"` : ''}>${wsSubLine}</span>` : ''
+      }${effLine}</td>
       <td class="ds-combos">${mainCellHtml(r.main4, r.wsDetail, 4)}</td>
       <td class="ds-combos">${mainCellHtml(r.main5, r.wsDetail, 5)}</td>
       <td class="ds-combos">${mainCellHtml(r.main6, r.wsDetail, 6)}</td>
