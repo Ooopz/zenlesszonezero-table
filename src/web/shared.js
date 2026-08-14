@@ -33,12 +33,14 @@ const SKILL_ICON = {
 export function skillIcon(key) {
   return SKILL_ICON[key] || SKILL_ICON.core;
 }
-/** 账号技能数字 type（0普攻 1特殊 2闪避 3终结 5核心 6支援）→ 图标路径 */
+/** 账号技能数字 type（官方语义：0普攻 1特殊 2闪避 3终结/连携 5核心 6支援）→ 图标路径。
+ *  注意：与统计视图的 canonical（constants.SKILL_TYPES）编号不同——官方 1=特殊技、2=闪避（与工坊互换）。
+ *  跨源匹配（如统计视图「我的等级」）必须经 OFFICIAL_SKILL_TYPE 映射，勿直接用本表。 */
 const TYPE_KEY = { 0: 'normal', 1: 'special', 2: 'dodge', 3: 'ultimate', 5: 'core', 6: 'support' };
 export function skillIconForType(type) {
   return SKILL_ICON[TYPE_KEY[type]] || SKILL_ICON.core;
 }
-/** 账号技能数字 type → 中文标签 */
+/** 账号技能数字 type → 中文标签（官方语义，同上） */
 export const SKILL_LABEL = { 0: '普攻', 1: '特殊技', 2: '闪避', 3: '终结技', 5: '核心技', 6: '支援技' };
 
 /** 把对象合并进 window.ZZZ（内联 onclick 引用的全局注册，wiki/ui 共用） */

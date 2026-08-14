@@ -127,16 +127,16 @@ test('全量提取结果能通过 schema 校验', () => {
   assert.deepEqual(validateCharacter(c), []);
 });
 
-// ---------- isMaxedRole：爬取过滤（角色/音擎≥60、驱动盘恰 6 块全 15 级，兼容 mys/2025 两源） ----------
-const mysRole = (level, wpnLevel, discLevels) => ({
+// ---------- isMaxedRole：爬取过滤（角色/音擎≥60、驱动盘恰 6 块全 15 级且全 R5，兼容 mys/2025 两源） ----------
+const mysRole = (level, wpnLevel, discLevels, rarities) => ({
   level,
-  item_json: { weapon: { level: wpnLevel }, equip: discLevels.map((lv) => ({ level: lv })) },
+  item_json: { weapon: { level: wpnLevel }, equip: discLevels.map((lv, i) => ({ level: lv, rarity: rarities?.[i] ?? 5 })) },
 });
-const role2025 = (level, wpnLevel, discLevels) => ({
+const role2025 = (level, wpnLevel, discLevels, rarities) => ({
   level,
   item_json: {
     Weapon: { Level: wpnLevel },
-    EquippedList: discLevels.map((lv) => (lv == null ? { Equipment: null } : { Equipment: { Level: lv } })),
+    EquippedList: discLevels.map((lv, i) => (lv == null ? { Equipment: null } : { Equipment: { Level: lv, Rarity: rarities?.[i] ?? 5 } })),
   },
 });
 
@@ -159,6 +159,12 @@ test('isMaxedRole：驱动盘不是 6 块 15 级排除', () => {
   assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15])), false, '只 5 块盘');
   assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15, 14])), false, '某盘 14 级');
   assert.equal(isMaxedRole(role2025(60, 60, [15, 15, 15, 15, 15, null])), false, '2025 有未装备槽');
+});
+
+test('isMaxedRole：驱动盘必须全部 R5（金色盘），混入 R4 排除（R4 上限 +12 非满配）', () => {
+  assert.equal(isMaxedRole(mysRole(60, 60, [15, 15, 15, 15, 15, 15], [5, 5, 5, 5, 5, 4])), false, 'mys 混入 R4');
+  assert.equal(isMaxedRole(role2025(60, 60, [15, 15, 15, 15, 15, 15], [5, 5, 5, 5, 4, 5])), false, '2025 混入 R4');
+  assert.equal(isMaxedRole(role2025(60, 60, [15, 15, 15, 15, 15, 15], [5, 5, 5, 5, 5, 5])), true, '2025 全 R5');
 });
 
 test('isMaxedRole：无 item_json / 非角色对象排除', () => {

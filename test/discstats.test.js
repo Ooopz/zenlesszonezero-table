@@ -1,7 +1,7 @@
 // test/discstats.test.js —— 驱动盘统计聚合逻辑
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeDiscStats } from '../src/lib/discstats.js';
+import { computeDiscStats, computeDiscAdvisor } from '../src/lib/discstats.js';
 import { loadDataFile } from './helpers.js';
 
 // 内联 fixture：两个角色共 3 个方案，覆盖 2 件套/4 件套、同盘多方案、不同副词条组合
@@ -328,4 +328,95 @@ test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/�
   const l = rows.find((r) => r.name === '灵魂摇滚');
   assert.ok(j.alternatives.includes('灵魂摇滚'));
   assert.ok(l.alternatives.includes('棘刺玫瑰'));
+});
+
+// ---------- computeDiscAdvisor：两口径对齐 + 保留/分歧/可抛弃判定 ----------
+
+const MAIN_OPTS = {
+  4: ['暴击率', '暴击伤害', '攻击力%', '防御力%', '生命值%'],
+  5: ['攻击力%', '防御力%', '生命值%', '电属性伤害加成'],
+  6: ['冲击力', '能量自动回复', '攻击力%', '防御力%'],
+};
+
+const OFFICIAL = {
+  count: 10,
+  characters: ['安比', '妮可'],
+  main4: [
+    { name: '暴击率', count: 8, ratio: 0.8 },
+    { name: '攻击力%', count: 2, ratio: 0.2 },
+  ],
+  main5: [{ name: '电属性伤害加成', count: 10, ratio: 1 }],
+  main6: [{ name: '冲击力', count: 10, ratio: 1 }],
+  subStats: [
+    { name: '暴击率', count: 9, ratio: 0.9 },
+    { name: '攻击力%', count: 7, ratio: 0.7 },
+    { name: '穿透值', count: 1, ratio: 0.1 },
+  ],
+  alternatives: [],
+};
+
+const LIVE = {
+  equips: 100,
+  characters: ['安比', '星见雅'],
+  main456: {
+    4: [
+      { name: '暴击率', count: 80 },
+      { name: '暴击伤害', count: 15 },
+      { name: '防御力%', count: 2 }, // <3% → 不算共识
+    ],
+    5: [{ name: '电属性伤害加成', count: 90 }],
+    6: [{ name: '冲击力', count: 95 }],
+  },
+  mainDenom: { 4: 100, 5: 100, 6: 100 },
+  subs: [
+    { name: '暴击率', count: 85 },
+    { name: '攻击力%', count: 60 },
+    { name: '能量自动回复', count: 40 },
+  ],
+  effDist: { 2: 20, 3: 60, 4: 20 },
+  subCombos: [{ combo: ['暴击率', '攻击力%'], count: 30 }],
+};
+
+test('computeDiscAdvisor：两口径对齐 + 保留/可抛弃判定（阈值 3%，任一 ≥3% 即保留）', () => {
+  const c = computeDiscAdvisor(OFFICIAL, LIVE, MAIN_OPTS, 0.03);
+  // 角色：交集 = 安比
+  assert.deepEqual(c.roles.both, ['安比']);
+  assert.deepEqual(c.roles.official.sort(), ['妮可', '安比']); // 码元序：'妮'(22958) < '安'(23433)
+  assert.deepEqual(c.roles.live.sort(), ['安比', '星见雅']);
+  // 4 号位：暴击率 双边 → 保留；暴击伤害 实况 15% 官方无 → 保留（任一 ≥3%）；防御力% 2% 官方无 → 可抛弃
+  const m4 = new Map(c.mains[4].map((m) => [m.name, m.verdict]));
+  assert.equal(m4.get('暴击率'), 'keep');
+  assert.equal(m4.get('暴击伤害'), 'keep', '实况 15% ≥3% → 保留');
+  assert.equal(m4.get('防御力%'), 'drop', '官方 0% + 实况 2% 都 <3% → 可抛弃');
+  assert.equal(m4.get('生命值%'), 'drop', '两口径都未出现的候选 → 可抛弃');
+  assert.equal(m4.get('攻击力%'), 'keep', '官方 20% ≥3% → 保留（实况无也保留）');
+  // 排序：keep 在 drop 前
+  const order = c.mains[4].map((m) => m.verdict);
+  assert.ok(order.indexOf('drop') > order.indexOf('keep'));
+  // 5/6 号位：双边 → 保留
+  assert.equal(c.mains[5][0].verdict, 'keep');
+  assert.equal(c.mains[6][0].verdict, 'keep');
+  // 副词条：只返回保留（任一 ≥3%），脏词条（伤害加成/能量回复/穿透率）被过滤
+  const subs = new Map(c.subs.map((s) => [s.name, s.verdict]));
+  assert.equal(subs.get('暴击率'), 'keep');
+  assert.equal(subs.get('攻击力%'), 'keep');
+  assert.equal(subs.get('能量自动回复'), undefined, '脏词条（非法副词条）被过滤');
+  assert.equal(subs.get('穿透值'), 'keep', '合法副词条，官方 10% ≥3% → 保留');
+  // 组合/有效词条透传
+  assert.equal(c.combos[0].count, 30);
+  assert.equal(c.effDist[4], 20);
+});
+
+test('computeDiscAdvisor：单口径缺失（无官方数据 / 无实况数据）不报错', () => {
+  const c1 = computeDiscAdvisor(null, LIVE, MAIN_OPTS);
+  assert.deepEqual(c1.roles.official, []);
+  assert.deepEqual(c1.roles.both, []);
+  assert.equal(c1.mains[4].find((m) => m.name === '暴击率').verdict, 'keep', '仅实况高频 → 保留');
+  assert.equal(c1.mains[4].find((m) => m.name === '暴击伤害').verdict, 'keep');
+  assert.equal(c1.mains[4].find((m) => m.name === '生命值%').verdict, 'drop');
+  const c2 = computeDiscAdvisor(OFFICIAL, null, MAIN_OPTS);
+  assert.deepEqual(c2.roles.live, []);
+  assert.equal(c2.mains[4].find((m) => m.name === '暴击率').verdict, 'keep', '官方 80% ≥3% → 保留');
+  assert.equal(c2.mains[4].find((m) => m.name === '攻击力%').verdict, 'keep', '官方 20% ≥3% → 保留');
+  assert.equal(c2.equips, 0);
 });

@@ -19,7 +19,8 @@ import {
 } from './data.js';
 import { render, setMyTab } from './render.js';
 import { setWikiTab } from './wiki.js';
-import { setRecommendTab, setSelectedRole } from './recommend.js';
+import { setRecommendTab, setSelectedRole, setSelectedAbyssRole } from './recommend.js';
+import { setSelectedDisc } from './discstats.js';
 
 // ---------- 提示条 ----------
 const statusEl = document.getElementById('status');
@@ -58,7 +59,10 @@ function startSyncPolling(kind) {
     else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
     else if (p.step === SYNC_KINDS.PLANS) msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
     else if (p.step === 'rank') msg = `正在爬取排名 ${p.done}/${p.total}…`;
-    else if (p.step === 'fetch') msg = `正在拉取工坊配装 ${p.done}/${p.total}…`;
+    else if (p.step === 'fetch')
+      msg = p.skipped
+        ? `正在拉取工坊配装 ${p.done}/${p.total}（跳过 ${p.skipped} 个已缓存）…`
+        : `正在拉取工坊配装 ${p.done}/${p.total}…`;
     else if (p.step === 'grad') msg = `正在更新工坊统计 ${p.done}/${p.total}…`;
     progress(msg);
   }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
@@ -486,6 +490,14 @@ export function initUi() {
     },
     selectRole: (name) => {
       setSelectedRole(name); // 角色详情/分布分析面板的角色下拉
+      render();
+    },
+    selectDisc: (name) => {
+      setSelectedDisc(name); // 驱动盘图表卡片区的盘下拉
+      render();
+    },
+    selectAbyssRole: (name) => {
+      setSelectedAbyssRole(name); // 深渊配队面板的角色下拉
       render();
     },
     myTab: (key) => {

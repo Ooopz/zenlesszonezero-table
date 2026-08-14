@@ -75,16 +75,36 @@ export function writeDataFile(file, data, { label = '', validate = null, strict 
  * @param {string} file  文件路径
  * @param {number} [chunkSize]  每次读取的字节数（默认 1MB）
  */
+/** 解码 Buffer 前 n 字节到「最后一个完整 UTF-8 字符边界」：
+ *  返回 { text, tail }——text 为可安全解码的字符串（无切断），tail 为可能跨块的尾部字节（≤3）交下块拼接。 */
+function decodeUtf8Tail(buff, n) {
+  let start = n - 1;
+  while (start >= 0 && (buff[start] & 0xc0) === 0x80) start--; // 跳过续字节找起始字节
+  if (start < 0) return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) };
+  const b = buff[start];
+  let len;
+  if (b < 0x80) len = 1;
+  else if ((b & 0xe0) === 0xc0) len = 2;
+  else if ((b & 0xf0) === 0xe0) len = 3;
+  else if ((b & 0xf8) === 0xf0) len = 4;
+  else return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) }; // 非法起始字节：整体解码（toString 处理）
+  if (start + len <= n) return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) }; // 最后字符完整
+  return { text: buff.toString('utf8', 0, start), tail: Buffer.from(buff.subarray(start, n)) }; // 最后字符跨块 → 推迟
+}
+
 export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
   const fd = fs.openSync(file, 'r');
   const buf = Buffer.alloc(chunkSize);
   // phase: 'head' 跳过 meta 找 `"entries":[`；'elem' 逐元素解析
   let st = { phase: 'head', headBuf: '', inStr: false, esc: false, depth: 0, started: false, elem: '' };
+  let carry = Buffer.alloc(0); // 跨块 UTF-8 字符的尾部字节（与下块拼接后解码，避免切断中文产生 U+FFFD）
   try {
     while (true) {
       const n = fs.readSync(fd, buf, 0, chunkSize, null);
       if (n <= 0) break;
-      const text = buf.toString('utf8', 0, n);
+      const combined = carry.length ? Buffer.concat([carry, buf.subarray(0, n)]) : buf.subarray(0, n);
+      const { text, tail } = decodeUtf8Tail(combined, combined.length);
+      carry = tail;
       for (let i = 0; i < text.length; i++) {
         const ch = text[i];
         if (st.phase === 'head') {
@@ -134,15 +154,62 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
           continue;
         }
         if (ch === ']') {
-          if (!st.started && st.depth === 0) break; // 顶层数组结束
+          if (!st.started && st.depth === 0) break; // 顶层数组结束（元素之间不会有 ']'，不会误触发）
           st.depth--;
           if (st.started) st.elem += ch;
           continue;
         }
         if (st.started) st.elem += ch;
       }
-      // 顶层数组已结束则停止读取
-      if (st.phase === 'elem' && !st.started && st.depth === 0) break;
+      // ⚠️ 不能在此检查「数组结束」：`!started && depth===0` 在「元素之间」（},{ 间隙）也为真，
+      // 块边界恰好落在间隙时会把后续全部条目丢弃（曾致 60 万条文件只解析出 9 万）。
+      // 数组结束已由上面 ']' 分支处理，此处不 break，while 靠 readSync 返回 0 自然结束。
+    }
+    // 文件末尾残留（≤3 字节，如结尾 `]}`）——正常文件为 ASCII，直接解码处理
+    if (carry.length) {
+      const text = carry.toString('utf8');
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (st.phase === 'head') {
+          st.headBuf += ch;
+          if (st.headBuf.endsWith('"entries":[')) {
+            st.phase = 'elem';
+            st.headBuf = '';
+          }
+          continue;
+        }
+        if (st.inStr) {
+          if (st.esc) st.esc = false;
+          else if (ch === '\\') st.esc = true;
+          else if (ch === '"') st.inStr = false;
+          if (st.started) st.elem += ch;
+          continue;
+        }
+        if (ch === '"') { st.inStr = true; if (st.started) st.elem += ch; continue; }
+        if (ch === '{') {
+          if (!st.started) { st.started = true; st.depth = 1; st.elem = ''; } else st.depth++;
+          st.elem += ch;
+          continue;
+        }
+        if (ch === '}') {
+          st.depth--;
+          st.elem += ch;
+          if (st.depth === 0 && st.started) {
+            yield st.elem;
+            st.started = false;
+            st.elem = '';
+          }
+          continue;
+        }
+        if (ch === '[') { st.depth++; if (st.started) st.elem += ch; continue; }
+        if (ch === ']') {
+          if (!st.started && st.depth === 0) break;
+          st.depth--;
+          if (st.started) st.elem += ch;
+          continue;
+        }
+        if (st.started) st.elem += ch;
+      }
     }
   } finally {
     fs.closeSync(fd);

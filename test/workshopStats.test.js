@@ -1,8 +1,20 @@
-// test/workshopStats.test.js —— 工坊驱动盘单盘统计：词条名映射 + 两源聚合
+// test/workshopStats.test.js —— 工坊统计：驱动盘单盘 / 面板散点 / 新指标聚合（评分·影画分层·技能·玩家画像·角色盘·深渊）
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { computeWorkshopDiscStats, computePanelScatter, discStatName } from '../src/lib/workshopStats.js';
+import {
+  computeWorkshopDiscStats,
+  computePanelScatter,
+  discStatName,
+  computeRelicStats,
+  computeRankLayers,
+  computeRankDist,
+  computeSkillStats,
+  computePlayerProfiles,
+  computeRoleDiscStats,
+  computeAbyssStats,
+  computeAbyssTeamStats,
+} from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { streamJsonArrayElements } from '../src/lib/node.js';
 import { loadDataFile } from './helpers.js';
@@ -279,4 +291,296 @@ test('computePanelScatter：每角色/全体 2D 密度网格（攻击归一、�
   }
   // 幂等
   assert.deepEqual(computePanelScatter(entries), out);
+});
+
+// ---------- 新指标聚合 ----------
+
+const NEW_META_ENTRIES = [
+  // 角色 1011：2 条（rank 0 / rank 6），技能与评分各异（source 显式声明，type 按 2025 语义：0普攻/1闪避）
+  {
+    uid: 'u1',
+    role_id: '1011',
+    source: '2025',
+    rank: 0,
+    relic_point: 150,
+    skills: [{ type: 0, level: 9 }, { type: 1, level: 7 }],
+    panel: [
+      { name: '攻击力', final: '2000' },
+      { name: '暴击率', final: '0.4' },
+    ],
+    equips: [
+      { id: '11114', suit: '静听嘉音', main: [{ name: '暴击率', value: '4.8%' }], subs: [{ name: '攻击力', value: '6%' }, { name: '异常掌控', value: '12' }] },
+    ],
+  },
+  {
+    uid: 'u1',
+    role_id: '1011',
+    source: '2025',
+    rank: 6,
+    relic_point: 300,
+    skills: [{ type: 0, level: 12 }, { type: 1, level: 12 }],
+    panel: [
+      { name: '攻击力', final: '3000' },
+      { name: '暴击率', final: '0.7' },
+    ],
+    equips: [
+      { id: '11114', suit: '静听嘉音', main: [{ name: '暴击率', value: '4.8%' }], subs: [{ name: '暴击伤害', value: '9.6%' }, { name: '攻击力', value: '6%' }] },
+    ],
+  },
+  // 角色 1031：1 条（rank 2），评分 0（应被过滤）
+  {
+    uid: 'u2',
+    role_id: '1031',
+    source: '2025',
+    rank: 2,
+    relic_point: 0,
+    skills: [{ type: 0, level: 10 }],
+    panel: [{ name: '攻击力', final: '2500' }],
+    equips: [],
+  },
+];
+
+test('computeRelicStats：每角色评分分布，0/非法排除', () => {
+  const out = computeRelicStats(NEW_META_ENTRIES);
+  assert.ok(out['1011']);
+  assert.equal(out['1011'].count, 2);
+  assert.equal(out['1011'].min, 150);
+  assert.equal(out['1011'].max, 300);
+  assert.equal(out['1011'].median, 225);
+  assert.equal(out['1031'], undefined, '0 评分角色不产出分布');
+  // 字符串评分兜底（旧数据）
+  const old = computeRelicStats([{ role_id: '1011', relic_point: '188.20' }]);
+  assert.equal(old['1011'].mean, 188.2);
+});
+
+test('computeRankLayers：每角色×影画档的关键属性分布', () => {
+  const out = computeRankLayers(NEW_META_ENTRIES);
+  assert.ok(out['1011']);
+  assert.ok(out['1011'][0], 'rank 0 有分布');
+  assert.ok(out['1011'][6], 'rank 6 有分布');
+  assert.equal(out['1011'][0]['攻击力'].median, 2000);
+  assert.equal(out['1011'][6]['攻击力'].median, 3000);
+  assert.equal(out['1011'][6]['暴击率'].mean, 0.7);
+  assert.equal(out['1011'][6]['暴击率'].count, 1);
+  // 非关键属性不进入
+  assert.equal(out['1011'][0]['防御力'], undefined);
+  // 无 rank 条目跳过
+  const noRank = computeRankLayers([{ role_id: '1011', rank: null, panel: [{ name: '攻击力', final: '1' }] }]);
+  assert.deepEqual(noRank, {});
+});
+
+test('computeRankDist：每角色影画档位占比', () => {
+  const out = computeRankDist(NEW_META_ENTRIES);
+  assert.deepEqual(out['1011'], { 0: 1, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1 });
+  assert.deepEqual(out['1031'], { 0: 0, 1: 0, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0 });
+});
+
+test('computeSkillStats：每角色×技能类型的等级分布', () => {
+  const out = computeSkillStats(NEW_META_ENTRIES);
+  assert.ok(out['1011']);
+  assert.equal(out['1011'][0].count, 2);
+  assert.equal(out['1011'][0].median, 12, 'lightDist 分位取整：排序 [9,12] 的 0.5 分位 = s[1]');
+  assert.equal(out['1011'][1].median, 12);
+  assert.equal(out['1031'][0].count, 1);
+  assert.equal(out['1031'][0].mean, 10);
+});
+
+test('computeSkillStats：mys 源按官方语义归一化（1特殊技→3、2闪避→1、3终结→4、6支援→2）', () => {
+  const out = computeSkillStats([
+    {
+      role_id: '1011',
+      source: 'mys',
+      skills: [
+        { type: 0, level: 12 }, // 普攻 → 0
+        { type: 1, level: 11 }, // 特殊技 → 3
+        { type: 2, level: 10 }, // 闪避 → 1
+        { type: 3, level: 9 },  // 终结+连携 → 4
+        { type: 5, level: 7 },  // 核心 → 5
+        { type: 6, level: 8 },  // 支援技 → 2
+      ],
+    },
+  ]);
+  const d = out['1011'];
+  assert.equal(d[0].median, 12, '普攻');
+  assert.equal(d[1].median, 10, 'mys type2 闪避 → canonical 1');
+  assert.equal(d[2].median, 8, 'mys type6 支援 → canonical 2');
+  assert.equal(d[3].median, 11, 'mys type1 特殊技 → canonical 3');
+  assert.equal(d[4].median, 9, 'mys type3 终结/连携 → canonical 4');
+  assert.equal(d[5].median, 7, '核心');
+});
+
+test('computeSkillStats：2025 源按 1.x ID 语义归一化（1闪避→1、2特殊技→3、3连携→4、6终结→4）', () => {
+  const out = computeSkillStats([
+    {
+      role_id: '1011',
+      source: '2025',
+      skills: [
+        { type: 0, level: 12 }, // 普攻 → 0
+        { type: 1, level: 11 }, // 闪避 → 1
+        { type: 2, level: 10 }, // 特殊技 → 3
+        { type: 3, level: 9 },  // 连携 → 4（并入终结）
+        { type: 5, level: 7 },  // 核心 → 5
+        { type: 6, level: 8 },  // 终结 → 4
+      ],
+    },
+  ]);
+  const d = out['1011'];
+  assert.equal(d[0].median, 12, '普攻');
+  assert.equal(d[1].median, 11, '2025 type1 闪避 → canonical 1');
+  assert.equal(d[2], undefined, '2025 无支援技数据');
+  assert.equal(d[3].median, 10, '2025 type2 特殊技 → canonical 3');
+  assert.equal(d[4].median, 9, '2025 type3 连携 + type6 终结 → canonical 4（排序 [8,9] 的 0.5 分位 = s[1]）');
+  assert.equal(d[5].median, 7, '核心');
+});
+
+test('computeSkillStats：旧数据无 source 回退数组顺序判别；无法判源跳过', () => {
+  const out = computeSkillStats([
+    {
+      role_id: '1011',
+      // 旧数据无 source：mys 数组按 UI 顺序 [0,2,6,...] → 第 2 位=2 判 mys
+      skills: [{ type: 0, level: 12 }, { type: 2, level: 10 }, { type: 6, level: 8 }],
+    },
+    {
+      role_id: '1021',
+      // 旧数据无 source：2025 数组按 ID 顺序 [0,1,2,...] → 第 2 位=1 判 2025
+      skills: [{ type: 0, level: 12 }, { type: 1, level: 11 }, { type: 6, level: 8 }],
+    },
+    {
+      role_id: '1031',
+      // 无 source 且 skills 不足 2 个 → 无法判源，跳过
+      skills: [{ type: 0, level: 12 }],
+    },
+  ]);
+  assert.equal(out['1011'][0].median, 12, 'mys 判别');
+  assert.equal(out['1011'][2].median, 8, 'mys type6 支援 → canonical 2');
+  assert.equal(out['1021'][1].median, 11, '2025 type1 闪避 → canonical 1');
+  assert.equal(out['1021'][4].median, 8, '2025 type6 终结 → canonical 4');
+  assert.equal(out['1031'], undefined, '无法判源条目不贡献');
+});
+
+test('computePlayerProfiles：uid 聚合（角色数/评分/影画）', () => {
+  const out = computePlayerProfiles(NEW_META_ENTRIES);
+  const u1 = out.find((p) => p.uid === 'u1');
+  assert.ok(u1);
+  assert.equal(u1.chars, 1, 'u1 只有一个角色（两条同角色条目）');
+  assert.equal(u1.avgRelic, 225);
+  assert.equal(u1.maxRelic, 300);
+  assert.equal(u1.ranked, 1, 'rank>0 的角色数（rank 6 那条）');
+  const u2 = out.find((p) => p.uid === 'u2');
+  assert.equal(u2.avgRelic, null, '全 0 评分 → 平均分 null');
+});
+
+test('computeRoleDiscStats：每角色 456 主词条/副词条/有效词条', () => {
+  const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
+  const roleNameMap = new Map([['1011', '安比·德玛拉']]);
+  const out = computeRoleDiscStats(NEW_META_ENTRIES, discIndex, { roleNameMap });
+  assert.equal(out.length, 1);
+  const r = out[0];
+  assert.equal(r.name, '安比·德玛拉');
+  assert.equal(r.mainDenom[4], 2);
+  assert.deepEqual(Object.fromEntries(r.main456[4].map((f) => [f.name, f.count])), { 暴击率: 2 });
+  // 副词条：异常掌控不是合法副词条（SUBSTAT_TYPE_SET 外）→ 白名单过滤，剩 攻击力% ×2 + 暴击伤害 ×1
+  assert.deepEqual(Object.fromEntries(r.subs.map((f) => [f.name, f.count])), { '攻击力%': 2, 暴击伤害: 1 });
+  // 有效词条（SUBSTAT 集合内）：攻击力% 有效，暴击伤害也有效 → 两盘各 1-2 个
+  assert.ok(r.effDist['2'] >= 1);
+});
+
+test('computeWorkshopDiscStats / computeRoleDiscStats：游戏规则白名单清洗（非法副词条/异常主词条过滤）', () => {
+  const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
+  const entries = [
+    {
+      uid: 'u1',
+      role_id: '1011',
+      equips: [
+        // 2025 源脏装备：4 号位（id 末位 4）副词条含 穿透率百分比（非法），主词条 暴击率（合法）
+        { id: '33144', suit: '静听嘉音', main: [{ name: '暴击率', value: 480 }], subs: [{ name: '穿透率百分比', value: 600 }, { name: '暴击率百分比', value: 480 }] },
+        // 5 号位（id 末位 5）主词条 穿透值（非候选 → 过滤），副词条 攻击力%（合法）
+        { id: '33145', suit: '静听嘉音', main: [{ name: '穿透值', value: 9 }], subs: [{ name: '攻击力百分比', value: 480 }] },
+      ],
+    },
+  ];
+  const out = computeWorkshopDiscStats(entries, discIndex, { roleNameMap: new Map([['1011', '安比']]) });
+  const d = out[0];
+  // 副词条：穿透率百分比 被过滤，只剩 暴击率（+攻击力%）
+  assert.deepEqual(Object.fromEntries(d.subs.map((f) => [f.name, f.count])), { 暴击率: 1, '攻击力%': 1 });
+  // 主词条：4 号位只统计候选内（暴击率 计入）；5 号位 穿透值 不在候选 → 不统计
+  assert.deepEqual(Object.fromEntries(d.main456[4].map((f) => [f.name, f.count])), { 暴击率: 1 });
+  assert.deepEqual(d.main456[5], []);
+  assert.equal(d.mainDenom[4], 1);
+  assert.equal(d.mainDenom[5], 1, '分母仍按物理盘数');
+  // 组合也过滤：脏词条不参与
+  for (const c of d.subCombos) assert.ok(c.combo.every((n) => ['暴击率', '攻击力%', '暴击伤害', '穿透值', '异常精通', '攻击力', '防御力', '防御力%', '生命值', '生命值%'].includes(n)));
+});
+
+test('computeAbyssStats：层数/评级分布 + 实战配队 Top', () => {
+  const abyssEntries = [
+    {
+      uid: 'u1',
+      abyss: {
+        max_layer: 7,
+        rating_list: [{ times: 4, rating: 'S' }],
+        floors: [
+          { node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: { avatars: [{ id: 1431 }, { id: 1501 }] } },
+        ],
+      },
+    },
+    {
+      uid: 'u2',
+      abyss: {
+        max_layer: 5,
+        rating_list: [{ times: 2, rating: 'A' }],
+        floors: [{ node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: null }],
+      },
+    },
+    { uid: 'u3', abyss: null }, // 无深渊
+  ];
+  const out = computeAbyssStats(abyssEntries);
+  assert.deepEqual(out.layerDist, { 7: 1, 5: 1 });
+  assert.deepEqual(out.ratingDist, { S: 1, A: 1 });
+  assert.equal(out.teams.length, 2);
+  // 1091,1311 共现 2 次（u1 node_1 + u2 node_1）→ Top1
+  const top = out.teams[0];
+  assert.deepEqual(top.team, ['1091', '1311']);
+  assert.equal(top.count, 2);
+});
+
+test('computeAbyssTeamStats：出场榜 / 双队配队 Top / S 评级 Top / 队友共现', () => {
+  const abyssEntries = [
+    {
+      uid: 'u1',
+      abyss: {
+        max_layer: 7,
+        floors: [
+          {
+            rating: 'S',
+            node_1: { avatars: [{ id: 1091 }, { id: 1311 }, { id: 1011 }] },
+            node_2: { avatars: [{ id: 1431 }, { id: 1501 }] },
+          },
+        ],
+      },
+    },
+    {
+      uid: 'u2',
+      abyss: {
+        max_layer: 5,
+        floors: [{ rating: 'A', node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: null }],
+      },
+    },
+  ];
+  const out = computeAbyssTeamStats(abyssEntries);
+  // 出场榜：1091/1311 各 2 次、1011/1431/1501 各 1 次；ratio 合计 = 1
+  const usage = new Map(out.charUsage.map((c) => [c.id, c.count]));
+  assert.equal(usage.get('1091'), 2);
+  assert.equal(usage.get('1011'), 1);
+  assert.ok(Math.abs(out.charUsage.reduce((s, c) => s + c.ratio, 0) - 1) < 1e-9);
+  // 双队分开：第一队 Top = [1011,1091,1311]（3 人组合）×1 + [1091,1311]×1；第二队 = [1431,1501]
+  assert.deepEqual(out.nodeTeams[1][0].chars, ['1011', '1091', '1311']);
+  assert.equal(out.nodeTeams[1].length, 2);
+  assert.deepEqual(out.nodeTeams[2][0].chars, ['1431', '1501']);
+  // S 评级只看 u1 第一队
+  assert.deepEqual(out.sTeams[0].chars, ['1011', '1091', '1311']);
+  // 队友共现：1091 的队友 = 1311×2、1011×1
+  const mates = out.teammates['1091'];
+  assert.equal(mates['1311'], 2);
+  assert.equal(mates['1011'], 1);
 });

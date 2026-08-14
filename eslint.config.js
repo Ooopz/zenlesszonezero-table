@@ -30,6 +30,11 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
+    // 根目录辅助脚本（Node，如 scripts-*.mjs）
+    files: ['*.mjs'],
+    languageOptions: { globals: globals.node },
+  },
+  {
     // 双端共享模块（Node 与浏览器都可 import，同时提供两边全局）
     files: ['src/lib/util.js', 'src/lib/schema.js', 'src/lib/calc.js'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
