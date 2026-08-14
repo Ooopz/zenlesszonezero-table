@@ -25,6 +25,7 @@ import {
   targetStats,
   targetPercents,
   targetGap,
+  resolveStatCurrent,
 } from '../lib/calc.js';
 import { escapeHtml, escapeJsAttr, formatValue, renderRichText } from '../lib/util.js';
 import { createSort } from '../lib/sort.js';
@@ -66,12 +67,14 @@ document.addEventListener('mouseout', (e) => {
 function wengineInfo(character, R) {
   const wengine = character.wengine || {};
   const libWengine = R.libWengine;
+  const mainStats = statEntries(wengine.mainStats);
+  const subStats = statEntries(wengine.subStats);
   return {
     wengine,
     libWengine,
     icon: wengine.icon || libWengine?.icon || '',
-    baseAtk: statEntries(wengine.mainStats).find((t) => t.name === '基础攻击力')?.value ?? libWengine?.baseAtk ?? null,
-    subStats: statEntries(wengine.subStats).length ? statEntries(wengine.subStats) : statEntries(libWengine?.subStats),
+    baseAtk: mainStats.find((t) => t.name === '基础攻击力')?.value ?? libWengine?.baseAtk ?? null,
+    subStats: subStats.length ? subStats : statEntries(libWengine?.subStats),
     specialEffect: (wengine.specialEffect || libWengine?.specialEffect || '').replace(/<[^>]*>/g, ''),
   };
 }
@@ -341,20 +344,8 @@ const tableSort = createSort();
 function toggleTableSort(col) {
   tableSort.toggle(col);
 }
-/** 列当前值（达成率与排序共用）：账号实际值优先，否则 wiki 计算值；属性伤害取首项 */
-function statCurrent(R, s) {
-  let current = R.actual?.[s]?.final ?? R.final[s];
-  if (s === '属性伤害加成') {
-    for (const k of Object.keys(R.final))
-      if (isDamageBonus(k)) {
-        current = R.final[k];
-        break;
-      }
-  }
-  return current ?? null;
-}
 function cellStats(R, target, s) {
-  const current = statCurrent(R, s);
+  const current = resolveStatCurrent(R, s);
   if (current == null) return `<td class="tstat">—<div class="tbar tbar-empty"></div></td>`;
   const targetVal = target[s];
   if (targetVal == null || !Number(targetVal))
@@ -452,7 +443,7 @@ function renderTable(list, container) {
 
     // 各列排序取值（点击表头排序用）
     const sortVals = { 角色: character.name, 音擎: wengine.name || R.libWengine?.name || '', 副词条命中: hits };
-    for (const s of targetStats) sortVals[s] = statCurrent(R, s);
+    for (const s of targetStats) sortVals[s] = resolveStatCurrent(R, s);
 
     const cells = colOrder.map((c) => cell[c]).join('');
     return { html: `<tr draggable="true" data-char="${escapeHtml(character.name)}">${cells}</tr>`, sortVals };

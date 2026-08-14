@@ -1,6 +1,5 @@
 // src/web/recommend.js —— 统计视图（原推荐）：五个二级子面板（角色面板 / 角色配装 / 驱动盘 / 角色配队 / 角色总览）
 // 数据源：plans.json（方案推荐）+ workshop-grad.json（全服真实占比，工坊 grad_stat 接口）+ library.json。
-// 注意口径：workshop-grad 是全服真实累计占比；workshop-stats 是基于「各影画档全服前100」的高段样本，
 // 供「角色面板」/「角色总览」作玩家样本对标（不当作全服分布）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序。
 import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex } from './data.js';
@@ -132,6 +131,7 @@ function relicTip(sets) {
 // ---------- grad 数据缓存（workshopGrad.roles 引用变化时惰性重建） ----------
 let _roleIdRoles = null;
 let _roleIdCache = null;
+let _roleIdByName = null;
 /** grad item_id → 角色名（供 workshop-stats 的 role_id 映射） */
 function wsRoleIdMap() {
   const roles = workshopGrad.roles;
@@ -142,7 +142,6 @@ function wsRoleIdMap() {
   }
   return _roleIdCache;
 }
-let _roleIdByName = null;
 let _wsPanelRoles = null;
 let _wsPanelCache = null;
 /** 角色名 → role_id（workshop-stats 的 panels/panelScatter 按 role_id 键；grad name→id 缓存反查） */

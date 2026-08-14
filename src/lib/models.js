@@ -88,7 +88,8 @@ export class Character {
     this.maxLevel = normalizeStatKeys(data.maxLevel);
     // 其余字段（wiki 扁平初始属性 / description / cinemas / appearance / cv 等）统一归一化到实例，
     // 避免 calc/wiki 各自去猜 .extra 里的字段
-    for (const [k, v] of Object.entries(data)) if (!(k in this)) this[k] = v;
+    // wengine/discs 在下文用基类实例化，此处跳过（避免先拷贝原对象再被覆盖的浪费）
+    for (const [k, v] of Object.entries(data)) if (!(k in this) && k !== 'wengine' && k !== 'discs') this[k] = v;
     // 组合：音擎 + 驱动盘（覆盖原始嵌套）
     this.wengine = data.wengine ? new Wengine(data.wengine) : null;
     this.discs = (data.discs || []).map((d) => new Disc(d));

@@ -33,6 +33,28 @@ export function isMain(meta, run) {
     });
 }
 
+/** 并发池：最多 limit 个 worker 并行执行 fn(item, index)；结果按下标对齐返回，单任务失败返回 null（错误已打印）。
+ *  onProgress 可选，每个任务结束后回调 (done, total)。library/characters/plans/workshop 四个同步脚本共用。 */
+export async function pool(items, limit, fn, onProgress) {
+  const ret = new Array(items.length);
+  let next = 0;
+  let done = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length || 1) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        ret[i] = await fn(items[i], i).catch((e) => {
+          console.error(`  ✗ 任务 ${i} 失败: ${e.message}`);
+          return null;
+        });
+        done++;
+        onProgress?.(done, items.length);
+      }
+    })
+  );
+  return ret;
+}
+
 /** 校验 + 写入 data/ 下的 JSON 文件（sync 脚本收尾共用）。
  *  validate 提供校验函数时先 warnIfInvalid（strict 为 true 则抛错中断）；
  *  pretty 为 false 时用紧凑格式——library.json 嵌套 5 层，pretty 会膨胀到 ~11MB，紧凑仅 ~3.5MB。 */

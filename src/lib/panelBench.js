@@ -1,7 +1,7 @@
 // src/lib/panelBench.js —— 面板对标数据合并（推荐 high 档 / 玩家真实样本 / 我的 三源），纯函数（Node 与浏览器共用）
 // 数据源：plans.json（推荐方案 high 档毕业值聚合）、workshop-stats.json（玩家真实样本 min/max/mean/median）、characters.json（我的 final）。
 // 思路：每属性展示三组统计——推荐毕业档范围（high 的 min→max，圆点 mean/median）、玩家真实样本范围（min→max，圆点 mean/median）、我的值。
-import { sd, median, cv } from './distStats.js';
+import { sd, median, cv, quantileSorted } from './distStats.js';
 import { resolveName, CATEGORY, CHAR_ALIASES } from './names.js';
 
 /** 特性 → 关键属性模板（按该特性角色推荐方案里最常出现的面板属性确定，数据验证过） */
@@ -33,7 +33,7 @@ function agg(vals) {
     min: s[0],
     max: s[n - 1],
     mean: sum / n,
-    median: n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2,
+    median: quantileSorted(s, 0.5), // 与 median() 同值，但 s 已排序，免二次排序
   };
 }
 

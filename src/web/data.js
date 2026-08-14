@@ -10,6 +10,8 @@ import { apiRequest, postJSON } from './util.js';
 // setData 重新赋值后，import 方读到的总是最新值。
 export let library = { characters: {}, wengines: {}, discs: {} };
 export let myCharacters = [];
+/** 角色名 → Character（供 readValidStats 默认路径 O(1) 查找，随 setData 重建） */
+let myCharByName = new Map();
 export const grid = document.getElementById('grid');
 
 /** 养成指南推荐方案：{ avatarId: { name, plans: [...] } }，按角色名另建索引供目标弹窗表格用 */
@@ -33,6 +35,7 @@ export function setData(lib, chars, plansData, gradData, statsData) {
     bangboos: lib.bangboos || {}, // 邦布为普通对象（基类无附加逻辑）
   };
   myCharacters = (chars || []).map((c) => new Character(c)); // 账号角色（含 Wengine/Disc 嵌套）
+  myCharByName = new Map(myCharacters.map((c) => [c.name, c]));
   plans = plansData || {};
   plansByName = {};
   for (const v of Object.values(plans)) if (v && v.name) plansByName[v.name] = v;
@@ -81,7 +84,7 @@ export function readValidStats(name) {
   if (name in userConfig.validStats) return userConfig.validStats[name] || [];
   // 否则用角色默认：游戏推荐的有效属性（equipPlan.plan_effective_property_list）。
   // 合法有效副词条类型见 constants.SUBSTAT_TYPE_SET（与 calc.validStatOptions 的 type 一致）
-  const character = myCharacters.find((c) => c.name === name);
+  const character = myCharByName.get(name);
   if (!character) return [];
   return (character.equipPlan?.plan_effective_property_list || [])
     .map((p) => (p.full_name && p.full_name.includes('百分比') ? `${p.name}%` : p.name))

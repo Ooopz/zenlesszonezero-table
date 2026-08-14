@@ -11,27 +11,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import { DATA_DIR, isMain, writeDataFile, openBrowser } from '../lib/node.js';
+import { DATA_DIR, isMain, writeDataFile, openBrowser, pool } from '../lib/node.js';
 import { parseCookies, parseNum, CLIPBOARD_SCRIPT } from '../lib/util.js';
-import { buildNameIndex, canonicalName, CATEGORY } from '../lib/names.js';
+import { canonicalize, CATEGORY } from '../lib/names.js';
 import { validateCharacters } from '../lib/schema.js';
-import { pool } from './library.js';
 import { requestJson, fetchUid } from './http.js';
+import { loadNameIndexes } from './name-index.js';
 
 const COOKIE_FILE = path.join(DATA_DIR, '.cookie.json');
 
 // ---------- 名称权威（写时归一） ----------
 // library.json 为标准名权威源；缺失/损坏时降级为不归一（名称保持接口原样），并在同步时提示。
-let libNameIndex = null;
-try {
-  const lib = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'library.json'), 'utf8'));
-  libNameIndex = {
-    wengine: buildNameIndex(lib.wengines || {}, CATEGORY.WENGINE),
-    disc: buildNameIndex(lib.discs || {}, CATEGORY.DISC),
-  };
-} catch {
-  console.warn('⚠️ library.json 缺失/损坏，账号音擎/驱动盘名跳过归一（建议先 npm run sync:library）');
-}
+const libNameIndex = loadNameIndexes('账号音擎/驱动盘名');
 
 /** 账号角色写时归一：音擎名 / 驱动盘套装名统一解析为 library 标准名（「未佩戴音擎」「未佩戴驱动盘」「未知」占位保留）。
  *  extractCharacter 保持纯函数，此层只在写 data/characters.json 前对已提取角色做名称固化。 */
@@ -39,16 +30,12 @@ function normalizeCharacterOutput(c) {
   if (!libNameIndex || !c) return c;
   const wengine =
     c.wengine && c.wengine.name !== '未佩戴音擎'
-      ? {
-          ...c.wengine,
-          name:
-            canonicalName(CATEGORY.WENGINE, libNameIndex.wengine, c.wengine.name, { fuzzy: false }) || c.wengine.name,
-        }
+      ? { ...c.wengine, name: canonicalize(CATEGORY.WENGINE, libNameIndex.wengine, c.wengine.name, { fuzzy: false }).name }
       : c.wengine;
   const discs = (c.discs || []).map((d) =>
     d.set === '未佩戴驱动盘' || d.set === '未知'
       ? d
-      : { ...d, set: canonicalName(CATEGORY.DISC, libNameIndex.disc, d.set, { fuzzy: false }) || d.set }
+      : { ...d, set: canonicalize(CATEGORY.DISC, libNameIndex.disc, d.set, { fuzzy: false }).name }
   );
   return { ...c, wengine, discs };
 }
