@@ -9,7 +9,7 @@
     "sync:library": "node src/sync/library.js",
     "sync:characters": "node src/sync/characters.js",
     "sync:plans": "node src/sync/plans.js",
-    "test": "node --test test/calc.test.js test/discstats.test.js test/distStats.test.js test/extract.test.js test/gradStats.test.js test/models.test.js test/names.test.js test/panelBench.test.js test/panelRange.test.js test/plansStats.test.js test/schema.test.js test/skill-growth.test.js test/sort.test.js test/teamStats.test.js test/util.test.js test/wengineStats.test.js test/workshop-extract.test.js test/workshopStats.test.js",
+    "test": "node --test test/calc.test.js test/discstats.test.js test/distStats.test.js test/extract.test.js test/gradStats.test.js test/models.test.js test/names.test.js test/node.test.js test/panelBench.test.js test/panelRange.test.js test/plansStats.test.js test/proxy.test.js test/schema.test.js test/skill-growth.test.js test/sort.test.js test/teamStats.test.js test/util.test.js test/wengineStats.test.js test/workshop-extract.test.js test/workshopStats.test.js",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,md,json}\""
   },

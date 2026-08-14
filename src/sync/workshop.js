@@ -3,26 +3,45 @@
 // 用法：
 //   node src/sync/workshop.js                    # 全量 57 角色 × 7 影画 × 每影画 300 条（榜单全量）
 //   node src/sync/workshop.js 3                  # 只爬前 3 个角色（试跑）
-//   node src/sync/workshop.js 57 300 8           # 第 4 参 = v3 配装并发（默认 6，调高加速但注意限流）
+//   node src/sync/workshop.js 57 300 6           # 第 4 参 = v3 配装并发（默认 6，调高加速但注意限流）
+//   node src/sync/workshop.js 57 300 6 http://127.0.0.1:7890   # 第 5 参 = 代理 URL（IP 被封时换 IP）
+//       代理支持 http/https CONNECT 与 socks5（可带 user:pass 认证）；也可用环境变量
+//       HTTPS_PROXY / ALL_PROXY / HTTP_PROXY（仅 api.zzzmap.com 走代理，其余请求不受影响，
+//       见 src/sync/proxy.js）。Node 24+ 也可用原生 `node --use-env-proxy`。
 // 排名收集：角色级并发 + 每角色 7 影画组内并行翻页（实测 6.4× 提速）。
 // 输出：data/workshop.json（配装条目）、data/workshop-stats.json（汇总，自动生成）
-// 断点续爬：进度存 data/.workshop-progress.json
+// 断点续爬：以 workshop.json 实际内容为准（文件里没有的 uid 自动重爬），写文件原子化（tmp+rename）；
+// 不再使用进度文件（旧 data/.workshop-progress.json 已废弃，可删除）
 // 注：本文件整合了面板计算（原 workshop-panel.js）、汇总生成（原 workshop-stats.js）；
 //     workshop-grad.js（全服统计）独立保留。提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算）。
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { computeWorkshopStats, computePanelCorrelations, computeWorkshopDiscStats, computePanelScatter } from '../lib/workshopStats.js';
+import {
+  computeWorkshopStats,
+  computePanelCorrelations,
+  computeWorkshopDiscStats,
+  computePanelScatter,
+  computeRelicStats,
+  computeRankLayers,
+  computeRankDist,
+  computeSkillStats,
+  computePlayerProfiles,
+  computeRoleDiscStats,
+  computeAbyssStats,
+  computeAbyssTeamStats,
+  bin2D,
+} from '../lib/workshopStats.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
 import { streamJsonArrayElements, ROOT, DATA_DIR, isMain, pool } from '../lib/node.js';
+import { installProxyFetch, resolveProxyUrl, maskProxyUrl } from './proxy.js';
 
 const OUT_FILE = path.join(DATA_DIR, 'workshop.json');
 const STATS_FILE = path.join(DATA_DIR, 'workshop-stats.json');
 const ABYSS_FILE = path.join(DATA_DIR, 'workshop-abyss.json'); // uid 级深渊战绩（裁剪后；前端不加载，聚合层消费）
 const WEIGHTS_FILE = path.join(DATA_DIR, 'workshop-weights.json'); // 角色默认流派权重（工坊有效词条口径）
-const PROGRESS_FILE = path.join(DATA_DIR, '.workshop-progress.json');
 // 逆向提取的静态数据表（合并文件）：装备 / 角色基础 / 套装 / 武器
 const S = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/sync', 'workshop-static.json'), 'utf8'));
 const items = S.items; // 装备 Id → {Rarity, SuitId}
@@ -69,11 +88,46 @@ function filterParams(data) {
   for (const [k, v] of Object.entries(data || {})) if (v != null) o[k] = v;
   return o;
 }
+/** 带重试的工坊请求：非 2xx / 非 JSON（风控返回 HTML 页）/ 网络错误 → 指数退避重试。
+ *  实测工坊 API 风控/限流时返回 HTML（`<html>...`，res.json() 解析抛 "Unexpected token '<'"），
+ *  且会持续数分钟——重试退避 2s→6s→18s→54s 后仍失败才抛错（调用方记 fail，续爬自愈重爬）。 */
+const RETRY_MAX = 4; // 重试次数（不含首次）
+const RETRY_BASE = 2000; // 初始退避 2s，指数 ×3
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function fetchJson(url, opts, attempt = 0) {
+  let res;
+  try {
+    res = await fetch(url, opts);
+  } catch (e) {
+    if (attempt < RETRY_MAX) {
+      await sleep(RETRY_BASE * 3 ** attempt);
+      return fetchJson(url, opts, attempt + 1);
+    }
+    throw new Error(`网络错误: ${e.message}`, { cause: e });
+  }
+  const text = await res.text(); // 先取全文：HTML 风控页与 JSON 分开处理
+  if (!res.ok) {
+    if (attempt < RETRY_MAX) {
+      await sleep(RETRY_BASE * 3 ** attempt);
+      return fetchJson(url, opts, attempt + 1);
+    }
+    throw new Error(`HTTP ${res.status}: ${text.slice(0, 60)}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (attempt < RETRY_MAX) {
+      await sleep(RETRY_BASE * 3 ** attempt);
+      return fetchJson(url, opts, attempt + 1);
+    }
+    throw new Error(`非 JSON 响应（疑似风控）: ${text.slice(0, 60)}`);
+  }
+}
 async function apiGet(path, data) {
   const d = filterParams(data);
   const time = Date.now();
   const qs = new URLSearchParams(d).toString();
-  const res = await fetch(`${BASE}${path}${qs ? '?' + qs : ''}`, {
+  return fetchJson(`${BASE}${path}${qs ? '?' + qs : ''}`, {
     headers: {
       'content-type': 'application/json',
       version: '100',
@@ -82,12 +136,11 @@ async function apiGet(path, data) {
       time: String(time),
     },
   });
-  return res.json();
 }
 async function apiPost(path, data) {
   const d = filterParams(data);
   const time = Date.now();
-  const res = await fetch(`${BASE}${path}`, {
+  return fetchJson(`${BASE}${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -98,11 +151,10 @@ async function apiPost(path, data) {
     },
     body: JSON.stringify(d),
   });
-  return res.json();
 }
 
 // 供 workshop-grad.js（全服统计）复用
-export { apiGet, apiPost, filterParams, makeSign };
+export { apiGet, apiPost, filterParams, makeSign, sleep };
 
 // ---------- 参数 ----------
 const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模式）
@@ -112,44 +164,105 @@ const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模�
 // type 变体（weapon/relic/player/all）返回空；uid 自增扫描不可行（uid 空间 10^7~1.5×10^9，
 // 无效 uid 也返回 code:0 data:null 需完整请求才能判定，命中率极低且易触发风控）。
 const PER_RANK = Number(process.argv[3] || 300); // 每影画拉多少条（默认 300 = 榜单全量）
-// v3 配装请求并发（默认 6）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
-// 调高可加速配装爬取（响应大、吃带宽，注意工坊 API 限流，默认 6 稳妥）
+// v3 配装请求并发（默认 10）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
+// 调高可加速配装爬取（响应大、吃带宽，注意工坊 API 限流）
 const CONCURRENCY = Number(process.argv[4] || 6);
 
-// ---------- 进度（断点续爬：缓存已爬 uid + 已提取的配装条目） ----------
-// 防 import 本模块时 OOM：进度文件过大（异常/旧口径遗留）时不读取，忽略断点；改爬取口径后旧进度本就作废，应全量重爬
-let progress = { cachedUids: {}, entries: [] };
-// workshop.json 不存在（数据已清空/首次爬取）时进度作废：cachedUids 若沿用会导致所有 uid 被跳过而空爬
-if (fs.existsSync(OUT_FILE) && fs.existsSync(PROGRESS_FILE)) {
-  try {
-    const size = fs.statSync(PROGRESS_FILE).size;
-    if (size > 200 * 1024 * 1024) {
-      console.warn(`⚠️ 进度文件过大（${(size / 1e6).toFixed(0)}MB），已忽略断点，将全量重爬（可删除 data/.workshop-progress.json 避免干扰）`);
-    } else {
-      progress = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-    }
-  } catch {
-    progress = { cachedUids: {}, entries: [] };
-  }
+// ---------- 代理（可选）：第 5 参 > HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量 ----------
+// IP 被工坊风控/封禁时用代理换 IP（工坊按 IP 限流，签名/接口不受 IP 影响）。
+// 模块加载时启用，server.js 复用 fetchWorkshopData 的「更新工坊配装」按钮同样生效；
+// 只对 api.zzzmap.com 生效（见 proxy.js 的 applyHosts），米游社等其他请求不受影响。
+const proxyUrl = resolveProxyUrl(process.argv[5]);
+if (proxyUrl) {
+  installProxyFetch(proxyUrl);
+  console.log(`🌐 工坊请求走代理: ${maskProxyUrl(proxyUrl)}（仅 api.zzzmap.com，其余请求不受影响）`);
 }
-const cachedUids = progress.cachedUids || {};
 
-/** 分批写「对象头 + 大数组」为 JSON 文件：每次只 JSON.stringify 一批（防条目过多时一次性序列化
- *  超过 V8 字符串上限 Invalid string length）。prefix 形如 `{"cachedUids":{...},"entries":[`，函数补上分批数组与 `]}`。 */
+// ---------- 断点续爬（以文件内容为准，不再依赖进度文件） ----------
+// 曾用 data/.workshop-progress.json 缓存「已爬 uid」做跳过判断，但进度保存在写文件之前，
+// 中断时会出现「进度领先于数据」→ 下次运行跳过大量 uid 并把残缺 entries 全量重写覆盖旧文件
+// （实测 145830 条覆盖仅 9579/63842 uid 的数据丢失事故）。现改为：
+//   · 跳过判断 = 恢复出的 entries 实际覆盖的 uid 集合（fileUids），文件里没有的 uid 一律重爬（自愈）；
+//   · 写文件原子化（tmp + rename），中断只损坏临时文件，旧文件完好。
+// 崩溃续爬 = 旧文件断点：上次「写入文件后」爬的 uid 不在文件里 → 本次自动重爬，永不静默丢数据。
+
+/** 分批写「对象头 + 大数组」为 JSON 文件（原子写：临时文件 + rename，中断不损坏旧文件）。
+ *  每次只 JSON.stringify 一批（防条目过多时一次性序列化超过 V8 字符串上限 Invalid string length）。
+ *  prefix 形如 `{"meta":{...},"entries":[`，函数补上分批数组与 `]}`。 */
 function writeJsonArrayStream(file, prefix, arr, batchSize = 5000) {
-  const fd = fs.openSync(file, 'w');
-  fs.writeSync(fd, prefix);
-  for (let i = 0; i < arr.length; i += batchSize) {
-    if (i > 0) fs.writeSync(fd, ',');
-    // 去 [ ] 只留元素（逗号分隔），分批发序列化
-    fs.writeSync(fd, JSON.stringify(arr.slice(i, i + batchSize)).slice(1, -1));
+  const tmp = `${file}.tmp`;
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeSync(fd, prefix);
+    for (let i = 0; i < arr.length; i += batchSize) {
+      if (i > 0) fs.writeSync(fd, ',');
+      // 去 [ ] 只留元素（逗号分隔），分批发序列化
+      fs.writeSync(fd, JSON.stringify(arr.slice(i, i + batchSize)).slice(1, -1));
+    }
+    fs.writeSync(fd, ']}');
+  } finally {
+    fs.closeSync(fd);
   }
-  fs.writeSync(fd, ']}');
-  fs.closeSync(fd);
+  fs.renameSync(tmp, file); // 原子替换：写成功才覆盖旧文件
 }
-// 进度只存 cachedUids（entries 可达数十万条，存它会撑爆 progress 文件 / 加载 / 序列化；
-// 续爬时 entries 从已写好的 workshop.json 流式恢复，见 fetchWorkshopData）
-const saveProgress = () => fs.writeFileSync(PROGRESS_FILE, JSON.stringify({ cachedUids }));
+
+// ---------- 大文件流式处理（防 OOM：90 万+ 条目全量进内存 ≈ 7GB，超 Node 默认 4GB 堆） ----------
+/** 本次新增配装条目的暂存文件（裸逗号流：`e1,e2,...`，无 [ ] 头尾）。
+ *  爬取中分批落盘；结束时与旧文件流式合并成最终 workshop.json。
+ *  崩溃残留直接删除（自愈：这些 uid 不在最终文件里，下次自动重爬）。 */
+const PART_FILE = path.join(DATA_DIR, '.workshop-part.json');
+const PART_FLUSH = 10000; // 内存条目达到该数即落盘一批（常驻内存 ~60MB + 序列化临时 ~30MB）
+
+/** 把内存中的 entries 追加写进 PART 裸流并**清空数组**（partCount 累计已落盘条数）。
+ *  ⚠️ 必须清空：不清空会让 entries 长度持续 ≥ 阈值，每个 build 都触发 flush，
+ *  每次重写全部条目导致 partCount 虚高（O(n²)）与 PART 写放大（曾出现 870 万虚高计数）。 */
+export function flushPart(entries, partCount, file = PART_FILE) {
+  if (!entries.length) return partCount;
+  const fd = fs.openSync(file, 'a');
+  try {
+    if (partCount > 0) fs.writeSync(fd, ',');
+    for (let i = 0; i < entries.length; i += 5000) {
+      if (i > 0) fs.writeSync(fd, ',');
+      fs.writeSync(fd, JSON.stringify(entries.slice(i, i + 5000)).slice(1, -1));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  const n = entries.length;
+  entries.length = 0; // 清空：下次 flush 只写新条目
+  return partCount + n;
+}
+
+/** 流式复制 src（{"meta":...,"entries":[...]} 结构）的 entries 到 outFd：
+ *  用 streamJsonArrayElements 逐条解析后原样写入——不能做字符级 slice 块切分
+ *  （条目含中文 UTF-8 多字节字符，块边界切断会损坏 JSON，曾致解析卡死 OOM）。 */
+export function copyEntriesTo(outFd, srcFile) {
+  let first = true;
+  for (const raw of streamJsonArrayElements(srcFile)) {
+    fs.writeSync(outFd, first ? '[' : ',');
+    fs.writeSync(outFd, raw);
+    first = false;
+  }
+}
+
+/** 流式复制 PART 裸流到 outFd（内容即元素逗号流，无头尾；整块搬移，无字符切分问题） */
+export function appendPartTo(outFd, file = PART_FILE) {
+  const buf = Buffer.alloc(1 << 20);
+  const fd = fs.openSync(file, 'r');
+  try {
+    let n;
+    while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
+      outFd && fs.writeSync(outFd, buf.toString('utf8', 0, n));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** 流式遍历 workshop.json 的 entries（generator）：聚合函数 for...of 天然兼容，不把大数组放内存 */
+export function* iterWorkshopEntries() {
+  for (const raw of streamJsonArrayElements(OUT_FILE)) yield JSON.parse(raw);
+}
 
 // ---------- 属性映射（get_prop_desc：PropertyId → 属性名，逆向自工坊） ----------
 const PROP_DESC = {
@@ -388,16 +501,69 @@ function computeEnkaPanel(ij) {
 }
 
 // ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------
-function buildWorkshopStats(roleNameMap, weightJson) {
+/** 深渊战绩聚合（读 workshop-abyss.json）：基础分布 + 「uid 平均评分 × 深渊层数」配对密度网格。
+ *  评分×层数配对需要 entries 的 uid 平均评分（一次流式遍历）。 */
+function buildAbyssStats() {
+  if (!fs.existsSync(ABYSS_FILE)) return { layerDist: {}, ratingDist: {}, teams: [], relicLayer: null, abyssTeam: null };
+  const abyssEntries = [];
+  for (const raw of streamJsonArrayElements(ABYSS_FILE)) abyssEntries.push(JSON.parse(raw));
+  const base = computeAbyssStats(abyssEntries);
+  // uid 平均评分（来自 workshop entries；0/缺失排除）
+  const relicByUid = new Map(); // uid -> {sum, n}
+  for (const e of iterWorkshopEntries()) {
+    if (!e || e.uid == null) continue;
+    const rp = Number(e.relic_point);
+    if (!Number.isFinite(rp) || rp <= 0) continue;
+    let p = relicByUid.get(e.uid);
+    if (!p) relicByUid.set(e.uid, (p = { sum: 0, n: 0 }));
+    p.sum += rp;
+    p.n++;
+  }
+  const xv = [];
+  const yv = [];
+  for (const a of abyssEntries) {
+    if (!a || !a.abyss || a.abyss.max_layer == null) continue;
+    const p = relicByUid.get(a.uid);
+    if (!p || !p.n) continue;
+    xv.push(p.sum / p.n);
+    yv.push(a.abyss.max_layer);
+  }
+  const grid = xv.length ? bin2D(xv, yv, 24) : null;
+  // 深渊配队聚合（出场榜/双队 Top/S 评级 Top/队友共现）
+  const abyssTeam = computeAbyssTeamStats(abyssEntries);
+  return { ...base, relicLayer: grid ? { xName: '平均装配评分', yName: '深渊层数', ...grid } : null, abyssTeam };
+}
+
+export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   if (!fs.existsSync(OUT_FILE)) return null;
-  // 流式读 entries：大文件（数十万条/数百 MB）一次 readFileSync 会超 V8 字符串上限 Invalid string length
-  const entries = [];
-  for (const raw of streamJsonArrayElements(OUT_FILE)) entries.push(JSON.parse(raw));
-  const stats = computeWorkshopStats(entries);
-  const panelCorr = computePanelCorrelations(entries); // 属性相关（按角色，同条目配对）
-  const discDetails = computeWorkshopDiscStats(entries, libDiscs, { roleNameMap }); // 驱动盘单盘真实统计（供统计→驱动盘面板）
-  const panelScatter = computePanelScatter(entries); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-  const data = { meta: { scrapedAt: new Date().toISOString(), entries: entries.length }, ...stats, discDetails, panelCorr, panelScatter };
+  // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：聚合函数 for...of 兼容 generator，
+  // 每次调用独立遍历一遍文件（~1-2 分钟），峰值内存只留聚合 Map
+  const stats = computeWorkshopStats(iterWorkshopEntries());
+  const panelCorr = computePanelCorrelations(iterWorkshopEntries()); // 属性相关（按角色，同条目配对）
+  const discDetails = computeWorkshopDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap }); // 驱动盘单盘真实统计
+  const panelScatter = computePanelScatter(iterWorkshopEntries()); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
+  // 新指标：练度评分 / 影画分层与占比 / 技能练度 / 玩家画像 / 角色盘画像 / 深渊战绩
+  const relicStats = computeRelicStats(iterWorkshopEntries());
+  const rankLayers = computeRankLayers(iterWorkshopEntries());
+  const rankDist = computeRankDist(iterWorkshopEntries());
+  const skillStats = computeSkillStats(iterWorkshopEntries());
+  const playerProfiles = computePlayerProfiles(iterWorkshopEntries());
+  const roleDiscStats = computeRoleDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap });
+  const abyssStats = buildAbyssStats(); // 读 workshop-abyss.json（内部多一次 entries 遍历配对评分×层数）
+  const data = {
+    meta: { scrapedAt: new Date().toISOString(), entries: totalEntries ?? -1 },
+    ...stats,
+    discDetails,
+    panelCorr,
+    panelScatter,
+    relicStats,
+    rankLayers,
+    rankDist,
+    skillStats,
+    playerProfiles,
+    roleDiscStats,
+    abyssStats,
+  };
   // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;
   fs.writeFileSync(STATS_FILE, JSON.stringify(data));
@@ -452,7 +618,14 @@ export async function fetchWorkshopGrad(onProgress) {
         const sysW = weapons.find((x) => String(x.item_id) === String(w.weapon_id));
         const rawName = sysW ? sysW.nick_name : '';
         const libW = sysW ? resolveWengine(rawName) : null;
-        const name = w.weapon_id === 'other' ? '其他' : libW ? libW.name : rawName ? romanNumeralUnicode(rawName) : `音擎${w.weapon_id}`;
+        const name =
+          w.weapon_id === 'other'
+            ? '其他'
+            : libW
+              ? libW.name
+              : rawName
+                ? romanNumeralUnicode(rawName)
+                : `音擎${w.weapon_id}`;
         const icon = w.weapon_id === 'other' ? '' : libW?.icon || '';
         weaponsStat.push({
           id: w.weapon_id,
@@ -498,7 +671,8 @@ export async function fetchWorkshopGrad(onProgress) {
 // ---------- 提取玩家某角色的配装（兼容 mys 源 / 2025 源两种 item_json） ----------
 // ctx = { weapons: system_weapons, artifacts: system_artifacts, items: 装备表 }
 
-/** 角色是否「练满」：角色 ≥60 级、音擎 ≥60 级、6 块驱动盘全部 15 级。爬取时过滤未毕业角色。
+/** 角色是否「练满」：角色 ≥60 级、音擎 ≥60 级、6 块驱动盘全部 15 级且全部 R5（金盘）。
+ *  爬取时过滤未毕业角色。R4 盘上限 +12（游戏规则），R5 才是满配。
  *  role 为 user_role/v3 的 role（含 item_json；mys 源用 ij.weapon/ij.equip，2025 源用 ij.Weapon/ij.EquippedList）。 */
 export function isMaxedRole(role) {
   if (!role || !role.item_json) return false;
@@ -507,13 +681,15 @@ export function isMaxedRole(role) {
   // 音擎等级（mys: ij.weapon.level；2025: ij.Weapon.Level）
   const wpnLv = ij.weapon ? ij.weapon.level : ij.Weapon ? ij.Weapon.Level : null;
   if (!(wpnLv >= 60)) return false;
-  // 驱动盘：恰 6 块且每块 15 级（mys: ij.equip[]；2025: ij.EquippedList[].Equipment）
+  // 驱动盘：恰 6 块且每块 15 级 + R5（mys: ij.equip[]；2025: ij.EquippedList[].Equipment）
   const discs =
     Array.isArray(ij.equip) && ij.equip.length ? ij.equip : Array.isArray(ij.EquippedList) ? ij.EquippedList : null;
   if (!discs || discs.length !== 6) return false;
   for (const d of discs) {
     const lv = d && d.level != null ? d.level : d && d.Equipment ? d.Equipment.Level : null;
     if (lv !== 15) return false;
+    const rar = d && d.rarity != null ? d.rarity : d && d.Equipment ? d.Equipment.Rarity : null;
+    if (rar !== 5) return false; // 必须 R5（金色盘）
   }
   return true;
 }
@@ -523,20 +699,26 @@ export function extractBuild(v3Data, roleId, ctx) {
   const role = roles.find((x) => String(x.item_id) === String(roleId));
   if (!role || !role.item_json) return null;
   const ij = role.item_json;
-  const base = { level: role.level, rank: role.rank, relic_point: role.relic_point };
+  // relic_point 写时归一为数字（工坊返回字符串如 "294.30"；0/缺失 = 未带驱动盘或 2025 源无评分，置 null 由聚合层过滤）
+  const rp = Number(role.relic_point);
+  const base = { level: role.level, rank: role.rank, relic_point: Number.isFinite(rp) && rp > 0 ? rp : null };
   // mys 源判定要「有实际数据」（数组非空）：2025 源若带空的 properties/equip 数组（[] 为 truthy）
   // 会误走 mys 分支返回空面板，必须落到 2025 分支按公式算 enka 面板。
   if ((ij.equip && ij.equip.length) || (ij.properties && ij.properties.length)) {
     // mys 源：工坊格式化结构（名称统一解析回 wiki 标准名 / 属性键归一）
     return {
       ...base,
+      source: 'mys', // 源标记（技能 type 为官方语义：0普攻/1特殊技/2闪避/3终结+连携/5核心/6支援技）
       skills: (ij.skills || []).map((s) => ({ type: s.skill_type, level: s.level })), // 技能练度（6 技能 {type 0-6, level}）
       weapon: ij.weapon && {
         id: ij.weapon.id,
         name: ij.weapon.name ? resolveWengine(ij.weapon.name)?.name || romanNumeralUnicode(ij.weapon.name) : null,
         level: ij.weapon.level,
         rarity: ij.weapon.rarity,
-        main: (ij.weapon.main_properties || []).map((p) => ({ name: normalizeStatKey(p.property_name), value: p.base })),
+        main: (ij.weapon.main_properties || []).map((p) => ({
+          name: normalizeStatKey(p.property_name),
+          value: p.base,
+        })),
       },
       panel: (ij.properties || []).map((p) => ({
         name: normalizeStatKey(p.property_name),
@@ -545,9 +727,10 @@ export function extractBuild(v3Data, roleId, ctx) {
         final: p.final,
       })),
       equips: (ij.equip || []).map((e) => {
-        const suitName = e.equip_suit && e.equip_suit.name
-          ? canonicalName(CATEGORY.DISC, libDiscs, e.equip_suit.name) || e.equip_suit.name
-          : undefined;
+        const suitName =
+          e.equip_suit && e.equip_suit.name
+            ? canonicalName(CATEGORY.DISC, libDiscs, e.equip_suit.name) || e.equip_suit.name
+            : undefined;
         // 主/副词条与 2025 源同构：main=主词条（main_properties）、subs=全部副词条（properties）。
         // 不提取 mys 独有的 valid/all_hit/invalid_property_cnt（两源结构需一致，聚合层按统一口径判定）。
         return {
@@ -603,6 +786,7 @@ export function extractBuild(v3Data, roleId, ctx) {
       .filter(Boolean);
     return {
       ...base,
+      source: '2025', // 源标记（技能 type 为 1.x 游戏 ID 语义：0普攻/1闪避/2特殊技/3连携/5核心/6终结）
       skills: (ij.SkillLevelList || []).map((s) => ({ type: s.Index, level: s.Level })), // 技能练度（与 mys 源同构 {type, level}）
       weapon,
       panel: computeEnkaPanel(ij),
@@ -699,7 +883,9 @@ async function fetchRankRows(itemId, rank) {
  *  onProgress({step, done, total}) 供 server 进度轮询。 */
 export async function fetchWorkshopData(onProgress) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  console.log(`开始爬取：前 ${MAX_ROLES} 角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘）\n`);
+  console.log(
+    `开始爬取：前 ${MAX_ROLES} 角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘）\n`
+  );
   const { ctx, roles } = await buildCtx();
   const targets = roles.slice(0, MAX_ROLES);
   console.log(`角色总数 ${roles.length}，本次爬 ${targets.length} 个\n`);
@@ -710,9 +896,7 @@ export async function fetchWorkshopData(onProgress) {
     roleDone = 0;
   await pool(targets, CONCURRENCY, async (t) => {
     const { item_id } = t;
-    const pages = await Promise.all(
-      Array.from({ length: 7 }, (_, rank) => fetchRankRows(item_id, rank))
-    );
+    const pages = await Promise.all(Array.from({ length: 7 }, (_, rank) => fetchRankRows(item_id, rank)));
     let fetched = 0;
     pages.forEach((rows, rank) => {
       for (const r of rows) {
@@ -728,16 +912,35 @@ export async function fetchWorkshopData(onProgress) {
   });
   console.log(`\n排名条目 ${rankFetch}，去重 uid ${uidMap.size}\n`);
 
-  // 每个 uid 拉完整配装（并发；断点续爬：已爬 uid 跳过，entries 从已写好的 workshop.json 流式恢复）
-  let entries = [];
+  // 每个 uid 拉完整配装（并发；断点续爬：恢复旧文件条目 + 以文件实际覆盖的 uid 为跳过依据）
+  // 内存安全：条目不保留全量——恢复只收集 fileUids，本次新增分批落盘 PART 裸流（90 万+ 条全量
+  // 进数组 ≈ 7GB 会 OOM），结束阶段再与旧文件流式合并成最终 workshop.json
+  fs.rmSync(PART_FILE, { force: true }); // 清残留：上次崩溃的 PART 丢弃（缺失 uid 由自愈机制重爬）
+  const fileUids = new Set(); // 旧文件实际覆盖的 uid（跳过判断的唯一依据：文件里没有的 uid 一律重爬，自愈进度领先）
+  let oldEntryCount = 0;
   if (fs.existsSync(OUT_FILE)) {
-    for (const raw of streamJsonArrayElements(OUT_FILE)) entries.push(JSON.parse(raw));
+    for (const raw of streamJsonArrayElements(OUT_FILE)) {
+      const e = JSON.parse(raw);
+      oldEntryCount++;
+      if (e && e.uid) fileUids.add(e.uid);
+    }
   }
+  // 只爬「文件里没有」的 uid：上次中断（写入前崩溃/写失败）丢失的 uid 会自动重爬，不再静默跳过
+  const newUids = [...uidMap.keys()].filter((u) => !fileUids.has(u));
+  const skippedCount = uidMap.size - newUids.length;
+  console.log(
+    `断点续爬：${uidMap.size} 个目标 uid 中 ${skippedCount} 个已存在于 workshop.json（跳过），` +
+      `本次实际爬取 ${newUids.length} 个` +
+      (newUids.length ? '' : '；如需全量重爬请删除 data/workshop.json')
+  );
+  onProgress?.({ step: 'fetch', done: 0, skipped: skippedCount, total: newUids.length }); // 初始进度：前端从第一秒就显示跳过数
   const abyssList = []; // 本次新爬 uid 的深渊战绩（裁剪后）
   let fail = 0,
-    done = 0;
-  await pool([...uidMap], CONCURRENCY, async ([uid]) => {
-    if (cachedUids[uid]) return; // 已爬过（entries 已在缓存里）
+    done = 0,
+    consecutiveFail = 0; // 连续失败计数（防加剧风控：连续失败过多时暂停 60s）
+  let entries = []; // 内存中未落盘的本次新增条目（达到 PART_FLUSH 即写入 PART）
+  let partCount = 0; // 已落盘 PART 的条目数
+  await pool(newUids, CONCURRENCY, async (uid) => {
     try {
       const j = await apiPost('/api/v1/user_role/v3', { uid, refresh: false, type: 'ranking' });
       const nick = j.data && j.data.nick_name;
@@ -748,31 +951,60 @@ export async function fetchWorkshopData(onProgress) {
       for (const role of roles) {
         if (!isMaxedRole(role)) continue;
         const build = extractBuild(j, role.item_id, ctx);
-        if (build) entries.push({ uid, role_id: String(role.item_id), nick, ...build });
+        if (build) {
+          entries.push({ uid, role_id: String(role.item_id), nick, ...build });
+          if (entries.length >= PART_FLUSH) partCount = flushPart(entries, partCount);
+        }
       }
-      cachedUids[uid] = true;
-    } catch {
+      consecutiveFail = 0;
+    } catch (e) {
       fail++;
+      consecutiveFail++;
+      if (fail <= 5) console.log(`  ✗ uid ${uid} 失败: ${e.message.slice(0, 90)}`); // 前几个失败打印原因（多为风控 HTML）
+      if (consecutiveFail >= 20) {
+        // 连续失败 = 风控激活中：暂停让限流缓解，避免无效请求加剧封禁
+        console.log(`  ⚠ 连续失败 ${consecutiveFail} 个，疑似风控/限流，暂停 60 秒…`);
+        await sleep(60000);
+        consecutiveFail = 0;
+      }
     }
     done++;
-    onProgress?.({ step: 'fetch', done, total: uidMap.size });
+    onProgress?.({ step: 'fetch', done, skipped: skippedCount, total: newUids.length });
     if (done % 100 === 0) {
-      saveProgress();
-      console.log(`  uid 进度 ${done}/${uidMap.size}，配装条目 ${entries.length}，失败 ${fail}`);
+      console.log(
+        `  uid 进度 ${done}/${newUids.length}，配装条目 ${oldEntryCount + partCount + entries.length}，失败 ${fail}`
+      );
     }
   });
-  saveProgress();
+  partCount = flushPart(entries, partCount); // 最后一批落盘（此后 entries 为空）
 
-  // 分批写 workshop.json（entries 可达十万级，一次性 JSON.stringify 会超 V8 字符串上限）
+  // 合并写 workshop.json（原子：tmp + rename）：meta + 旧文件 entries（流式复制）+ PART 裸流
+  const totalCount = oldEntryCount + partCount;
   const outMeta = {
     scrapedAt: new Date().toISOString(),
     roles: targets.length,
     ranks: 7,
     perRank: PER_RANK,
     uidCount: uidMap.size,
-    entryCount: entries.length,
+    entryCount: totalCount,
   };
-  writeJsonArrayStream(OUT_FILE, `{"meta":${JSON.stringify(outMeta)},"entries":[`, entries);
+  {
+    const tmp = `${OUT_FILE}.tmp`;
+    const fd = fs.openSync(tmp, 'w');
+    try {
+      fs.writeSync(fd, `{"meta":${JSON.stringify(outMeta)},"entries":[`);
+      if (fs.existsSync(OUT_FILE)) {
+        copyEntriesTo(fd, OUT_FILE); // 旧 entries（含 '['）
+        if (partCount > 0) fs.writeSync(fd, ',');
+      }
+      if (partCount > 0) appendPartTo(fd); // 本次新增裸流
+      fs.writeSync(fd, ']}');
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, OUT_FILE);
+  }
+  fs.rmSync(PART_FILE, { force: true }); // 合并完成，清理暂存
 
   // 深渊战绩落盘（断点续爬合并：旧文件已有条目 + 本次新增，uid 去重）
   const prevAbyss = [];
@@ -795,17 +1027,26 @@ export async function fetchWorkshopData(onProgress) {
   }
   fs.writeFileSync(
     WEIGHTS_FILE,
-    JSON.stringify({ meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length }, weights: weightJson })
+    JSON.stringify({
+      meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length },
+      weights: weightJson,
+    })
   );
 
   // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails 输出角色名）
   const roleNameMap = new Map(
-    roles.map((r) => [String(r.item_id), canonicalName(CATEGORY.CHAR, libChars, r.nick_name, { fuzzy: true }) || r.nick_name])
+    roles.map((r) => [
+      String(r.item_id),
+      canonicalName(CATEGORY.CHAR, libChars, r.nick_name, { fuzzy: true }) || r.nick_name,
+    ])
   );
-  buildWorkshopStats(roleNameMap, weightJson); // 配装数据更新后自动生成汇总（含 weightJson）
+  buildWorkshopStats(roleNameMap, weightJson, totalCount); // 配装数据更新后自动生成汇总（含 weightJson，流式遍历防 OOM）
   const g = await fetchWorkshopGrad(onProgress); // 同时更新全服配装统计（workshop-grad.json）
-  console.log(`\n完成：${entries.length} 条配装写入 ${OUT_FILE}，深渊 ${abyssMerged.length} 条写入 ${ABYSS_FILE}`);
-  return { stats: { entries: entries.length, roles: g.stats.roles } };
+  console.log(
+    `\n完成：本次新爬 ${done} 个 uid（跳过 ${skippedCount} 个已缓存，失败 ${fail}），` +
+      `配装条目共 ${totalCount} 条写入 ${OUT_FILE}，深渊 ${abyssMerged.length} 条写入 ${ABYSS_FILE}`
+  );
+  return { stats: { entries: totalCount, roles: g.stats.roles } };
 }
 
 async function main() {

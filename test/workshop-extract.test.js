@@ -57,7 +57,7 @@ test('extractBuild mys 源：提取 skills 且主/副词条与 2025 源同构（
   ]);
   assert.equal(build.level, 60);
   assert.equal(build.rank, 6);
-  assert.equal(build.relic_point, '257.00');
+  assert.equal(build.relic_point, 257, 'relic_point 归一为数字');
   assert.equal(build.weapon.name, '仿制星徽引擎');
   assert.equal(build.panel[0].name, '攻击力');
   assert.equal(build.equips[0].suit, '沧浪行歌');
@@ -140,6 +140,26 @@ test('extractBuild：skills 缺失时不崩（旧数据/字段缺失容错）', 
   const build = extractBuild(v3, '1081', { weapons: [], artifacts: [], items: {} });
   assert.ok(build);
   assert.deepEqual(build.skills, []);
+  assert.equal(build.relic_point, 100, '字符串评分归一为数字');
+});
+
+test('extractBuild：relic_point 0/缺失归一为 null', () => {
+  const v3 = {
+    data: {
+      roles: [
+        {
+          item_id: '1081',
+          level: 60,
+          rank: 0,
+          relic_point: '0.00',
+          item_json: { properties: [{ property_name: '攻击力', base: '1', add: '1', final: '2' }], equip: [] },
+        },
+      ],
+    },
+  };
+  const build = extractBuild(v3, '1081', { weapons: [], artifacts: [], items: {} });
+  assert.ok(build);
+  assert.equal(build.relic_point, null, '0 评分视为缺失');
 });
 
 // ---------- extractAbyss：深渊战绩裁剪 ----------

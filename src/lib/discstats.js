@@ -6,6 +6,7 @@
 // 方案推荐二件套效果 X 时计入所有 set2 为 X 的盘（传 discSet2 时启用）。四件套效果无结构化数值，保持按套装名。
 // 套装名解析统一走 src/lib/names.js 的 resolver（normalize + 别名，如 荆棘玫瑰→棘刺玫瑰、尾随空格）。
 import { buildNameIndex, resolveName, CATEGORY } from './names.js';
+import { SUBSTAT_TYPE_SET } from './constants.js';
 
 /** set2 效果 → 规范化组键：null/空 → null（无二件套效果，自成组不扩展）；否则属性键排序后序列化 */
 function set2Key(s2) {
@@ -125,4 +126,69 @@ export function computeDiscStats(plans, discNames, discSet2) {
       main6: freqList(a.mainFreq[6], a.count),
     };
   });
+}
+
+/**
+ * 驱动盘「决策卡」合并层：官方推荐口径（computeDiscStats 行）与工坊实况口径（discDetails 行）
+ * 对齐为统一结构——两个口径独立产出同一套维度（角色/456 主词条/副词条），再按共识判定（二分类）：
+ *   keep = 官方占比 ≥ threshold **或** 实况占比 ≥ threshold → 保留（任一口径值得留）
+ *   drop = 官方与实况都 < threshold → 可抛弃（仅 456 候选主词条；副词条 drop 直接过滤不返回）
+ * 副词条按 wiki 规则过滤：只保留合法副词条（SUBSTAT_TYPE_SET：攻击/生命/防御 固定+%、
+ * 暴击率/暴击伤害/穿透值/异常精通）——伤害加成类、能量自动回复、穿透率、冲击力、异常掌控等
+ * 出现在数据里的脏词条一律排除。
+ * 占比口径：官方 = count/方案数（computeDiscStats 自带 ratio）；实况 = count/分母（副词条用盘数、
+ * 456 用该槽 mainDenom）。角色交集 = 两口径都出现（最适配）。
+ * @param {object|null} official  computeDiscStats 行 {characters, main4, main5, main6, subStats}；null=无官方数据
+ * @param {object|null} live      discDetails 行 {equips, characters, main456, mainDenom, subs}；null=无实况数据
+ * @param {object} mainOptions    456 主词条候选（MAIN_STAT_OPTIONS）
+ * @param {number} [threshold=0.03] 占比保留阈值（官方/实况任一 ≥ 阈值即保留）
+ * @returns {{roles:{official:string[],live:string[],both:string[]}, mains:Object,
+ *            subs:{name,official,live,verdict:'keep'}[], combos, effDist}}
+ */
+export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03) {
+  const t = threshold;
+  const oChars = new Set((official?.characters || []).map(String));
+  const lChars = new Set((live?.characters || []).map(String));
+  const both = [...oChars].filter((c) => lChars.has(c));
+  // ---- 456 主词条：候选全集（候选 ∪ 两口径出现过的），逐槽判定 ----
+  const SLOT_KEY = { 4: 'main4', 5: 'main5', 6: 'main6' };
+  const mains = {};
+  for (const slot of [4, 5, 6]) {
+    const oMap = new Map((official?.[SLOT_KEY[slot]] || []).map((f) => [f.name, f.ratio || 0]));
+    const lDenom = live?.mainDenom?.[slot] || 0;
+    const lMap = new Map((live?.main456?.[slot] || []).map((f) => [f.name, lDenom ? f.count / lDenom : 0]));
+    const names = new Set([...(mainOptions?.[slot] || []), ...oMap.keys(), ...lMap.keys()]);
+    const items = [];
+    for (const n of names) {
+      const or = oMap.get(n) || 0;
+      const lr = lMap.get(n) || 0;
+      const verdict = or >= t || lr >= t ? 'keep' : 'drop';
+      if (verdict === 'keep' || (mainOptions?.[slot] || []).includes(n)) items.push({ name: n, official: or, live: lr, verdict });
+    }
+    items.sort((a, b) => (a.verdict === b.verdict ? b.live - a.live : a.verdict === 'keep' ? -1 : 1));
+    mains[slot] = items;
+  }
+  // ---- 副词条：仅合法副词条（SUBSTAT_TYPE_SET），任一 ≥ 阈值为 keep；drop 不返回 ----
+  const oSub = new Map((official?.subStats || []).map((f) => [f.name, f.ratio || 0]));
+  const lDenomS = live?.equips || 0;
+  const lSub = new Map((live?.subs || []).map((f) => [f.name, lDenomS ? f.count / lDenomS : 0]));
+  const subNames = new Set([...oSub.keys(), ...lSub.keys()]);
+  const subs = [...subNames]
+    .filter((n) => SUBSTAT_TYPE_SET.has(n)) // wiki 规则：合法副词条全集
+    .map((n) => {
+      const or = oSub.get(n) || 0;
+      const lr = lSub.get(n) || 0;
+      return { name: n, official: or, live: lr, verdict: or >= t || lr >= t ? 'keep' : 'drop' };
+    })
+    .filter((s) => s.verdict === 'keep')
+    .sort((a, b) => b.live - a.live);
+  return {
+    roles: { official: [...oChars], live: [...lChars], both },
+    mains,
+    subs,
+    combos: live?.subCombos || [],
+    effDist: live?.effDist || null,
+    equips: live?.equips || 0,
+    alternatives: official?.alternatives || [],
+  };
 }

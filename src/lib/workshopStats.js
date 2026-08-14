@@ -4,7 +4,7 @@
 import { computeDist, pearson } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
-import { mainStatName, SUBSTAT_TYPE_SET } from './constants.js';
+import { mainStatName, SUBSTAT_TYPE_SET, MAIN_STAT_OPTIONS, OFFICIAL_SKILL_TYPE, WS2025_SKILL_TYPE } from './constants.js';
 
 /** 面板 final 值归一化：百分比字符串（"31.4%" → 0.314）与数值字符串/数字统一为数字；空串/纯空白 → null（缺失，不污染 min/count） */
 function parsePanelFinal(v) {
@@ -220,16 +220,27 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
       a.equips += 1;
       a.chars.add(roleName);
       const slot = slotOf(eq);
+      // 词条名清洗：丢弃含 U+FFFD 的坏名（工坊源头数据的属性名被替换符污染，如「生命值百分���」，
+      // 无法归一且会污染图表显示——过滤后这些词的样本少量损失，换来 stats 干净）
+      const cleanName = (n) => (n && !n.includes('\uFFFD') ? n : null);
       // 两源同构：subs=全部副词条（含无效词条）、main[0]=主词条
+      // 游戏规则白名单清洗：副词条只保留合法副词条（SUBSTAT_TYPE_SET：攻击/生命/防御 固定+%、
+      // 暴击率/暴伤/穿透值/异常精通）——工坊 2025 源偶发异常词条（穿透率/冲击力/异常掌控百分比等，
+      // 实测 180/605k 件），不合法则丢弃，避免脏词条进入分布
       const subNames = (eq.subs || [])
         .map((s) => (s && s.name ? discStatName(s.name, s.value) : null))
-        .filter(Boolean);
-      // 主词条（main[0]）——mn 只算一次，主词条频次与 ×副词条协同共用
+        .filter(Boolean)
+        .map(cleanName)
+        .filter(Boolean)
+        .filter((n) => SUBSTAT_TYPE_SET.has(n));
+      // 主词条（main[0]）——mn 只算一次，主词条频次与 ×副词条协同共用；
+      // 仅统计该槽候选内的合法主词条（MAIN_STAT_OPTIONS），异常主词条不计入分布
       const main = Array.isArray(eq.main) && eq.main[0];
-      const mn = main && main.name ? mainStatName(discStatName(main.name, main.value)) : null;
+      const mn = main && main.name ? cleanName(mainStatName(discStatName(main.name, main.value))) : null;
+      const mnOk = mn && (MAIN_STAT_OPTIONS[slot] || []).includes(mn);
       if (slot >= 4 && slot <= 6) {
         a.mainDenom[slot] += 1;
-        if (mn) {
+        if (mnOk) {
           a.main456[slot].set(mn, (a.main456[slot].get(mn) || 0) + 1);
           let bySub = a.mainSub[slot].get(mn);
           if (!bySub) a.mainSub[slot].set(mn, (bySub = new Map()));
@@ -284,7 +295,7 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
 
 /** 2D 密度网格：x/y 数组 → {min/max, N, data:[[xi,yi,count]]}（xi/yi 为 [0,N-1] 归一网格坐标；
  *  前端按均匀 bin 反算实际值，故只需存 N 而非 bin 边界数组） */
-function bin2D(xv, yv, N) {
+export function bin2D(xv, yv, N) {
   const n = xv.length;
   if (!n) return null;
   let minX = xv[0], maxX = xv[0], minY = yv[0], maxY = yv[0];
@@ -347,4 +358,286 @@ export function computePanelScatter(entries, pairs) {
     if (grid) global[key] = grid;
   }
   return { perRole, global };
+}
+
+// ================= 新指标聚合（练度总览 / 角色画像 / 深渊） =================
+
+/** 轻量分布（无直方图/箱线，供 rankLayers/skillStats 防 stats 膨胀）：count/min/max/mean/median/p10/p90 */
+function lightDist(vals) {
+  const s = [...vals].sort((a, b) => a - b);
+  const n = s.length;
+  const q = (p) => s[Math.min(n - 1, Math.floor(p * n))];
+  return {
+    count: n,
+    min: s[0],
+    max: s[n - 1],
+    mean: s.reduce((a, v) => a + v, 0) / n,
+    median: q(0.5),
+    p10: q(0.1),
+    p90: q(0.9),
+  };
+}
+
+/** 每角色工坊装配评分（relic_point）分布（computeDist 全量，含 hist）。
+ *  @param {object[]} entries  workshop.json 的 entries（{role_id, relic_point}）
+ *  @returns {Object<string, Dist>}  role_id → 评分分布；0/非法评分排除（0 = 未带驱动盘/2025 源缺失） */
+export function computeRelicStats(entries) {
+  const acc = new Map();
+  for (const e of entries || []) {
+    if (!e || e.role_id == null) continue;
+    const v = Number(e.relic_point);
+    if (!Number.isFinite(v) || v <= 0) continue;
+    if (!acc.has(e.role_id)) acc.set(e.role_id, []);
+    acc.get(e.role_id).push(v);
+  }
+  const out = {};
+  for (const [rid, vals] of acc) out[rid] = panelStats(vals);
+  return out;
+}
+
+/** 每角色影画档位（rank 0-6）占比：供影画金字塔。
+ *  @param {object[]} entries  workshop.json 的 entries（{role_id, rank}）
+ *  @returns {Object<string, {0:number,...,6:number}>} role_id → 各档条目数 */
+export function computeRankDist(entries) {
+  const acc = new Map();
+  for (const e of entries || []) {
+    if (!e || e.role_id == null || e.rank == null) continue;
+    let d = acc.get(e.role_id);
+    if (!d) acc.set(e.role_id, (d = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 }));
+    const r = Number(e.rank);
+    if (r >= 0 && r <= 6) d[r]++;
+  }
+  return Object.fromEntries(acc);
+}
+
+/** 每角色 × 影画档（rank 0-6）的关键属性分布（轻量，无 hist）。
+ *  @param {object[]} entries  workshop.json 的 entries（{role_id, rank, panel}）
+ *  @param {string[]} [attrs]  参与分层的属性（默认 8 个核心属性）
+ *  @returns {Object<string, Object<string, Object<string, LightDist>>>} role_id → rank → attr → 分布 */
+export function computeRankLayers(entries, attrs) {
+  const LAYER_ATTRS = attrs || ['攻击力', '暴击率', '暴击伤害', '异常精通', '冲击力', '生命值', '防御力', '能量自动回复'];
+  const acc = new Map(); // rid -> Map<rank -> Map<attr -> number[]>
+  for (const e of entries || []) {
+    if (!e || e.role_id == null || e.rank == null) continue;
+    let byRank = acc.get(e.role_id);
+    if (!byRank) acc.set(e.role_id, (byRank = new Map()));
+    let byAttr = byRank.get(e.rank);
+    if (!byAttr) byRank.set(e.rank, (byAttr = new Map()));
+    for (const p of e.panel || []) {
+      if (!LAYER_ATTRS.includes(p.name)) continue;
+      const v = parsePanelFinal(p.final);
+      if (v == null) continue;
+      if (!byAttr.has(p.name)) byAttr.set(p.name, []);
+      byAttr.get(p.name).push(v);
+    }
+  }
+  const out = {};
+  for (const [rid, byRank] of acc) {
+    out[rid] = {};
+    for (const [rank, byAttr] of byRank) {
+      out[rid][rank] = {};
+      for (const [attr, vals] of byAttr) out[rid][rank][attr] = lightDist(vals);
+    }
+  }
+  return out;
+}
+
+/** 每角色 × 技能类型（canonical 编号，见 constants.SKILL_TYPES）的等级分布（轻量分位 + 逐等级计数 dist，供技能分布柱状图）。
+ *  @param {object[]} entries  workshop.json 的 entries（{role_id, source, skills:[{type,level}]}）
+ *  @returns {Object<string, Object<string, LightDist & {dist:Object<number,number>}>>} role_id → 技能类型 → 分布
+ *  工坊两源 type 语义不同，聚合前按源归一化为 canonical：mys 源（官方语义）用 OFFICIAL_SKILL_TYPE；
+ *  2025 源（1.x ID 语义）用 WS2025_SKILL_TYPE（连携/终结并入 canonical 4）。
+ *  源判别：优先读条目 `source` 字段（extractBuild 写时固化）；旧数据（无 source）回退 skills 数组顺序
+ *  （mys 按 UI 顺序 [0,2,6,...]、2025 按 ID 顺序 [0,1,2,...]）；数组不足 2 个仍无法判源 → 跳过该条。 */
+export function computeSkillStats(entries) {
+  const acc = new Map(); // rid -> Map<type -> number[]>
+  for (const e of entries || []) {
+    if (!e || e.role_id == null) continue;
+    let is2025;
+    if (e.source === 'mys') is2025 = false;
+    else if (e.source === '2025') is2025 = true;
+    else if (e.skills?.length >= 2) is2025 = e.skills[1].type !== 2; // 旧数据回退：mys 数组第 2 位=2、2025=1
+    else continue; // 无 source 且数组不足 2 个：无法判源，不贡献技能统计
+    const map = is2025 ? WS2025_SKILL_TYPE : OFFICIAL_SKILL_TYPE;
+    for (const s of e.skills || []) {
+      if (s.type == null || s.level == null) continue;
+      const t = map[s.type] ?? s.type; // 归一化源 type → canonical
+      let byType = acc.get(e.role_id);
+      if (!byType) acc.set(e.role_id, (byType = new Map()));
+      if (!byType.has(t)) byType.set(t, []);
+      byType.get(t).push(s.level);
+    }
+  }
+  const out = {};
+  for (const [rid, byType] of acc) {
+    out[rid] = {};
+    for (const [type, vals] of byType) {
+      const dist = {};
+      for (const v of vals) dist[v] = (dist[v] || 0) + 1;
+      out[rid][type] = { ...lightDist(vals), dist };
+    }
+  }
+  return out;
+}
+
+/** 玩家级画像（按 uid 聚合）：角色数 / 平均·最高评分 / 有影画角色数。
+ *  @param {object[]} entries  workshop.json 的 entries（{uid, role_id, rank, relic_point}）
+ *  @returns {{uid:string, chars:number, avgRelic:number|null, maxRelic:number|null, ranked:number}[]} */
+export function computePlayerProfiles(entries) {
+  const acc = new Map(); // uid -> 聚合
+  for (const e of entries || []) {
+    if (!e || e.uid == null) continue;
+    let p = acc.get(e.uid);
+    if (!p) acc.set(e.uid, (p = { chars: new Set(), relicSum: 0, relicN: 0, relicMax: 0, ranked: 0 }));
+    p.chars.add(e.role_id);
+    const rp = Number(e.relic_point);
+    if (Number.isFinite(rp) && rp > 0) {
+      p.relicSum += rp;
+      p.relicN++;
+      if (rp > p.relicMax) p.relicMax = rp;
+    }
+    if (e.rank > 0) p.ranked++;
+  }
+  return [...acc.entries()].map(([uid, p]) => ({
+    uid,
+    chars: p.chars.size,
+    avgRelic: p.relicN ? Math.round((p.relicSum / p.relicN) * 10) / 10 : null,
+    maxRelic: p.relicMax || null,
+    ranked: p.ranked,
+  }));
+}
+
+/** 每角色驱动盘画像：456 主词条分布 / 副词条频率 / 有效词条数分布（与 computeWorkshopDiscStats 同口径，按角色聚合）。
+ *  @param {object[]} entries  workshop.json 的 entries（{role_id, equips}）
+ *  @param {object} discIndex  buildNameIndex(library.discs, CATEGORY.DISC)
+ *  @param {{roleNameMap?:Map<string,string>}} [opts]
+ *  @returns {{name:string, main456:{4,5,6:{name,count}[]}, mainDenom:{4,5,6}, subs:{name,count}[], effDist:Object}[]} */
+export function computeRoleDiscStats(entries, discIndex, opts = {}) {
+  const roleNameMap = opts.roleNameMap || null;
+  const acc = new Map(); // 角色名 -> 聚合
+  for (const e of entries || []) {
+    if (!e || e.role_id == null) continue;
+    const roleName = roleNameMap ? roleNameMap.get(String(e.role_id)) : String(e.role_id);
+    if (roleName == null) continue;
+    let a = acc.get(roleName);
+    if (!a)
+      acc.set(
+        roleName,
+        (a = { main456: { 4: new Map(), 5: new Map(), 6: new Map() }, mainDenom: { 4: 0, 5: 0, 6: 0 }, subs: new Map(), effDist: new Map() })
+      );
+    for (const eq of e.equips || []) {
+      if (!eq || !eq.suit) continue;
+      const slot = slotOf(eq);
+      // 词条名清洗：丢弃含 U+FFFD 的坏名（同 computeWorkshopDiscStats 口径）；
+      // 副词条只保留合法副词条（SUBSTAT_TYPE_SET），主词条仅统计槽候选内（MAIN_STAT_OPTIONS）——游戏规则白名单
+      const cleanName = (n) => (n && !n.includes('\uFFFD') ? n : null);
+      const subNames = (eq.subs || [])
+        .map((s) => (s && s.name ? discStatName(s.name, s.value) : null))
+        .filter(Boolean)
+        .map(cleanName)
+        .filter(Boolean)
+        .filter((n) => SUBSTAT_TYPE_SET.has(n));
+      const main = Array.isArray(eq.main) && eq.main[0];
+      const mn = main && main.name ? cleanName(mainStatName(discStatName(main.name, main.value))) : null;
+      const mnOk = mn && (MAIN_STAT_OPTIONS[slot] || []).includes(mn);
+      if (slot >= 4 && slot <= 6) {
+        a.mainDenom[slot]++;
+        if (mnOk) a.main456[slot].set(mn, (a.main456[slot].get(mn) || 0) + 1);
+      }
+      const eff = subNames.filter((n) => SUBSTAT_TYPE_SET.has(n)).length;
+      a.effDist.set(eff, (a.effDist.get(eff) || 0) + 1);
+      for (const n of subNames) a.subs.set(n, (a.subs.get(n) || 0) + 1);
+    }
+  }
+  return [...acc.entries()].map(([name, a]) => ({
+    name,
+    main456: { 4: freqPairs(a.main456[4]), 5: freqPairs(a.main456[5]), 6: freqPairs(a.main456[6]) },
+    mainDenom: a.mainDenom,
+    subs: freqPairs(a.subs),
+    effDist: Object.fromEntries(a.effDist),
+  }));
+}
+
+/** 深渊战绩聚合：层数分布 / 评级分布 / 实战配队 Top（按上场角色 id 组合计数）。
+ *  @param {object[]} abyssEntries  workshop-abyss.json 的 entries（{uid, abyss:{max_layer, rating_list, floors}}）
+ *  @returns {{layerDist:Object<number,number>, ratingDist:Object<string,number>, teams:{team:string[],count:number}[]}} */
+export function computeAbyssStats(abyssEntries) {
+  const layerDist = {};
+  const ratingDist = {};
+  const teams = new Map();
+  for (const a of abyssEntries || []) {
+    if (!a || !a.abyss) continue;
+    const ab = a.abyss;
+    if (ab.max_layer != null) layerDist[ab.max_layer] = (layerDist[ab.max_layer] || 0) + 1;
+    for (const r of ab.rating_list || []) ratingDist[r.rating] = (ratingDist[r.rating] || 0) + 1;
+    for (const f of ab.floors || []) {
+      for (const node of [f.node_1, f.node_2]) {
+        if (!node) continue;
+        const ids = (node.avatars || []).map((v) => String(v.id)).sort();
+        if (ids.length < 2) continue;
+        const key = ids.join(',');
+        teams.set(key, (teams.get(key) || 0) + 1);
+      }
+    }
+  }
+  const teamTop = [...teams.entries()]
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, 20)
+    .map(([k, count]) => ({ team: k.split(','), count }));
+  return { layerDist, ratingDist, teams: teamTop };
+}
+
+/** 深渊配队聚合（「深渊配队」面板）：角色出场榜 / 双队配队 Top / 队友共现 / S 评级配队 Top。
+ *  @param {object[]} abyssEntries  workshop-abyss.json 的 entries（{abyss:{floors:[{node_1,node_2,rating}]}}）
+ *  @returns {{
+ *    charUsage:{id:string,count:number,ratio:number}[]       角色出场榜（按出场次数降序，ratio=占全部出场）
+ *    nodeTeams:{1:{chars:string[],count:number}[],2:{...}[]} 第一/第二队的配队组合 Top10（组合内 id 排序去重）
+ *    sTeams:{chars:string[],count:number}[]                  S/SS 评级配队组合 Top10
+ *    teammates:Object<string, Object<string, number>>        角色 id → 队友 id → 共现次数（Top12）
+ *  }} */
+export function computeAbyssTeamStats(abyssEntries) {
+  const usage = new Map(); // id -> 出场次数
+  const nodeTeams = { 1: new Map(), 2: new Map() }; // 组合 key -> 次数
+  const sTeams = new Map();
+  const teammates = new Map(); // id -> Map<队友id, 次数>
+  for (const a of abyssEntries || []) {
+    const ab = a?.abyss;
+    if (!ab) continue;
+    for (const f of ab.floors || []) {
+      for (const [nk, node] of [['1', f.node_1], ['2', f.node_2]]) {
+        if (!node) continue;
+        const ids = (node.avatars || []).map((v) => String(v.id)).filter(Boolean);
+        if (ids.length < 2) continue;
+        const sorted = [...ids].sort();
+        const key = sorted.join(',');
+        nodeTeams[nk].set(key, (nodeTeams[nk].get(key) || 0) + 1);
+        if (f.rating === 'S' || f.rating === 'SS') sTeams.set(key, (sTeams.get(key) || 0) + 1);
+        for (const id of ids) usage.set(id, (usage.get(id) || 0) + 1);
+        for (const id of ids) {
+          let m = teammates.get(id);
+          if (!m) teammates.set(id, (m = new Map()));
+          for (const o of ids) if (o !== id) m.set(o, (m.get(o) || 0) + 1);
+        }
+      }
+    }
+  }
+  const toTop = (map, n = 10) =>
+    [...map.entries()]
+      .map(([key, count]) => ({ chars: key.split(','), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, n);
+  const total = [...usage.values()].reduce((a, b) => a + b, 0) || 1;
+  return {
+    charUsage: [...usage.entries()]
+      .map(([id, count]) => ({ id, count, ratio: count / total }))
+      .sort((a, b) => b.count - a.count),
+    nodeTeams: { 1: toTop(nodeTeams[1]), 2: toTop(nodeTeams[2]) },
+    sTeams: toTop(sTeams),
+    teammates: Object.fromEntries(
+      [...teammates.entries()].map(([id, m]) => [
+        id,
+        Object.fromEntries([...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)),
+      ])
+    ),
+  };
 }

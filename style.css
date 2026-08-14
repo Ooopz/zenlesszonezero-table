@@ -1448,6 +1448,35 @@ table.tbl th.sorted,
 .rec-table.grad-table {
   font-size: 14px;
 }
+/* 角色配装对标（单角色）：表格铺满卡片宽度（与图表同宽），页宽不足时文本换行，所有内容顶端对齐 */
+.rec-table.grad-table {
+  width: 100%;
+  min-width: 0; /* 覆盖 .rec-table 的 720px 下限，随容器收缩而非横向滚动 */
+}
+.rec-table.grad-table th,
+.rec-table.grad-table td {
+  white-space: normal; /* 页宽不足时文本换行 */
+  vertical-align: top; /* 内容向上对齐 */
+  word-break: break-word;
+}
+.rec-table.grad-table .ws-item {
+  flex-wrap: wrap; /* 名称/进度条过长时换行，不撑破列宽 */
+}
+/* 差异行（音擎/套装差异各占两列宽）：弱化背景 + 标签金色，内容保持顶端对齐 */
+.rec-table.grad-table td.ds-diff-row {
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+}
+.rec-table.grad-table td.ds-diff-row b {
+  color: var(--acc);
+}
+.rec-table.grad-table td.ds-diff-row .ds-same {
+  color: var(--green);
+}
+.rec-table.grad-table td.ds-diff-row .ds-diff {
+  color: var(--red); /* 方案与实况有区别时标红 */
+  font-size: 12px;
+}
 .rec-table.grad-table td.wiki-name {
   display: flex;
   align-items: center;
@@ -1889,4 +1918,178 @@ a:hover {
 /* 标签微背景，层次更清晰 */
 .tag {
   background: rgba(255, 255, 255, 0.03);
+}
+
+/* ================= 驱动盘决策卡（统计→驱动盘） ================= */
+.ad-overview {
+  margin-bottom: 14px;
+}
+.ad-overview .wiki-wrap {
+  max-height: none;
+}
+.ad-ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ad-ov-table th,
+.ad-ov-table td {
+  border: 1px solid var(--line);
+  padding: 4px 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+.ad-ov-table th {
+  background: var(--card2);
+  color: var(--acc);
+  font-weight: 800;
+}
+.ad-ov-table td:first-child {
+  text-align: left;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ad-ov-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.045);
+}
+.ad-ov-table tr.cur td {
+  background: rgba(247, 212, 29, 0.08);
+}
+.ad-sub {
+  color: var(--dim);
+  font-size: 11px;
+}
+.ad-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.ad-card h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--acc);
+  font-weight: 800;
+}
+.ad-sec {
+  margin: 14px 0 0;
+}
+.ad-sec h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--acc);
+}
+.ad-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.ad-row-label {
+  flex-shrink: 0;
+  color: var(--dim);
+  font-size: 12px;
+  padding-top: 3px;
+  min-width: 56px;
+}
+.ad-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ad-chip {
+  padding: 2px 10px;
+  border-radius: 10px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.ad-chip.both {
+  border-color: var(--acc);
+  color: var(--acc);
+  font-weight: 800;
+}
+.ad-slotgrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.ad-slot h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--txt);
+}
+.ad-bar {
+  margin-bottom: 8px;
+}
+.ad-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.ad-bar-name {
+  font-size: 12px;
+}
+.ad-bar-val {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ad-tag {
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.ad-keep {
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+.ad-split {
+  color: var(--orange);
+  border: 1px solid var(--orange);
+}
+.ad-drop {
+  color: var(--dim);
+  border: 1px solid var(--dim);
+  text-decoration: line-through;
+}
+.ad-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #262626;
+  margin-bottom: 3px;
+  overflow: hidden;
+}
+.ad-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+.ad-bar-fill.off {
+  background: var(--acc);
+}
+.ad-bar-fill.live {
+  background: #59b7ff;
+}
+.ad-extra {
+  color: var(--dim);
+  font-size: 11px;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.ad-drops {
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.ad-drops del {
+  text-decoration: line-through;
+}
+@media (max-width: 900px) {
+  .ad-slotgrid {
+    grid-template-columns: 1fr;
+  }
 }

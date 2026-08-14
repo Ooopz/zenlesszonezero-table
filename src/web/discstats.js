@@ -1,170 +1,153 @@
-// src/web/discstats.js —— 「统计→驱动盘」面板渲染：按驱动盘聚合 方案推荐/全服使用/工坊真实 三口径
-// 数据源：plans.json（方案推荐，lib/discstats.js 聚合）+ workshop-grad.json（全服使用，gradStats）+ workshop-stats.json discDetails（工坊真实穿戴：主/副词条、盘数）。
-// 副词条与 456 主属性单元格内上下两行：上行=方案推荐、下行=工坊玩家真实；456 冷门主词条（候选里方案/工坊都没出现）灰色删除线标出。
-import { plans, library, workshopGrad, workshopStats } from './data.js';
-import { computeDiscStats } from '../lib/discstats.js';
-import { computeGradStats } from '../lib/gradStats.js';
+// src/web/discstats.js —— 「统计→驱动盘」面板：盘为中心的「决策卡」
+// 使命：选一个驱动盘，回答 适配哪些角色 / 456 号位保留哪些主词条 / 副词条保留哪些组合 / 哪些主词条可抛弃。
+// 两口径独立产出同一套维度，经 computeDiscAdvisor 对齐并判定：
+//   keep  = 官方推荐 + 实况占比 ≥3%（共识 → 保留，绿）
+//   split = 仅一方出现（官方推荐玩家不用 / 玩家在用官方没推 → 分歧，橙）
+//   drop  = 两口径都未出现（仅 456 候选主词条 → 可抛弃，灰删除线）
+// 对比条：金=官方推荐占比（方案数）、蓝=玩家实况占比（盘数/槽分母），数值显示在条右侧。
+import { plans, library, workshopStats } from './data.js';
+import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
-import { createSort } from '../lib/sort.js';
 import { discSetEffectsHtml } from './shared.js';
+import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption } from './charts.js';
 
-// 排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js）
-const sort = createSort();
-export function toggleDiscStatsSort(key) {
-  sort.toggle(key);
+let selectedDisc = '';
+export function setSelectedDisc(name) {
+  selectedDisc = name;
 }
-/** 复位驱动盘面板排序（统计视图切换子面板时调用） */
-export function resetDiscStatsSort() {
-  sort.reset();
-}
+// 本面板无表格排序，保留导出兼容 render.js 的表头排序委托
+export function resetDiscStatsSort() {}
+export function toggleDiscStatsSort() {}
 
-const HEADERS = ['驱动盘', '方案推荐', '全服使用', '工坊盘数', '匹配角色', '副词条', '4号位', '5号位', '6号位'];
-const SORTABLE = new Set(['驱动盘', '方案推荐', '全服使用', '工坊盘数', '匹配角色']);
-/** 各列排序取值：驱动盘按名，方案推荐/全服使用/工坊盘数/匹配角色按数量（越多越常用排越前） */
-function sortVal(row, key) {
-  if (key === '驱动盘') return row.name;
-  if (key === '方案推荐') return row.count;
-  if (key === '全服使用') return row.gradCount;
-  if (key === '工坊盘数') return row.wsEquips;
-  if (key === '匹配角色') return row.characters.length;
-  return null;
-}
-/** 列表 → HTML：每项独立一行（逐项 escapeHtml 后再拼 <br>，避免把 <br> 一起转义） */
-const joinBr = (items) => (items?.length ? items.map((x) => escapeHtml(x)).join('<br>') : '—');
+const pct = (v) => Math.round((v || 0) * 100);
 
-/** 悬浮详情：盘名 + 二/四件套效果 + 同效果二件套替代盘（复用角色卡片驱动盘悬浮的构成方式，套件效果走 shared.discSetEffectsHtml） */
-function discTipHtml(name, alternatives) {
-  const alt = alternatives?.length
-    ? `<br><span style="color:var(--dim)">同效果二件套：${alternatives.map((x) => escapeHtml(x)).join('、')}</span>`
-    : '';
-  return `<b>${escapeHtml(name)}</b>${discSetEffectsHtml(library.discs?.[name])}${alt}`;
+/** 两口径对齐后的全盘决策卡（每次渲染重算：~65 盘 × 判定，开销可忽略） */
+function allCards() {
+  const discSet2 = Object.fromEntries(Object.values(library.discs || {}).map((d) => [d.name, d.set2]));
+  const official = new Map(
+    computeDiscStats(plans, Object.keys(library.discs || {}), discSet2).map((r) => [r.name, r])
+  );
+  const live = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
+  const cards = new Map();
+  for (const name of Object.keys(library.discs || {})) {
+    cards.set(name, computeDiscAdvisor(official.get(name) || null, live.get(name) || null, MAIN_STAT_OPTIONS));
+  }
+  return cards;
 }
 
-/** 频次列表 → HTML：每词条一行（<br> 分隔）。三档区分：≥50% 加粗高亮（优先留）、<5% 灰色弱化（特化低优先级）、中间档普通显示 */
-function freqHtml(list) {
-  if (!list?.length) return '—';
-  return list
-    .map((f) => {
-      const cls = f.ratio >= 0.5 ? 'ds-hot' : f.ratio < 0.05 ? 'ds-dim' : '';
-      return `<span${cls ? ` class="${cls}"` : ''}>${escapeHtml(f.name)} ${Math.round(f.ratio * 100)}%</span>`;
-    })
-    .join('<br>');
+/** 盘下拉（所有盘，按玩家实况盘数降序；默认选中盘数最多者） */
+function discSelectHtml(current, cards) {
+  const opts = [...cards.entries()]
+    .sort((a, b) => b[1].equips - a[1].equips)
+    .map(
+      ([name, card]) =>
+        `<option value="${escapeHtml(name)}"${name === current ? ' selected' : ''}>${escapeHtml(name)}${card.equips ? `（${card.equips.toLocaleString()} 盘）` : ''}</option>`
+    )
+    .join('');
+  return `<div class="chart-select"><label>驱动盘</label><select onchange="ZZZ.selectDisc(this.value)">${opts}</select></div>`;
 }
 
-/** 工坊真实频次列表 → HTML（下行；ratio 分母由调用方给：subs 用物理盘数、456 用该槽 2025 源盘数 mainDenom）。空 → null */
-function freqWsHtml(list, total) {
-  if (!list?.length) return null;
-  return list
-    .map((f) => {
-      const ratio = total ? f.count / total : 0;
-      const cls = ratio >= 0.5 ? 'ds-hot' : ratio < 0.05 ? 'ds-dim' : '';
-      return `<span${cls ? ` class="${cls}"` : ''}>${escapeHtml(f.name)} ${Math.round(ratio * 100)}%</span>`;
-    })
-    .join('<br>');
+/** 对比条：词条名 + 判定标签 + 双条（金=官方、蓝=实况）+ 右侧数值（官方% / 实况%） */
+function barHtml(name, official, live, verdict) {
+  const tag =
+    verdict === 'keep'
+      ? '<span class="ad-tag ad-keep">保留</span>'
+      : '<span class="ad-tag ad-drop">可抛弃</span>';
+  const w = (v) => (v > 0 ? Math.max(3, pct(v)) : 0);
+  const bar = (v, cls) =>
+    `<div class="ad-bar-track">${v > 0 ? `<div class="ad-bar-fill ${cls}" style="width:${w(v)}%"></div>` : ''}</div>`;
+  return `<div class="ad-bar">
+    <div class="ad-bar-head"><span class="ad-bar-name">${escapeHtml(name)}</span>${tag}<span class="ad-bar-val">${pct(official)}% / ${pct(live)}%</span></div>
+    ${bar(official, 'off')}
+    ${bar(live, 'live')}
+  </div>`;
 }
 
-/** 456 槽冷门主词条：MAIN_STAT_OPTIONS 候选里「方案没推荐过 且 工坊没出现过」的 → 灰色删除线。空 → '' */
-function coldMainsHtml(slot, planMains, wsMains) {
-  const used = new Set([...(planMains || []).map((f) => f.name), ...(wsMains || []).map((f) => f.name)]);
-  const cold = (MAIN_STAT_OPTIONS[slot] || []).filter((n) => !used.has(n));
-  if (!cold.length) return '';
-  return `<span class="ds-cold">未用主词条：${cold.map((n) => `<del>${escapeHtml(n)}</del>`).join('、')}</span>`;
+/** ① 适配角色：两口径徽章行，both 优先 + 名称序排列（两行同一规则，位置尽量对齐） */
+function rolesHtml(card) {
+  const { official, live, both } = card.roles;
+  const sortKey = (n) => (both.includes(n) ? 0 : 1) + n; // 交集在前，其余按名称
+  const chip = (n) => `<span class="ad-chip${both.includes(n) ? ' both' : ''}">${escapeHtml(n)}</span>`;
+  return `<div class="ad-sec">
+    <h4>① 适配角色（金色 ★=两口径一致，最适配）</h4>
+    <div class="ad-row"><span class="ad-row-label">官方推荐</span><span class="ad-chips">${[...official].sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh')).map(chip).join('') || '—'}</span></div>
+    <div class="ad-row"><span class="ad-row-label">玩家实况</span><span class="ad-chips">${[...live].sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh')).map(chip).join('') || '—'}</span></div>
+  </div>`;
 }
 
-/** 有效词条数分布小字：discDetails.effDist {0..4:盘数} → "有效词条 4有效x% · 3有效y%"（分母=该盘物理盘数） */
-function effHtml(d) {
-  const eff = d?.effDist;
-  if (!eff) return '';
-  const total = Object.values(eff).reduce((s, v) => s + v, 0);
-  if (!total) return '';
-  const p = (k) => Math.round(((eff[k] || 0) / total) * 100);
-  return `<span class="ds-eff">有效词条 4有效${p(4)}% · 3有效${p(3)}% · 2有效${p(2)}%</span>`;
+/** ② 可抛弃主词条（两口径都未使用的 456 候选） */
+function dropsHtml(card) {
+  const drops = [4, 5, 6].flatMap((s) =>
+    card.mains[s].filter((m) => m.verdict === 'drop').map((m) => `${s}号 ${m.name}`)
+  );
+  if (!drops.length) return '';
+  return `<div class="ad-sec">
+    <h4>② 可抛弃主词条（两口径都未使用）</h4>
+    <div class="ad-drops">${drops.map((d) => `<del>${escapeHtml(d)}</del>`).join('　')}</div>
+  </div>`;
 }
 
-/** 工坊副词条组合 Top 悬浮（discDetails.subCombos） */
-function wsCombosTip(d) {
-  if (!d?.subCombos?.length) return null;
-  return `工坊词条组合 Top：<br>${d.subCombos.map((c) => `${escapeHtml(c.combo.join('、'))} ×${c.count}`).join('<br>')}`;
+/** ③ 456 号位 + 副词条：一行 4 列对比条（每列 = 槽位或副词条，数值在条右方） */
+function statGridHtml(card) {
+  const cols = [4, 5, 6]
+    .map(
+      (slot) => `<div class="ad-slot"><h4>${slot} 号位</h4>${card.mains[slot]
+        .map((m) => barHtml(m.name, m.official, m.live, m.verdict))
+        .join('')}</div>`
+    )
+    .join('');
+  const subCol = `<div class="ad-slot"><h4>副词条</h4>${card.subs
+    .map((s) => barHtml(s.name, s.official, s.live, s.verdict))
+    .join('') || '—'}</div>`;
+  return `<div class="ad-sec">
+    <h4>③ 456 号位主词条 / 副词条保留清单（金=官方推荐 · 蓝=玩家实况 · 保留=任一口径≥3% · 可抛弃=两口径都<3%）</h4>
+    <div class="ad-slotgrid">${cols}${subCol}</div>
+  </div>`;
 }
 
-/** 主词条×副词条协同悬浮（该槽；仅 2025 源有主词条的样本） */
-function mainSubTip(slot, wsDetail) {
-  const cross = wsDetail?.mainSubCross?.[slot];
-  if (!cross || !Object.keys(cross).length) return null;
-  const lines = Object.entries(cross).map(([main, bySub]) => {
-    // 与聚合层 mainSubCross 的 Top6 截断一致（数据层已截 6）
-    const subs = Object.entries(bySub)
-      .slice(0, 6)
-      .map(([n, c]) => `${escapeHtml(n)}×${c}`)
-      .join('、');
-    return `<b>${escapeHtml(main)}</b> → ${subs}`;
-  });
-  return `工坊主词条×副词条（2025源样本）：<br>${lines.join('<br>')}`;
+/** 底部图表卡片区：456 主词条占比 / 副词条出现频率 / 词条组合 Top（玩家实况） */
+function chartCardsHtml(selectedDetail) {
+  if (!selectedDetail) return '';
+  const id = `disc-chart-${selectedDetail.name}`;
+  registerChart(`${id}-main`, discMain456Option(selectedDetail));
+  registerChart(`${id}-subs`, discSubsOption(selectedDetail.subs, selectedDetail.equips));
+  registerChart(`${id}-combo`, discComboOption(selectedDetail.subCombos));
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(selectedDetail.name)} · 工坊真实穿戴（${selectedDetail.equips.toLocaleString()} 块盘）</h3>
+    <div class="chart-grid">
+      <div class="chart-card"><h4>456 主词条占比（玩家实况）</h4>${chartBox(`${id}-main`, 260)}</div>
+      <div class="chart-card"><h4>副词条出现频率（带此词条的盘占比）</h4>${chartBox(`${id}-subs`, 300)}</div>
+      <div class="chart-card"><h4>词条组合 Top</h4>${chartBox(`${id}-combo`, 300)}</div>
+    </div>
+  </div>`;
 }
 
-/** 456 单元格：上行=方案推荐 freq、下行=工坊真实 freq（.ds-wsline 分隔，悬浮看主词条×副词条协同）+ 冷门主词条标灰 */
-function mainCellHtml(planList, wsDetail, slot) {
-  const wsLine = freqWsHtml(wsDetail?.main456?.[slot], wsDetail?.mainDenom?.[slot]);
-  const wsTip = mainSubTip(slot, wsDetail);
-  return `${freqHtml(planList)}${
-    wsLine ? `<span class="ds-wsline"${wsTip ? ` data-detail="${escapeHtml(wsTip)}" title="悬浮看主词条×副词条"` : ''}>${wsLine}</span>` : ''
-  }${coldMainsHtml(slot, planList, wsDetail?.main456?.[slot])}`;
-}
-
-/** 渲染驱动盘统计表（返回 HTML；空方案数据时返回提示） */
+/** 渲染驱动盘决策卡页面 */
 export function renderDiscStats() {
   if (!Object.keys(plans || {}).length) {
     return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
   }
-  // 二件套同效果替代：把每个盘的结构化 set2 效果传给聚合层，2 件套推荐扩展到同效果组
-  const discSet2 = Object.fromEntries(Object.values(library.discs || {}).map((d) => [d.name, d.set2]));
-  // 全服真实使用（workshop-grad 按套装拆分累加），供「全服使用」对比列
-  const grad = new Map(computeGradStats(workshopGrad.roles).discs.map((g) => [g.name, g]));
-  // 工坊真实穿戴（workshop-stats.discDetails：每盘物理盘数/角色/主词条/副词条），供「工坊盘数」列与下行对比
-  const discDetails = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
-  const totalWsDiscs = [...discDetails.values()].reduce((s, d) => s + d.equips, 0) || 1;
-  const data = computeDiscStats(plans, Object.keys(library.discs || {}), discSet2).map((r) => {
-    const g = grad.get(r.name);
-    const d = discDetails.get(r.name);
-    return { ...r, gradCount: g?.count ?? 0, gradRatio: g?.ratio ?? 0, wsEquips: d?.equips ?? 0, wsDetail: d ?? null };
-  });
-  const rows = sort.apply(data, sortVal);
-  const head = HEADERS.map((h) => {
-    if (!SORTABLE.has(h)) return `<th>${h}</th>`;
-    const on = sort.key === h;
-    return `<th data-sort="${h}"${on ? ' class="sorted"' : ''}>${h}${on ? (sort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
-  }).join('');
-  const body = rows
-    .map((r) => {
-      // 副词条：上行=方案推荐频次（悬浮显示原「组合明细」保留搭配信息），下行=工坊真实频次
-      const comboTip = r.subCombos.length ? r.subCombos.map((c) => c.join('、')).join('<br>') : '';
-      const subCell = r.subStats.length
-        ? `<span class="ds-sub" data-detail="${escapeHtml(comboTip)}" title="悬浮查看副词条组合明细">${freqHtml(r.subStats)}</span>`
-        : '—';
-      const wsSubLine = freqWsHtml(r.wsDetail?.subs, r.wsDetail?.equips);
-      const wsSubTip = wsCombosTip(r.wsDetail); // 工坊词条组合 Top（悬浮）
-      const effLine = effHtml(r.wsDetail); // 有效词条数分布（小字）
-      const icon = library.discs?.[r.name]?.icon
-        ? `<img class="ws-ico" src="${library.discs[r.name].icon}" alt="">`
-        : '';
-      return `<tr>
-      <td class="wiki-name" data-detail="${escapeHtml(discTipHtml(r.name, r.alternatives))}" title="悬浮查看详情"><span class="ds-dname">${escapeHtml(r.name)}</span>${icon}</td>
-      <td class="ds-count">${r.count || '—'}</td>
-      <td class="ds-count">${r.gradCount ? `${r.gradCount}<span class="ds-ratio">${(r.gradRatio * 100).toFixed(1)}%</span>` : '—'}</td>
-      <td class="ds-count">${r.wsEquips ? `${r.wsEquips}<span class="ds-ratio">${((r.wsEquips / totalWsDiscs) * 100).toFixed(1)}%</span>` : '—'}</td>
-      <td class="ds-chars">${joinBr(r.characters)}</td>
-      <td class="ds-combos">${subCell}${
-        wsSubLine ? `<span class="ds-wsline"${wsSubTip ? ` data-detail="${escapeHtml(wsSubTip)}" title="悬浮看工坊词条组合"` : ''}>${wsSubLine}</span>` : ''
-      }${effLine}</td>
-      <td class="ds-combos">${mainCellHtml(r.main4, r.wsDetail, 4)}</td>
-      <td class="ds-combos">${mainCellHtml(r.main5, r.wsDetail, 5)}</td>
-      <td class="ds-combos">${mainCellHtml(r.main6, r.wsDetail, 6)}</td>
-    </tr>`;
-    })
-    .join('');
-  // 列宽下限（自动布局 + 单元格 nowrap）：长内容按行内项定宽，单个词条频次保持单行
-  const colgroup =
-    '<colgroup><col style="width:110px"><col style="width:70px"><col style="width:80px"><col style="width:80px"><col style="width:170px"><col style="width:250px"><col style="width:140px"><col style="width:140px"><col style="width:140px"></colgroup>';
-  return `<div class="discstats"><div class="wiki-wrap"><table class="discstats-table">${colgroup}<thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+  const cards = allCards();
+  if (!selectedDisc || !cards.has(selectedDisc)) {
+    selectedDisc = [...cards.entries()].sort((a, b) => b[1].equips - a[1].equips)[0][0];
+  }
+  const card = cards.get(selectedDisc);
+  const selectedDetail = (workshopStats.discDetails || []).find((d) => d.name === selectedDisc) || null;
+  const alt = card.alternatives?.length
+    ? `<div class="ad-sub">同效果二件套：${card.alternatives.map((x) => escapeHtml(x)).join('、')}</div>`
+    : '';
+  const discLib = library.discs?.[selectedDisc];
+  const sets = discLib ? discSetEffectsHtml(discLib) : '';
+  return `<div class="discstats">
+    ${discSelectHtml(selectedDisc, cards)}
+    <div class="ad-card">
+      <h3>${escapeHtml(selectedDisc)} · 决策卡${card.equips ? `（玩家在用 ${card.equips.toLocaleString()} 块）` : ''}</h3>
+      ${sets ? `<div class="ad-sub">${sets}</div>` : ''}
+      ${alt}
+      ${rolesHtml(card)}
+      ${dropsHtml(card)}
+      ${statGridHtml(card)}
+    </div>
+    <div class="chart-grid">${chartCardsHtml(selectedDetail)}</div>
+  </div>`;
 }
