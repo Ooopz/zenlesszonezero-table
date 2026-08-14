@@ -1,16 +1,21 @@
 // src/lib/distStats.js —— 分布统计纯函数（分位/离散/形态/相关/战力/均衡/聚类/档位匹配），Node 与浏览器共用
 // 供 workshopStats 聚合扩展、统计视图图表、个人对标共用。
 
+/** 已排序数组的分位数（线性插值）：假设 arr 升序已排序，q∈[0,1]。
+ *  computeDist 等已知排序好的场景直接用此函数，避免 quantile 重复排序。 */
+export function quantileSorted(arr, q) {
+  if (!arr || !arr.length) return null;
+  const pos = q * (arr.length - 1);
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return hi === lo ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (pos - lo);
+}
 /** 分位数（线性插值）：对数组排序后取 q 分位（q∈[0,1]）。内部排序，调用方无需预排序 */
 export function quantile(arr, q) {
   if (!arr || !arr.length) return null;
-  const s = [...arr].sort((a, b) => a - b);
-  const pos = q * (s.length - 1);
-  const lo = Math.floor(pos);
-  const hi = Math.ceil(pos);
-  return hi === lo ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo);
+  return quantileSorted([...arr].sort((a, b) => a - b), q);
 }
-/** 中位数 */
+/** 中位数（内部排序，入参可乱序） */
 export function median(sorted) {
   return quantile(sorted, 0.5);
 }
@@ -65,8 +70,15 @@ export function computeDist(arr) {
   const n = s.length;
   const mean = s.reduce((a, v) => a + v, 0) / n;
   const sdev = sd(s, mean);
-  const q1 = quantile(s, 0.25);
-  const q3 = quantile(s, 0.75);
+  // 分位数一次性算好（s 已排序，直接用 quantileSorted 避免反复排序）
+  const p5 = quantileSorted(s, 0.05);
+  const p10 = quantileSorted(s, 0.1);
+  const q1 = quantileSorted(s, 0.25);
+  const med = quantileSorted(s, 0.5);
+  const q3 = quantileSorted(s, 0.75);
+  const p90 = quantileSorted(s, 0.9);
+  const p95 = quantileSorted(s, 0.95);
+  const p99 = quantileSorted(s, 0.99);
   const iqr = q3 - q1;
   // 离群值阈值：IQR 1.5 规则（Q1-1.5IQR 以下 / Q3+1.5IQR 以上）
   const fenceLow = q1 - 1.5 * iqr;
@@ -89,10 +101,8 @@ export function computeDist(arr) {
   // 且 IQR 规则会把真正堆该属性的主流玩家误判为离群。此时退化为分位数规则：
   // 须端用 P10/P90 展示主流区间，离群改为 P5/P95 之外（保留堆属性的玩家）
   if (whiskerLow == null || whiskerHigh == null || iqr <= (s[n - 1] - s[0]) * 0.02) {
-    whiskerLow = quantile(s, 0.1);
-    whiskerHigh = quantile(s, 0.9);
-    const p5 = quantile(s, 0.05);
-    const p95 = quantile(s, 0.95);
+    whiskerLow = p10;
+    whiskerHigh = p90;
     outliers = 0;
     for (let i = 0; i < n; i++) if (s[i] < p5 || s[i] > p95) outliers++;
   }
@@ -112,16 +122,16 @@ export function computeDist(arr) {
     max: s[n - 1],
     range: s[n - 1] - s[0],
     mean,
-    median: median(s),
+    median: med,
     sd: sdev,
     IQR: iqr,
-    p10: quantile(s, 0.1),
+    p10,
     p25: q1,
-    p50: median(s),
+    p50: med,
     p75: q3,
-    p90: quantile(s, 0.9),
-    p95: quantile(s, 0.95),
-    p99: quantile(s, 0.99),
+    p90,
+    p95,
+    p99,
     skew: skew(s, mean, sdev),
     kurt: kurt(s, mean, sdev),
     // 离群值排除（箱线图用 whiskerLow/whiskerHigh 作须端，outliers 为离群数量）

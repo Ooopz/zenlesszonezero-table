@@ -138,8 +138,9 @@ export function computePanelCorrelations(entries, pairs) {
 }
 
 // ---------- 驱动盘单盘统计（工坊真实穿戴：主/副词条、槽位、角色） ----------
-// 供「统计→驱动盘」面板作「工坊真实」对比列（与 plans 方案推荐并列）。workshop.json 的盘有两源：
-// 2025 源（eq.subs 数组，main[0]=真实主词条）与 mys 源（无 subs，main[] 即副词条，主词条丢失）。
+// 供「统计→驱动盘」面板作「工坊真实」对比列（与 plans 方案推荐并列）。workshop.json 的盘有两源，
+// 2026-08 起提取已同构（main=主词条、subs=全部副词条）：2025 源（main[0]=真实主词条，subs=副词条）
+// 与 mys 源（同构）。
 
 /** mys 源按值带 % 判定百分比形态的属性（仅这三项有固定/百分比两形态；暴击率/暴击伤害恒为百分比属性不带 %） */
 const MYS_PCT_NAMES = new Set(['攻击力', '生命值', '防御力']);
@@ -181,9 +182,10 @@ function freqPairs(map) {
  *            main456:{4:{name,count}[],5:{name,count}[],6:{name,count}[]},
  *            mainDenom:{4:number,5:number,6:number}, subs:{name,count}[]}[]}
  *   name：library 规范盘名；equips：物理盘数（每块盘计一次，不做条目内去重）；
- *   characters：使用角色（去重）；main456：仅 2025 源盘有主词条（mys 主词条丢失），已套 mainStatName 兜底；
- *   mainDenom：每槽 2025 源盘数（主词条 ratio 分母，避免 mys 无主词条导致 456 频次系统性低估）；
- *   subs：副词条（2025 subs + mys main[] 合并，统一名）。仅含工坊中出现的盘；未解析到 library 的套装 / '其他' 跳过。
+ *   characters：使用角色（去重）；main456：主词条分布（两源同构，已套 mainStatName 兜底）；
+ *   mainDenom：每槽盘数（主词条 ratio 分母）；
+ *   subs：副词条全量（含无效词条，统一名）。
+ *   仅含工坊中出现的盘；未解析到 library 的套装 / '其他' 跳过。
  */
 export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
   const roleNameMap = opts.roleNameMap || null;
@@ -218,15 +220,14 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
       a.equips += 1;
       a.chars.add(roleName);
       const slot = slotOf(eq);
-      const is2025 = Array.isArray(eq.subs);
-      // 归一化的副词条列表（2025 源 subs；mys 源 main[] 即副词条）
-      const subNames = (is2025 ? eq.subs : eq.main || [])
+      // 两源同构：subs=全部副词条（含无效词条）、main[0]=主词条
+      const subNames = (eq.subs || [])
         .map((s) => (s && s.name ? discStatName(s.name, s.value) : null))
         .filter(Boolean);
-      // 主词条（2025 源 main[0]；mys 源主词条丢失）——mn 只算一次，主词条频次与 ×副词条协同共用
-      const main = is2025 && Array.isArray(eq.main) && eq.main[0];
+      // 主词条（main[0]）——mn 只算一次，主词条频次与 ×副词条协同共用
+      const main = Array.isArray(eq.main) && eq.main[0];
       const mn = main && main.name ? mainStatName(discStatName(main.name, main.value)) : null;
-      if (is2025 && slot >= 4 && slot <= 6) {
+      if (slot >= 4 && slot <= 6) {
         a.mainDenom[slot] += 1;
         if (mn) {
           a.main456[slot].set(mn, (a.main456[slot].get(mn) || 0) + 1);
@@ -271,7 +272,7 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
       subs: freqPairs(a.subs),
       effDist, // {0:n,1:n,2:n,3:n,4:n} 有效词条数分布
       subCombos, // [{combo:词条[], count}] 副词条组合 Top8（降序）
-      mainSubCross, // {4:{主词条:{副词条:次数}},...} 主词条×副词条协同（仅 2025 源）
+      mainSubCross, // {4:{主词条:{副词条:次数}},...} 主词条×副词条协同（两源同构）
     };
   });
 }

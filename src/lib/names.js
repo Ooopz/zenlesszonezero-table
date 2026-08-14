@@ -40,11 +40,12 @@ export const DISC_ALIASES = ALIASES[CATEGORY.DISC];
  * @param {object|string[]} names  object: {规范名: 条目}（library 表 / 实例集合）
  *                                  array : [规范名, ...]（纯函数只关心名字集合时用）
  * @param {string} category  实体类别（CATEGORY.*）
- * @returns {{lib:object|null, category:string, keyFn:Function, names:string[],
+ * @returns {{lib:object|null, category:string, keyFn:Function, names:string[], keys:string[],
  *            byKey:Map, byAlias:Map, byAliasKey:Map}}
- *   byKey      归一化键(规范名) → 规范名（首见优先）
- *   byAlias    变体原串 → 规范名（仅收录规范名在集合内的，防脏别名）
- *   byAliasKey 归一化键(变体) → 规范名（处理变体带空白/标点）
+ *   keys        各规范名的归一化键（与 names 同序，供子串兜底复用，避免每次重算）
+ *   byKey       归一化键(规范名) → 规范名（首见优先）
+ *   byAlias     变体原串 → 规范名（仅收录规范名在集合内的，防脏别名）
+ *   byAliasKey  归一化键(变体) → 规范名（处理变体带空白/标点）
  */
 export function buildNameIndex(names, category) {
   const isArray = Array.isArray(names);
@@ -55,8 +56,10 @@ export function buildNameIndex(names, category) {
   const byKey = new Map();
   const byAlias = new Map();
   const byAliasKey = new Map();
+  const keys = [];
   for (const name of list) {
     const k = keyFn(name);
+    keys.push(k);
     if (!byKey.has(k)) byKey.set(k, name);
   }
   for (const [variant, canonical] of Object.entries(aliases)) {
@@ -65,7 +68,7 @@ export function buildNameIndex(names, category) {
     const k = keyFn(variant);
     if (!byAliasKey.has(k)) byAliasKey.set(k, canonical);
   }
-  return { lib, category, keyFn, names: list, byKey, byAlias, byAliasKey };
+  return { lib, category, keyFn, names: list, keys, byKey, byAlias, byAliasKey };
 }
 
 /**
@@ -83,7 +86,9 @@ export function resolveName(category, index, rawName, opts = {}) {
   const keyFn = index.keyFn || CATEGORY_KEY[category] || normalize;
   const fuzzy = opts.fuzzy !== undefined ? opts.fuzzy : category === CATEGORY.CHAR;
   // 对未构建（空对象/旧格式）索引防御：Map 字段缺失时视为无命中
-  if (index.lib && rawName in index.lib) return { name: rawName, entry: index.lib[rawName], matchedBy: 'exact' };
+  // hasOwnProperty 而非 in：防止 rawName 命中 Object.prototype 成员（如 "constructor"）造成伪命中
+  if (index.lib && Object.prototype.hasOwnProperty.call(index.lib, rawName))
+    return { name: rawName, entry: index.lib[rawName], matchedBy: 'exact' };
   let canonical = index.byAlias?.get(rawName);
   if (canonical && (!index.lib || index.lib[canonical] != null))
     return { name: canonical, entry: index.lib?.[canonical] ?? null, matchedBy: 'alias' };
@@ -102,13 +107,15 @@ export function resolveName(category, index, rawName, opts = {}) {
   return null;
 }
 
-/** 子串兜底：归一化键互相包含；确定性 = 最短规范名优先，同长按 zh localeCompare */
+/** 子串兜底：归一化键互相包含；确定性 = 最短规范名优先，同长按 zh localeCompare。
+ *  归一化键在 buildNameIndex 时已预计算（index.keys），避免每次解析都对全部名字重算 keyFn。 */
 function substringMatch(index, rawKey) {
   if (!rawKey) return null;
+  const keys = index.keys || index.names.map(index.keyFn);
   const candidates = [];
-  for (const name of index.names) {
-    const k = index.keyFn(name);
-    if (k.includes(rawKey) || rawKey.includes(k)) candidates.push(name);
+  for (let i = 0; i < index.names.length; i++) {
+    const k = keys[i];
+    if (k.includes(rawKey) || rawKey.includes(k)) candidates.push(index.names[i]);
   }
   if (!candidates.length) return null;
   candidates.sort((a, b) => a.length - b.length || a.localeCompare(b, 'zh'));
@@ -123,4 +130,12 @@ export function resolveEntry(category, index, rawName, opts) {
 /** 写时固化 / 迁移：返回标准名串（找不到返回 null） */
 export function canonicalName(category, index, rawName, opts) {
   return resolveName(category, index, rawName, opts)?.name ?? null;
+}
+
+/** 写时固化便捷封装：解析为标准名，未命中保留原名；返回 { name, changed }（changed 表示发生替换）。
+ *  同步脚本写前归一（characters/plans/workshop）共用，消除各处「resolve→比对→计数」重复。 */
+export function canonicalize(category, index, rawName, opts) {
+  if (rawName == null || rawName === '') return { name: rawName, changed: false };
+  const name = canonicalName(category, index, rawName, opts);
+  return name ? { name, changed: name !== rawName } : { name: rawName, changed: false };
 }

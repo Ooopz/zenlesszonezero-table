@@ -58,16 +58,16 @@ test('computeWorkshopDiscStats：两源混合聚合（主词条/副词条/槽位
         { id: '33145', suit: '静听嘉音', main: [{ name: '攻击力', value: 3000 }], subs: [{ name: '暴击率百分比', value: 480 }] },
       ],
     },
-    // —— mys 源：name [N]，main[] 即副词条（主词条缺失），无 subs ——
+    // —— mys 源：name [N]，与 2025 同构（main=主词条、subs=全部副词条） ——
     {
       uid: 'u2',
       role_id: '1341',
       equips: [
-        { name: '静听嘉音[5]', suit: '静听嘉音', main: [{ name: '攻击力', value: '6%' }, { name: '穿透率', value: '4.8%' }] },
+        { name: '静听嘉音[5]', suit: '静听嘉音', main: [{ name: '穿透率', value: '4.8%' }], subs: [{ name: '攻击力', value: '6%' }, { name: '暴击率', value: '4.8%' }] },
       ],
     },
     // —— 套装别名（荆棘玫瑰→棘刺玫瑰）+ 另一角色 ——
-    { uid: 'u3', role_id: '1361', equips: [{ name: '荆棘玫瑰[1]', suit: '荆棘玫瑰', main: [{ name: '防御力', value: '6%' }] }] },
+    { uid: 'u3', role_id: '1361', equips: [{ name: '荆棘玫瑰[1]', suit: '荆棘玫瑰', main: [{ name: '防御力', value: '6%' }], subs: [{ name: '生命值', value: '224' }] }] },
   ];
   const out = computeWorkshopDiscStats(entries, discIndex, { roleNameMap });
   assert.equal(out.length, 2, '只含出现的盘');
@@ -76,21 +76,21 @@ test('computeWorkshopDiscStats：两源混合聚合（主词条/副词条/槽位
   assert.ok(静听 && 棘刺, '套装别名解析为规范名');
   // 静听嘉音：equips = 2 块 2025 + 1 块 mys = 3（物理盘数）
   assert.equal(静听.equips, 3);
-  // 主词条：仅 2025 源 2 块（槽4/槽5），槽4=攻击力%（2025 扁平 攻击力 经 mainStatName 兜底）；mys 槽5 主词条缺失
+  // 主词条：两源都参与（槽4=攻击力% 2025 扁平经 mainStatName 兜底；槽5=2025 攻击力% + mys 穿透率）
   assert.deepEqual(静听.main456[4], [{ name: '攻击力%', count: 1 }]);
-  assert.deepEqual(静听.main456[5], [{ name: '攻击力%', count: 1 }]);
+  assert.deepEqual(Object.fromEntries(静听.main456[5].map((f) => [f.name, f.count])), { '攻击力%': 1, 穿透率: 1 });
   assert.deepEqual(静听.main456[6], []);
-  // mainDenom 只数 2025 盘（槽4:1、槽5:1、槽6:0），mys 盘不数
-  assert.deepEqual(静听.mainDenom, { 4: 1, 5: 1, 6: 0 });
-  // 副词条：2025 subs(攻击力%×1、暴击伤害×1、暴击率×1) + mys main(攻击力%×1、穿透率×1) 合并
+  // mainDenom：每槽所有盘（槽4:1、槽5:2、槽6:0）
+  assert.deepEqual(静听.mainDenom, { 4: 1, 5: 2, 6: 0 });
+  // 副词条：两源 subs 全量合并（mys 盘穿透率是主词条不参与；生命值属棘刺盘在下方断言）
   const subMap = Object.fromEntries(静听.subs.map((f) => [f.name, f.count]));
-  assert.deepEqual(subMap, { '攻击力%': 2, 暴击伤害: 1, 暴击率: 1, 穿透率: 1 });
+  assert.deepEqual(subMap, { '攻击力%': 2, 暴击伤害: 1, 暴击率: 2 });
   // 角色：两个 entry 同 role_id → 去重 1 个名字
   assert.deepEqual(静听.characters, ['维琳娜·艾嘉德']);
-  // 棘刺玫瑰：mys 盘，防御力% 副词条，角色去重
+  // 棘刺玫瑰：mys 盘（槽1 主词条防御力% 不在 456 范围），副词条 生命值，角色去重
   assert.equal(棘刺.equips, 1);
-  assert.deepEqual(棘刺.main456, { 4: [], 5: [], 6: [] }, 'mys 源无主词条');
-  assert.deepEqual(Object.fromEntries(棘刺.subs.map((f) => [f.name, f.count])), { '防御力%': 1 });
+  assert.deepEqual(棘刺.main456, { 4: [], 5: [], 6: [] }, '槽1 主词条不在 456 范围');
+  assert.deepEqual(Object.fromEntries(棘刺.subs.map((f) => [f.name, f.count])), { 生命值: 1 });
   assert.deepEqual(棘刺.characters, ['艾莲']);
   // 幂等：同 entries 跑两遍深相等
   assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, { roleNameMap }), out);
@@ -170,11 +170,18 @@ test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 
         },
       ],
     },
-    // —— mys 源盘（name 末尾 [1]）：main[] 即副词条（主词条丢失），攻击力 按值带 % 判百分比 ——
+    // —— mys 源盘（name 末尾 [1]，同构：main=主词条、subs=副词条全量，含无效词条 异常掌控） ——
     {
       uid: 'u2',
       role_id: '1341',
-      equips: [{ name: '静听嘉音[1]', suit: '静听嘉音', main: [{ name: '攻击力', value: '6%' }, { name: '暴击率', value: '4.8%' }] }],
+      equips: [
+        {
+          name: '静听嘉音[1]',
+          suit: '静听嘉音',
+          main: [{ name: '攻击力', value: '6%' }],
+          subs: [{ name: '攻击力', value: '6%' }, { name: '暴击率', value: '4.8%' }, { name: '异常掌控', value: '12' }],
+        },
+      ],
     },
   ];
   const out = computeWorkshopDiscStats(entries, discIndex, {});
@@ -186,9 +193,61 @@ test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 
   assert.ok(静听.subCombos.length >= 2);
   assert.equal(静听.subCombos[0].count, 1);
   assert.equal(new Set(静听.subCombos[0].combo).size, 4, '2025 盘组合含 4 词条');
-  // 主词条×副词条协同：仅 2025 槽4 盘（主词条 暴击率）有；mys 盘无主词条不参与
+  // 主词条×副词条协同：槽4 盘（主词条 暴击率）；mys 盘槽1 主词条不在 456 范围不参与
   assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1, 暴击率: 1, 异常精通: 1 });
-  assert.ok(!静听.mainSubCross[1], '槽1 无协同（非 456 / mys 盘）');
+  assert.ok(!静听.mainSubCross[1], '槽1 无协同（非 456 槽位）');
+  // 幂等
+  assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, {}), out);
+});
+
+test('computeWorkshopDiscStats：mys 与 2025 同构，主词条/协同统计两源全量参与', () => {
+  const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
+  const entries = [
+    // —— 2025 源盘（id 末位=槽4）：主词条 + 副词条 ——
+    {
+      uid: 'u1',
+      role_id: '1341',
+      equips: [
+        {
+          id: '11114',
+          suit: '静听嘉音',
+          main: [{ name: '暴击率百分比', value: 2400 }],
+          subs: [{ name: '攻击力百分比', value: 480 }, { name: '暴击伤害百分比', value: 480 }],
+        },
+      ],
+    },
+    // —— mys 源盘（name 末尾 [4]）：同构 main=主词条、subs=全部副词条，含无效词条 ——
+    {
+      uid: 'u2',
+      role_id: '1341',
+      equips: [
+        {
+          name: '静听嘉音[4]',
+          suit: '静听嘉音',
+          main: [{ name: '暴击伤害', value: '9.6%' }],
+          subs: [
+            { name: '暴击率', value: '4.8%' },
+            { name: '防御力', value: '15' }, // 无效副词条（防御力）也应参与统计
+          ],
+        },
+      ],
+    },
+  ];
+  const out = computeWorkshopDiscStats(entries, discIndex, {});
+  const 静听 = out.find((d) => d.name === '静听嘉音');
+  assert.ok(静听, '应聚合出盘');
+  assert.equal(静听.equips, 2, '两块盘都计数');
+  // 主词条：两源都参与（槽4：暴击率 1 + 暴击伤害 1），分母为 2
+  assert.equal(静听.mainDenom[4], 2, 'mys 盘也计入主词条分母');
+  assert.deepEqual(Object.fromEntries(静听.main456[4].map((f) => [f.name, f.count])), { 暴击伤害: 1, 暴击率: 1 });
+  // 副词条：mys 的无效词条（防御力）也计入
+  const subMap = Object.fromEntries(静听.subs.map((f) => [f.name, f.count]));
+  assert.deepEqual(subMap, { '攻击力%': 1, 暴击伤害: 1, 暴击率: 1, 防御力: 1 });
+  // 有效词条数：2025 盘 2 有效（攻击%+暴伤）、mys 盘 2 有效（暴击率 + 防御力——防御力在 SUBSTAT_TYPE_SET 候选集内）
+  assert.deepEqual(静听.effDist, { 2: 2 });
+  // 主词条×副词条协同：两源都参与
+  assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1 });
+  assert.deepEqual(静听.mainSubCross[4]['暴击伤害'], { 暴击率: 1, 防御力: 1 });
   // 幂等
   assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, {}), out);
 });

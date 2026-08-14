@@ -64,10 +64,12 @@ function startSyncPolling(kind) {
   }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
 }
 
-/** 统一同步请求：执行一个同步并返回 {ok, data}（由调用方决定刷新/汇总） */
+/** 统一同步请求：执行一个同步并返回 {ok, data}（由调用方决定刷新/汇总）。
+ *  同步可跑数小时（工坊全量/推荐方案全量），POST 不设超时（timeout: 0），
+ *  完成与否以服务器最终响应为准；进度靠 startSyncPolling 轮询展示。 */
 async function runSync(label, kind, url, body) {
   startSyncPolling(kind);
-  const j = body ? await postJSON(url, body) : await apiRequest(url, { method: 'POST' });
+  const j = body ? await postJSON(url, body, { timeout: 0 }) : await apiRequest(url, { method: 'POST', timeout: 0 });
   stopSyncPolling();
   return { ok: !!(j && j.ok), data: j };
 }

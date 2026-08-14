@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { stripHtml, normalizeStatKey, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
 import { validateLibrary } from '../lib/schema.js';
-import { isMain, writeDataFile, DATA_DIR } from '../lib/node.js';
+import { isMain, writeDataFile, DATA_DIR, pool } from '../lib/node.js';
 import { requestJson, retry } from './http.js';
 
 // ---------- 图片本地化（原 library-img.js 合并进来） ----------
@@ -97,29 +97,6 @@ const HEADERS = {
 };
 
 // ---------------- 基础工具 ----------------
-
-/** 并发池：最多同时 limit 个，结果按下标对齐；onProgress 在每个任务结束后回调 (done, total)。
- *  导出供 characters.js 复用（角色详情抓取同样有网络往返，可并发提速）。 */
-export async function pool(items, limit, fn, onProgress) {
-  const ret = new Array(items.length);
-  let i = 0,
-    done = 0;
-  const workers = Array(Math.min(limit, items.length || 1))
-    .fill(0)
-    .map(async () => {
-      while (i < items.length) {
-        const idx = i++;
-        ret[idx] = await fn(items[idx], idx).catch((e) => {
-          console.error(`    ✗ ${items[idx].key} 失败: ${e.message}`);
-          return null;
-        });
-        done++;
-        onProgress?.(done, items.length);
-      }
-    });
-  await Promise.all(workers);
-  return ret;
-}
 
 /** 把组件的 data 字段（可能是字符串 JSON）解析成对象，解析失败返回 null */
 function parseComponentData(comp) {

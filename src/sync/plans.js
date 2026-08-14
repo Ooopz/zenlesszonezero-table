@@ -18,37 +18,27 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR, isMain, writeDataFile } from '../lib/node.js';
+import { DATA_DIR, isMain, writeDataFile, pool } from '../lib/node.js';
 import { readCookieCache } from './characters.js';
-import { pool } from './library.js';
 import { normalizeStatKey, substatName, parseNum } from '../lib/util.js';
-import { buildNameIndex, canonicalName, CATEGORY } from '../lib/names.js';
+import { canonicalize, CATEGORY } from '../lib/names.js';
 import { PERCENT_STATS, mainStatName } from '../lib/constants.js';
 import { validatePlans } from '../lib/schema.js';
 import { requestJson, retry, fetchUid } from './http.js';
+import { loadNameIndexes } from './name-index.js';
 
 const ACCOUNT_FILE = path.join(DATA_DIR, 'characters.json');
 
 // ---------- 名称权威（写时归一） ----------
 // library.json 为标准名权威源；缺失/损坏时降级为不归一（名称保持接口原样），并在同步时提示。
-let libNameIndex = null;
-try {
-  const lib = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'library.json'), 'utf8'));
-  libNameIndex = {
-    char: buildNameIndex(lib.characters || {}, CATEGORY.CHAR),
-    wengine: buildNameIndex(lib.wengines || {}, CATEGORY.WENGINE),
-    disc: buildNameIndex(lib.discs || {}, CATEGORY.DISC),
-  };
-} catch {
-  console.warn('⚠️ library.json 缺失/损坏，推荐方案名称跳过归一（建议先 npm run sync:library）');
-}
+const libNameIndex = loadNameIndexes('推荐方案名称');
 
 /** 方案写时归一：角色名 / 音擎主备 / 套装名 / 配队成员统一解析为 library 标准名。
  *  extractPlan 保持纯函数，此层只在写 data/plans.json 前对已提取方案做名称固化。 */
 function normalizePlansOutput(entry) {
   if (!libNameIndex) return entry;
   // 写时归一一律关 fuzzy（plans 名是全名，精确/别名/归一化键已足够，避免子串误匹配）
-  const cn = (cat, idx, raw) => (raw ? canonicalName(cat, idx, raw, { fuzzy: false }) || raw : raw);
+  const cn = (cat, idx, raw) => canonicalize(cat, idx, raw, { fuzzy: false }).name;
   return {
     ...entry,
     name: cn(CATEGORY.CHAR, libNameIndex.char, entry.name),
@@ -89,7 +79,7 @@ const planHeaders = {
 
 const API = 'https://api-takumi.mihoyo.com/event/nap_cultivate_tool';
 const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/user'; // feed 端点域
-const MAX_PLANS = 500; // 每个角色方案上限（「切换方案」列表前 500 个）
+const MAX_PLANS = 5000; // 每角色方案安全上限（feed 正常以 end 标记自然终止；仅防接口异常时死循环，实际爬取全部）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
 
 /** 设备指纹头：优先取 cookie 里养成指南会话的真实指纹（DEVICEFP / _MHYUUID，随 cookie 一起导出），
@@ -175,11 +165,11 @@ export function extractPlan(p) {
 
 // ---------------- 抓取 ----------------
 
-/** 单个角色的方案：user/feed 长列表分页取前 MAX_PLANS 个 + avatar_simple_info 的 plan_id 兜底补齐。 */
+/** 单个角色的方案：user/feed 长列表分页爬取全部（直到 end）+ avatar_simple_info 的 plan_id 兜底补齐。 */
 async function fetchPlansFor(cookies, uid, avatarId) {
   const R = `uid=${uid}&region=prod_gf_cn`;
   // 「切换方案」长列表：user/feed 分页（参数用下划线，order=0 综合排序），
-  // 直到 end 或凑满 MAX_PLANS 个方案
+  // 翻页直到 end（全量爬取，不再截断前 500 个；MAX_PLANS 仅作防死循环上限）
   const plans = [];
   let nextId = 0;
   while (plans.length < MAX_PLANS) {
