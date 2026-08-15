@@ -1,7 +1,7 @@
 // test/workshop-extract.test.js —— 工坊提取扩展：技能等级（mys/2025 两源）+ 深渊战绩裁剪（extractAbyss）
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractBuild, extractAbyss } from '../src/sync/workshop.js';
+import { extractBuild } from '../src/sync/workshop.js';
 
 // ---------- extractBuild：技能等级提取 ----------
 
@@ -160,75 +160,4 @@ test('extractBuild：relic_point 0/缺失归一为 null', () => {
   const build = extractBuild(v3, '1081', { weapons: [], artifacts: [], items: {} });
   assert.ok(build);
   assert.equal(build.relic_point, null, '0 评分视为缺失');
-});
-
-// ---------- extractAbyss：深渊战绩裁剪 ----------
-
-const RAW_ABYSS = {
-  uid: '13503759',
-  max_layer: 7,
-  rating_list: [{ times: 4, rating: 'S' }],
-  fast_layer_time: 39,
-  battle_time_47: 368,
-  schedule_id: 62032,
-  begin_time: 1760040000,
-  end_time: 1761249599,
-  all_roles: [1301, 1021, 1041],
-  all_floor_detail: [
-    {
-      layer_id: 'l1',
-      layer_index: 0,
-      zone_name: '层一',
-      rating: 'S',
-      challenge_time: 0,
-      floor_challenge_time: 0,
-      buffs: [{ title: '赤海巡鲨', text: '很长很长的buff描述文本……' }],
-      node_1: {
-        buddy: { id: 54019, level: 60, rarity: 'S', bangboo_rectangle_url: 'https://example.com/buddy.png' },
-        battle_time: 76,
-        avatars: [
-          { id: 1381, rank: 2, level: 60, rarity: 'S', element_type: 203, avatar_profession: 1, role_square_url: 'https://example.com/a.png' },
-          { id: 1361, rank: 1, level: 60, rarity: 'S', element_type: 203, avatar_profession: 2, role_square_url: 'https://example.com/b.png' },
-        ],
-        monster_info: {
-          list: [{ id: 930169, name: '秽息蚀者·阿瓦鲁斯', icon_url: 'https://example.com/m.png', bg_icon: 'https://example.com/bg.png' }],
-        },
-      },
-      node_2: null,
-    },
-  ],
-};
-
-test('extractAbyss：保留可分析字段、去掉图片 URL 与长文本、明显瘦身', () => {
-  const out = extractAbyss(RAW_ABYSS);
-  assert.ok(out);
-  assert.equal(out.max_layer, 7);
-  assert.deepEqual(out.rating_list, [{ times: 4, rating: 'S' }]);
-  assert.equal(out.fast_layer_time, 39);
-  assert.deepEqual(out.all_roles, [1301, 1021, 1041]);
-  const floor = out.floors[0];
-  assert.equal(floor.zone_name, '层一');
-  assert.equal(floor.rating, 'S');
-  // buffs 只留标题
-  assert.deepEqual(floor.buffs, [{ title: '赤海巡鲨' }]);
-  // node 保留实战配队（无图片 URL）
-  assert.deepEqual(floor.node_1.avatars, [
-    { id: 1381, rank: 2, level: 60, rarity: 'S', element_type: 203, avatar_profession: 1 },
-    { id: 1361, rank: 1, level: 60, rarity: 'S', element_type: 203, avatar_profession: 2 },
-  ]);
-  assert.deepEqual(floor.node_1.buddy, { id: 54019, level: 60, rarity: 'S' });
-  assert.deepEqual(floor.node_1.monsters, [{ id: 930169, name: '秽息蚀者·阿瓦鲁斯' }]);
-  assert.equal(floor.node_1.battle_time, 76);
-  // 空 node 保留 null
-  assert.equal(floor.node_2, null);
-  // 瘦身有效性：裁剪后体积不增，且不再包含图片 URL 与 buff 长文本
-  const outStr = JSON.stringify(out);
-  assert.ok(outStr.length <= JSON.stringify(RAW_ABYSS).length, '裁剪后体积不应增大');
-  assert.ok(!outStr.includes('https://'), '裁剪后不应残留图片 URL');
-  assert.ok(!outStr.includes('buff描述'), '裁剪后不应残留 buff 长文本');
-});
-
-test('extractAbyss：无数据（null/undefined）返回 null', () => {
-  assert.equal(extractAbyss(null), null);
-  assert.equal(extractAbyss(undefined), null);
 });

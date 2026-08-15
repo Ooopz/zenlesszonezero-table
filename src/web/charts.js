@@ -21,25 +21,25 @@ export const CHART_COLORS = {
 /** 主题色半透明变体（图表大面积填充/条形用；值 = 主题色 + 透明度，保持风格一致） */
 const SOFT = {
   blue: 'rgba(89,183,255,0.28)', // 小提琴密度
-  blueBar: 'rgba(89,183,255,0.45)', // 玩家生态散点
+  blueBar: 'rgba(89,183,255,0.45)',
   blueBar70: 'rgba(89,183,255,0.7)', // 副词条/组合横向条
   acc: 'rgba(247,212,29,0.12)', // 箱线盒体
-  accBar: 'rgba(247,212,29,0.7)', // 中位条
+  accBar: 'rgba(247,212,29,0.7)', // 中位条（relic 箱线改版后暂未使用，保留备用）
   green: 'rgba(127,216,164,0.8)', // 0 影
   purple: 'rgba(180,140,255,0.85)', // 6 影
 };
 
 /** 坐标轴/网格/标签（统一引用主题色） */
 const AXIS_LINE = { lineStyle: { color: CHART_COLORS.line } };
-const AXIS_LABEL = { color: CHART_COLORS.dim, fontSize: 10 };
-const AXIS_LABEL_SMALL = { ...AXIS_LABEL, fontSize: 9 }; // 多子图/紧凑图表
+const AXIS_LABEL = { color: CHART_COLORS.dim, fontSize: 12 };
+const AXIS_LABEL_SMALL = { ...AXIS_LABEL, fontSize: 11 }; // 多子图/紧凑图表
 const SPLIT_LINE = { lineStyle: { color: CHART_COLORS.line } };
 /** 图例统一样式 */
 const CHART_LEGEND = { textStyle: { color: CHART_COLORS.dim }, top: 4 };
 /** 单图标题（整图居中标题） */
-const CHART_TITLE = { textStyle: { color: '#eee', fontSize: 13 } };
+const CHART_TITLE = { textStyle: { color: '#eee', fontSize: 15 } };
 /** 多子图的小标题（每个子图上方） */
-const CHART_SUBTITLE = { textStyle: { color: CHART_COLORS.dim, fontSize: 11 } };
+const CHART_SUBTITLE = { textStyle: { color: CHART_COLORS.dim, fontSize: 13 } };
 
 /** 图表通用 grid 边距 */
 export const CHART_GRID = { left: 44, right: 20, top: 40, bottom: 30, containLabel: true };
@@ -71,7 +71,81 @@ export function mountCharts() {
     const chart = echarts.init(el);
     chart.setOption(opt);
     instances.set(key, chart);
+    // 读数参考线（option 带 readLine 标记时启用：小提琴图等需要按鼠标位置读数的场景）
+    if (opt.readLine) attachReadLine(chart, opt);
   });
+}
+
+/** 灰色读数参考线：随鼠标移动的横虚线 + 数值标签。
+ *  图表 option 需带 readLine: {attrs: [各 grid 属性名], densities: [密度系列索引|null], bins: [bins|null]}
+ *  与预置 graphic 元素（id: read-line / read-label）。
+ *  行为：鼠标在某个子图（grid）内任意位置（含没放在数据条上的空白处）→ 灰线横跨该子图宽度，
+ *  数值标签按鼠标所在 y 轴位置换算显示；鼠标在子图外（间隙/标题/容器外）→ 隐藏。
+ *  悬浮框：数据元素上由原生 item tooltip 处理（内容随位置更新）；空白处用 showTip 指向
+ *  鼠标 y 对应的密度区间（复用 tooltip formatter），实现「y 轴对应时也显示」。
+ *  用原生 DOM mousemove 而非 zrender 事件：canvas 空白处 DOM 事件可靠触发。 */
+function attachReadLine(chart, opt) {
+  const attrs = opt.readLine.attrs || [];
+  const densities = opt.readLine.densities || [];
+  const binsList = opt.readLine.bins || [];
+  const dom = chart.getDom();
+  const hide = () => {
+    chart.setOption({ graphic: [{ id: 'read-line', invisible: true }, { id: 'read-label', invisible: true }] });
+    chart.dispatchAction({ type: 'hideTip' });
+  };
+  // zrender 层标记：鼠标是否悬在数据元素上（数据元素由原生 item tooltip 处理，空白处由 showTip 接管）
+  let onData = false;
+  chart.on('mousemove', (e) => {
+    onData = e.dataIndex != null;
+  });
+  chart.on('mouseout', () => {
+    onData = false;
+  });
+  dom.addEventListener('mousemove', (e) => {
+    const canvas = dom.querySelector('canvas');
+    if (!canvas) return;
+    const r = canvas.getBoundingClientRect();
+    const px = e.clientX - r.left;
+    const py = e.clientY - r.top;
+    if (px < 0 || py < 0 || px > r.width || py > r.height) return hide();
+    // 找鼠标所在子图（实时取像素矩形，resize 后自动正确）
+    for (let i = 0; i < attrs.length; i++) {
+      const comp = chart.getModel().getComponent('grid', i);
+      if (!comp) continue;
+      const rect = comp.coordinateSystem.getRect();
+      if (px < rect.x || px > rect.x + rect.width || py < rect.y || py > rect.y + rect.height) continue;
+      // 子图内：灰线横跨该子图宽度，标签 = 鼠标 y 对应的 y 轴数值
+      const line = { id: 'read-line', invisible: false, shape: { x1: rect.x, y1: py, x2: rect.x + rect.width, y2: py } };
+      let label = { id: 'read-label', invisible: true };
+      const v = chart.convertFromPixel({ gridIndex: i }, [px, py]);
+      if (v && Number.isFinite(v[1])) {
+        label = {
+          id: 'read-label',
+          invisible: false,
+          style: { text: `${attrs[i]} ${formatValue(attrs[i], v[1])}`, x: rect.x + 4, y: py - 6 },
+        };
+        // 空白处（未悬在数据元素上）：悬浮框显示鼠标 y 对应的密度区间（数值区间 + 玩家数 + 累计）
+        if (!onData) {
+          const si = densities[i];
+          const bins = binsList[i];
+          if (si != null && bins && bins.length > 1) {
+            let idx = 0;
+            for (let j = 0; j < bins.length - 1; j++) {
+              if (v[1] < bins[j + 1]) {
+                idx = j;
+                break;
+              }
+            }
+            chart.dispatchAction({ type: 'showTip', seriesIndex: si, dataIndex: idx, position: [px + 14, py + 14] });
+          }
+        }
+      }
+      chart.setOption({ graphic: [line, label] });
+      return;
+    }
+    hide();
+  });
+  dom.addEventListener('mouseleave', hide);
 }
 /** 窗口尺寸变化时 resize 所有已挂载图表（页面 resize 自动触发，防抖 150ms；
  *  多子图布局（技能分布/推荐三档等百分比 grid）依赖 resize 重算才能跟随容器宽度） */
@@ -99,14 +173,15 @@ export function baseYAxis() {
 export const DARK_TOOLTIP = {
   backgroundColor: CHART_COLORS.card,
   borderColor: CHART_COLORS.acc,
-  textStyle: { color: '#eee', fontSize: 12 },
+  textStyle: { color: '#eee', fontSize: 14 },
 };
 
 // ---------- 各图表的 option 构建函数（数据由 recommend.js 各面板准备） ----------
 
 
-/** 达标热力图：角色×属性，色 = 我的玩家百分位，悬浮标注是否达推荐中档 */
-export function heatmapOption(data, attrs) {
+/** 热力图：角色×属性，色 = 数值（百分位或技能等级）。
+ *  @param {number} [max] visualMap 上限：达标热力图默认 100（百分位）；技能热力图传 12（等级上限）。 */
+export function heatmapOption(data, attrs, max = 100) {
   // data: [{name, cells: [{pct, reached}|null]}]，attrs: 属性列表
   const rows = [];
   data.forEach((r, i) => {
@@ -123,13 +198,14 @@ export function heatmapOption(data, attrs) {
         const c = data[p.value[1]]?.cells[p.value[0]];
         if (!c || c.pct == null || !Number.isFinite(c.pct)) return '无数据';
         const hit = c.reached == null ? '' : c.reached ? `<span style="color:${CHART_COLORS.green}">✓ 达到推荐中档</span>` : `<span style="color:${CHART_COLORS.orange}">未达推荐中档</span>`;
-        return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}玩家百分位 <b>${Math.round(c.pct)}%</b>${hit ? '<br>' + hit : ''}`;
+        const gap = c.gap != null && Number.isFinite(c.gap) ? `<br>缺口 ${formatValue(attrs[p.value[0]], c.gap)}` : '';
+        return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}${max === 100 ? `玩家百分位 <b>${Math.round(c.pct)}%</b>` : `等级 <b>${c.pct}</b>`}${hit ? '<br>' + hit : ''}${gap}`;
       },
     },
     xAxis: { ...baseXAxis(attrs), axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 35 } },
     yAxis: { type: 'category', data: data.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
     visualMap: {
-      min: 0, max: 100, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
+      min: 0, max, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
       inRange: { color: ['#4a1a1a', '#8a4a1e', '#d4a81e', CHART_COLORS.green] }, // 深红→橙→金→绿，色阶鲜明
       textStyle: { color: CHART_COLORS.dim },
     },
@@ -143,39 +219,74 @@ export function heatmapOption(data, attrs) {
   };
 }
 
-/** 共识度散点图：X=玩家 sd、Y=推荐 CV，每角色一点（默认不显示名称，悬浮时高亮并显示） */
-export function consensusScatterOption(points) {
-  // points: [{name, sd, cv}]
+/** 共识度散点多子图大图：每属性一个子图（X=玩家 sd、Y=推荐 CV，每角色一点）。
+ *  attrs: [{attr, points: [{name, sd, cv}]}] —— 悬浮显示角色名与两项指标 */
+export function consensusGridOption(attrs) {
+  const n = attrs.length;
+  if (!n) return {};
+  // 布局：最多 4 列，属性多时换行（8 个属性 = 2 行）
+  const COLS = 4;
+  const rows = Math.ceil(n / COLS);
+  const padX = 2.2;
+  const padY = 7;
+  const gw = (100 - padX * (COLS + 1)) / COLS;
+  const gh = (100 - padY * (rows + 1)) / rows;
+  const grids = attrs.map((_, i) => ({
+    left: `${padX + (i % COLS) * (gw + padX)}%`,
+    top: `${padY + Math.floor(i / COLS) * (gh + padY)}%`,
+    width: `${gw}%`,
+    height: `${gh}%`,
+    containLabel: true,
+  }));
+  const titles = attrs.map((item, i) => ({
+    text: item.attr,
+    left: `${padX + (i % COLS) * (gw + padX) + gw / 2}%`,
+    top: `${padY + Math.floor(i / COLS) * (gh + padY) - 2}%`,
+    textAlign: 'center',
+    ...CHART_SUBTITLE,
+  }));
+  const xAxes = attrs.map((_, i) => ({
+    gridIndex: i,
+    type: 'value',
+    name: '玩家分化(sd)',
+    axisLine: AXIS_LINE,
+    axisLabel: AXIS_LABEL_SMALL,
+    splitLine: SPLIT_LINE,
+  }));
+  const yAxes = attrs.map((_, i) => ({
+    gridIndex: i,
+    type: 'value',
+    name: '攻略分歧(CV)',
+    axisLine: { show: false },
+    axisLabel: AXIS_LABEL_SMALL,
+    splitLine: SPLIT_LINE,
+  }));
+  const series = attrs.map((item, i) => ({
+    name: item.attr,
+    type: 'scatter',
+    gridIndex: i,
+    xAxisIndex: i,
+    yAxisIndex: i,
+    symbolSize: 9,
+    data: item.points.map((p) => [p.sd, p.cv, p.name]),
+    itemStyle: { color: CHART_COLORS.purple },
+    emphasis: {
+      scale: 1.7,
+      itemStyle: { color: CHART_COLORS.acc, borderColor: CHART_COLORS.acc, borderWidth: 1.5 },
+    },
+  }));
   return {
-    grid: CHART_GRID,
+    grid: grids,
+    title: titles,
+    xAxis: xAxes,
+    yAxis: yAxes,
     tooltip: {
       ...DARK_TOOLTIP,
+      trigger: 'item',
       formatter: (p) =>
-        `${p.data[2]}<br>玩家分化(sd): <b>${p.data[0].toFixed(1)}</b><br>攻略分歧(CV): <b>${(p.data[1] * 100).toFixed(1)}%</b>`,
+        `<b>${p.seriesName}</b><br>${p.data[2]}<br>玩家分化(sd): <b>${p.data[0].toFixed(1)}</b><br>攻略分歧(CV): <b>${(p.data[1] * 100).toFixed(1)}%</b>`,
     },
-    xAxis: { name: '玩家分化(sd)', ...baseYAxis() },
-    yAxis: { name: '攻略分歧(CV)', ...baseYAxis() },
-    series: [
-      {
-        type: 'scatter',
-        symbolSize: 11,
-        data: points.map((p) => [p.sd, p.cv, p.name]),
-        itemStyle: { color: CHART_COLORS.purple },
-        label: { show: true, formatter: (p) => p.data[2], position: 'top', color: CHART_COLORS.dim, fontSize: 10 },
-        emphasis: {
-          scale: 1.7, // 悬浮放大
-          label: {
-            show: true,
-            formatter: (p) => p.data[2],
-            position: 'top',
-            color: CHART_COLORS.acc, // 网站金色
-            fontSize: 12,
-            fontWeight: 'bold',
-          },
-          itemStyle: { color: CHART_COLORS.acc, borderColor: CHART_COLORS.acc, borderWidth: 1.5 },
-        },
-      },
-    ],
+    series,
   };
 }
 
@@ -216,10 +327,16 @@ export function violinBoxOption(items) {
     splitLine: { show: false }, // 不显示网格刻度线
   }));
   const series = [];
+  // 每子图密度系列的 series 索引与 bins（供 attachReadLine 在空白处 showTip 定位鼠标 y 对应的区间）
+  const densitySI = [];
+  const binsList = [];
   items.forEach((item, i) => {
     // 小提琴密度：镜像直方图（dist.hist 存在时；半透明蓝左右对称，箱线居中叠加）
     const hist = item.dist?.hist;
+    densitySI.push(null);
+    binsList.push(hist?.bins || null);
     if (hist?.counts?.length) {
+      densitySI[i] = series.length;
       const maxCount = Math.max(...hist.counts, 1);
       const bins = hist.bins;
       const counts = hist.counts;
@@ -303,6 +420,8 @@ export function violinBoxOption(items) {
     yAxis: yAxes,
     tooltip: {
       ...DARK_TOOLTIP,
+      // item 触发：悬浮框内容随悬浮位置实时更新（密度矩形区间 / 箱线点统计）；
+      // 灰色读数参考线由下方 graphic + mountCharts 的 attachReadLine 机制提供（不依赖 tooltip 触发模式）
       formatter: (p) => {
         const [attr, type] = (p.seriesName || '').split('|');
         const item = items.find((x) => x.attr === attr);
@@ -334,22 +453,26 @@ export function violinBoxOption(items) {
       },
     },
     series,
-  };
-}
-
-/** 档位占比条形图 */
-export function tierBarOption(data) {
-  // data: [{tier:'高档', count, pct}]
-  return {
-    grid: CHART_GRID,
-    tooltip: DARK_TOOLTIP,
-    xAxis: { ...baseXAxis(data.map((d) => d.tier)), axisLabel: AXIS_LABEL },
-    yAxis: baseYAxis(),
-    series: [
+    // 灰色读数参考线：横虚线随鼠标移动 + 数值标签（由 mountCharts 的 attachReadLine 驱动；
+    // attrs 为各 grid 的属性名，densities/bins 供空白处 showTip 显示鼠标 y 对应区间的悬浮框）
+    readLine: { attrs: items.map((x) => x.attr), densities: densitySI, bins: binsList },
+    graphic: [
       {
-        type: 'bar', data: data.map((d) => d.count),
-        barWidth: 40, itemStyle: { color: CHART_COLORS.acc },
-        label: { show: true, position: 'top', color: CHART_COLORS.dim },
+        id: 'read-line',
+        type: 'line',
+        invisible: true,
+        silent: true,
+        z: 50,
+        shape: { x1: 0, y1: 0, x2: 0, y2: 0 },
+        style: { stroke: '#8a8a8a', lineDash: [4, 3], lineWidth: 1 },
+      },
+      {
+        id: 'read-label',
+        type: 'text',
+        invisible: true,
+        silent: true,
+        z: 50,
+        style: { text: '', x: 0, y: 0, fill: '#ddd', fontSize: 12, backgroundColor: '#2b2b2b', borderRadius: 2, padding: [2, 4] },
       },
     ],
   };
@@ -469,7 +592,7 @@ export function tierRichOption(items, height = 380) {
     for (const k of ['low', 'mid', 'high']) {
       push(item[k]?.median);
       if (item[k]?.sd != null) {
-        push(item[k].median - item[k].sd);
+        push(Math.max(0, item[k].median - item[k].sd)); // 面板属性不可能为负，区间下界钳制到 0
         push(item[k].median + item[k].sd);
       }
     }
@@ -485,14 +608,16 @@ export function tierRichOption(items, height = 380) {
       axisLine: AXIS_LINE,
       axisLabel: AXIS_LABEL_SMALL,
       splitLine: SPLIT_LINE,
-      // 数值轴的 axisPointer 默认不显示（类目轴才默认显示竖线），必须显式在轴上开启
-      axisPointer: { show: true, type: 'line', lineStyle: { color: CHART_COLORS.acc, type: 'dashed', width: 1.5 } },
+      // 数值轴的 axisPointer 默认不显示（类目轴才默认显示竖线），必须显式在轴上开启；
+      // 样式不自定义：走 ECharts 默认（实线 #555），与技能等级分布图的竖线效果一致
+      axisPointer: { show: true, type: 'line' },
     });
     /** 区间行：空 bar series + markArea 半透明区域（[from, to]，x 为 value 坐标） */
     const areaRow = (cat, from, to, color) => {
       if (from == null || to == null) return;
       const lo = Math.min(from, to);
       const hi = Math.max(from, to);
+      if (hi <= 0) return; // 占位 0 区间（0~0）无信息，跳过（面板属性不可能为负）
       series.push({
         name: cat,
         type: 'bar',
@@ -507,7 +632,7 @@ export function tierRichOption(items, height = 380) {
             show: true,
             position: 'insideRight',
             color: '#1c1c1e',
-            fontSize: 9,
+            fontSize: 11,
             formatter: `${lo.toFixed(1)} ~ ${hi.toFixed(1)}`,
           },
           data: [[{ yAxis: cat, xAxis: lo }, { yAxis: cat, xAxis: hi }]],
@@ -515,13 +640,40 @@ export function tierRichOption(items, height = 380) {
       });
     };
     if (item.player?.p10 != null && item.player?.p90 != null) {
-      areaRow('玩家', item.player.p10, item.player.p90, COLORS.player);
+      if (item.player.p10 === item.player.p90) {
+        // 集中分布（大量玩家同值，如能量自动回复 1.2 / 基础穿透值）：P10=P90 区间退化为 0 宽，
+        // markArea 不可见 → 用贯穿 4 行的虚线竖线 + 底部标签（不伪造区间宽度）
+        series.push({
+          name: '玩家',
+          type: 'line',
+          gridIndex: i,
+          xAxisIndex: i,
+          yAxisIndex: i,
+          data: [],
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { color: COLORS.player, width: 1.5, type: 'dashed' },
+            label: {
+              show: true,
+              position: 'insideEndBottom',
+              color: COLORS.player,
+              fontSize: 11,
+              formatter: `≈ ${item.player.p10.toFixed(1)}`,
+            },
+            data: [{ xAxis: item.player.p10 }],
+          },
+        });
+      } else {
+        areaRow('玩家', item.player.p10, item.player.p90, COLORS.player);
+      }
     }
     for (const [k, cat, color] of [['low', '低配', COLORS.low], ['mid', '毕业', COLORS.mid], ['high', '高配', COLORS.high]]) {
       const v = item[k];
       if (v?.median == null) continue;
       const sd = v.sd != null ? v.sd : 0;
-      areaRow(cat, v.median - sd, v.median + sd, color);
+      // median-sd 可能为负（sd>median 的小数值属性），面板属性不可能为负，下界钳制到 0
+      areaRow(cat, Math.max(0, v.median - sd), v.median + sd, color);
     }
     // 我的值：金色竖线贯穿 4 行 + 顶部百分位标签（markLine；insideEndTop 让标签留在绘图区内侧，
     // 避免越出 grid 顶与子图标题（像素定位在 grid 上方）重叠）
@@ -542,7 +694,7 @@ export function tierRichOption(items, height = 380) {
             show: true,
             position: 'insideEndTop',
             color: COLORS.mine,
-            fontSize: 9,
+            fontSize: 11,
             formatter: pct,
           },
           data: [{ xAxis: +item.mine.toFixed(3) }],
@@ -575,7 +727,7 @@ export function tierRichOption(items, height = 380) {
     tooltip: {
       ...DARK_TOOLTIP,
       trigger: 'axis',
-      axisPointer: { type: 'line', lineStyle: { color: CHART_COLORS.acc, type: 'dashed', width: 1.5 } },
+      axisPointer: { type: 'line' },
       formatter: (p) => {
         const arr = Array.isArray(p) ? p : [p];
         const f = arr[0];
@@ -596,20 +748,20 @@ export function tierRichOption(items, height = 380) {
 export function rankPyramidOption(rows) {
   // rows: [{name, ranks: [p0..p6]}]
   const RANK_COLORS = [
-    '#4a4a4a',
-    CHART_COLORS.green,
-    CHART_COLORS.acc,
-    CHART_COLORS.acc2,
-    CHART_COLORS.orange,
-    CHART_COLORS.red,
-    CHART_COLORS.purple,
+    '#2f7d7d', // 0 影：深青
+    '#5a7d9a', // 1 影：蓝灰
+    CHART_COLORS.blue, // 2 影：蓝
+    CHART_COLORS.green, // 3 影：绿
+    CHART_COLORS.acc, // 4 影：金
+    CHART_COLORS.orange, // 5 影：橙
+    CHART_COLORS.red, // 6 影：红（冷→暖递进，影画越高越醒目）
   ];
   const series = [0, 1, 2, 3, 4, 5, 6].map((r) => ({
     name: `${r} 影`,
     type: 'bar',
     stack: 'rank',
     data: rows.map((x) => x.ranks[r]),
-    barWidth: 14,
+    barWidth: 16,
     itemStyle: { color: RANK_COLORS[r] },
   }));
   return {
@@ -629,45 +781,49 @@ export function rankPyramidOption(rows) {
     },
     legend: CHART_LEGEND,
     xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE },
-    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
+    // interval: 0 —— 角色名全部显示（默认自动间隔会隔一个显示一个）
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, interval: 0 } },
     series,
   };
 }
 
-/** 玩家生态散点：X=角色数、Y=平均装配评分（大样本 large 模式；气泡 = 最高评分经 tooltip 展示） */
-export function playerScatterOption(points) {
-  return {
-    grid: CHART_GRID,
-    tooltip: {
-      ...DARK_TOOLTIP,
-      formatter: (p) =>
-        `角色数 <b>${p.value[0]}</b><br>平均评分 <b>${p.value[1]}</b><br>最高评分 <b>${p.value[2] ?? '—'}</b>`,
-    },
-    xAxis: { name: '角色池大小', ...baseYAxis() },
-    yAxis: { name: '平均装配评分', ...baseYAxis() },
-    series: [
-      {
-        type: 'scatter',
-        large: true,
-        symbolSize: 4,
-        data: points.map((p) => [p.chars, p.avgRelic, p.maxRelic]),
-        itemStyle: { color: SOFT.blueBar },
-        emphasis: { itemStyle: { color: CHART_COLORS.acc } },
-      },
-    ],
-  };
-}
-
-/** 全角色评分中位条形（p10-p90 区间以 scatter 叠加显示） */
+/** 全角色装配评分箱线图：盒 = P25-P75、线 = 中位、须 = IQR 1.5 规则（IQR 塌缩时退化为 P10/P90），
+ *  悬浮显示分位明细与离群数 */
 export function relicBarOption(rows) {
-  // rows: [{name, median, p10, p90, count}]
+  // rows: [{name, median, p25, p75, whiskerLow, whiskerHigh, outliers, count}]
   return {
-    grid: { left: 90, right: 40, top: 30, bottom: 24, containLabel: true },
+    grid: { left: 90, right: 50, top: 30, bottom: 24, containLabel: true },
     tooltip: {
       ...DARK_TOOLTIP,
       formatter: (p) => {
         const d = p.data?.d || p.data;
-        return `${d.name}<br>中位 <b>${d.median}</b><br>P10-P90 <b>${d.p10} ~ ${d.p90}</b><br>样本 ${d.count}`;
+        return `<b>${d.name}</b><br>须 ${d.whiskerLow ?? d.p10} ~ ${d.whiskerHigh ?? d.p90}<br>Q1 <b>${d.p25}</b> · 中位 <b>${d.median}</b> · Q3 <b>${d.p75}</b><br>样本 ${d.count}${d.outliers ? `（离群 ${d.outliers}）` : ''}`;
+      },
+    },
+    xAxis: { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
+    series: [
+      {
+        type: 'boxplot',
+        data: rows.map((r) => ({ value: [r.whiskerLow ?? r.p10, r.p25, r.median, r.p75, r.whiskerHigh ?? r.p90], d: r })),
+        boxWidth: ['40%', '55%'],
+        itemStyle: { color: SOFT.acc, borderColor: CHART_COLORS.acc },
+        lineStyle: { color: CHART_COLORS.acc },
+      },
+    ],
+  };
+}
+
+/** 影画 × 装配评分：每角色 6 影 median − 0 影 median 的横向条（正=氪影画玩家配装评分更高）。
+ *  rows: [{name, gap, r0, r6}] —— 按 gap 排序传入 */
+export function rankRelicGapOption(rows) {
+  return {
+    grid: { left: 90, right: 50, top: 16, bottom: 24, containLabel: true },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => {
+        const d = p.data?.d || p.data;
+        return `<b>${d.name}</b><br>0 影评分 <b>${d.r0}</b><br>6 影评分 <b>${d.r6}</b><br>差距 <b>${d.gap >= 0 ? '+' : ''}${d.gap}</b>`;
       },
     },
     xAxis: { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
@@ -675,48 +831,9 @@ export function relicBarOption(rows) {
     series: [
       {
         type: 'bar',
-        data: rows.map((r) => ({ value: r.median, d: r })),
         barWidth: 10,
-        itemStyle: { color: SOFT.accBar },
-        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 9, formatter: (p) => p.value },
-      },
-      {
-        type: 'scatter',
-        symbolSize: 2,
-        data: rows.flatMap((r) => [
-          { value: [r.p10, r.name], d: r },
-          { value: [r.p90, r.name], d: r },
-        ]),
-        itemStyle: { color: CHART_COLORS.blue },
-        silent: true,
-      },
-    ],
-  };
-}
-
-/** 影画收益：每角色 0 影 vs 6 影 关键属性 P50 分组横条 */
-export function layerGainOption(rows) {
-  // rows: [{name, attr, rank0, rank6}]
-  return {
-    grid: { left: 90, right: 40, top: 36, bottom: 24, containLabel: true },
-    tooltip: { ...DARK_TOOLTIP, trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: CHART_LEGEND,
-    xAxis: { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
-    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
-    series: [
-      {
-        name: '0 影 P50',
-        type: 'bar',
-        data: rows.map((r) => r.rank0),
-        barWidth: 8,
-        itemStyle: { color: SOFT.green },
-      },
-      {
-        name: '6 影 P50',
-        type: 'bar',
-        data: rows.map((r) => r.rank6),
-        barWidth: 8,
-        itemStyle: { color: SOFT.purple },
+        data: rows.map((r) => ({ value: r.gap, d: r })),
+        itemStyle: { color: (p) => (p.value >= 0 ? CHART_COLORS.acc : CHART_COLORS.dim) },
       },
     ],
   };
@@ -795,7 +912,7 @@ export function skillDistOption(items) {
           show: isMine && count > 0,
           position: 'top',
           color: CHART_COLORS.acc,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: 'bold',
           formatter: `${count} 人`,
         },
@@ -879,9 +996,78 @@ export function discSubsOption(subs, total) {
         barWidth: 12,
         data: rows.map((r) => ({ value: r.pct, count: r.count })).reverse(),
         itemStyle: { color: SOFT.blueBar70 },
-        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 9, formatter: '{c}%' },
+        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11, formatter: '{c}%' },
       },
     ],
+  };
+}
+
+/** 主词条 × 副词条协同热力图（mainSubCross）：4/5/6 槽并排，色 = 条件频率（count / 该槽盘数）。
+ *  detail = discDetails 条目（mainSubCross/mainDenom）——「4 号位暴击率 → 暴伤 42%」式配装规律 */
+export function mainSubCrossOption(detail) {
+  const slots = [4, 5, 6];
+  const grids = [];
+  const xAxes = [];
+  const yAxes = [];
+  const series = [];
+  const titles = [];
+  slots.forEach((slot, i) => {
+    const cross = detail?.mainSubCross?.[slot] || {};
+    const mains = Object.keys(cross);
+    const subs = [...new Set(mains.flatMap((m) => Object.keys(cross[m] || {})))];
+    if (!mains.length || !subs.length) return;
+    const denom = detail?.mainDenom?.[slot] || 1;
+    const data = [];
+    mains.forEach((m, mi) => {
+      for (const [s, cnt] of Object.entries(cross[m] || {})) {
+        data.push({ value: [subs.indexOf(s), mi, +(cnt / denom).toFixed(3)], m, s });
+      }
+    });
+    const left = `${(i % 3) * 32 + 2}%`;
+    grids.push({ left, top: '16%', width: '30%', height: '72%', containLabel: true });
+    titles.push({ text: `${slot} 号位`, left: `${(i % 3) * 32 + 17}%`, top: '1%', textAlign: 'center', ...CHART_SUBTITLE });
+    xAxes.push({
+      gridIndex: i,
+      type: 'category',
+      data: subs,
+      axisLine: AXIS_LINE,
+      axisLabel: { ...AXIS_LABEL_SMALL, interval: 0, rotate: 40 },
+      axisTick: { show: false },
+    });
+    yAxes.push({ gridIndex: i, type: 'category', data: mains, axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL });
+    series.push({
+      name: `${slot}号位`,
+      type: 'heatmap',
+      gridIndex: i,
+      xAxisIndex: i,
+      yAxisIndex: i,
+      data,
+      itemStyle: { borderColor: '#000', borderWidth: 0.5 },
+      emphasis: { itemStyle: { borderColor: CHART_COLORS.acc, borderWidth: 1 } },
+    });
+  });
+  if (!series.length) return {};
+  return {
+    grid: grids,
+    title: titles,
+    xAxis: xAxes,
+    yAxis: yAxes,
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => `<b>${p.seriesName}</b><br>主词条 ${p.data.m}<br>副词条 ${p.data.s}<br>条件频率 <b>${(p.value[2] * 100).toFixed(1)}%</b>`,
+    },
+    visualMap: {
+      min: 0,
+      max: 1,
+      calculable: false,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 2,
+      inRange: { color: ['#232323', '#8a4a1e', CHART_COLORS.acc] },
+      textStyle: { color: CHART_COLORS.dim },
+      formatter: (v) => (v * 100).toFixed(0) + '%',
+    },
+    series,
   };
 }
 
@@ -899,7 +1085,7 @@ export function discComboOption(subCombos) {
         barWidth: 12,
         data: rows.map((r) => r.count).reverse(),
         itemStyle: { color: SOFT.blueBar70 },
-        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 9 },
+        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11 },
       },
     ],
   };

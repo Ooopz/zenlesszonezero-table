@@ -2,9 +2,9 @@
 // 数据源：data/plans.json（养成指南推荐方案，见 src/sync/plans.js 的 extractPlan）。
 // 按驱动盘名聚合全部角色的推荐方案，统计「推荐方案里用到该盘（2件套或4件套）的角色」、
 // 这些方案推荐的主/副词条出现频次（出现得越多的词条越通用、越值得留）、以及 4/5/6 号位主属性频次。
-// 二件套按「效果」替代：同一 set2 效果的盘可互相替代（如 棘刺玫瑰/灵魂摇滚 都是 防御力0.16），
+// 二件套按「效果」替代：同一 set2 效果的盘可互相替代（如 荆棘玫瑰/灵魂摇滚 都是 防御力0.16），
 // 方案推荐二件套效果 X 时计入所有 set2 为 X 的盘（传 discSet2 时启用）。四件套效果无结构化数值，保持按套装名。
-// 套装名解析统一走 src/lib/names.js 的 resolver（normalize + 别名，如 荆棘玫瑰→棘刺玫瑰、尾随空格）。
+// 套装名解析统一走 src/lib/names.js 的 resolver（normalize + 别名，如 棘刺玫瑰→荆棘玫瑰 旧名兼容、尾随空格）。
 import { buildNameIndex, resolveName, CATEGORY } from './names.js';
 import { SUBSTAT_TYPE_SET } from './constants.js';
 

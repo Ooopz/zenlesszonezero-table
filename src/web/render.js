@@ -119,7 +119,7 @@ function discTile(d, validSet) {
   const { discLib, main, subs, discHits } = discDetail(d, validSet);
   const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
   const sub = subs.map((s) => `<div class="${s.hit ? 'hit' : ''}">${s.content}</div>`).join('');
-  return `<div class="disc" data-detail="${escapeHtml(discTooltip(d))}" title="悬浮查看详情">
+  return `<div class="disc" data-detail="${escapeHtml(discTooltip(d))}">
     <div class="disc-top">${icon ? `<img class="d-ico" src="${icon}" alt="">` : ''}<div class="disc-head"><div class="dset">${d.set}</div><div class="dslot">${d.slot}号${d.level ? ' · +' + d.level : ''}</div></div>${discHits != null ? `<span class="d-hit">命中 ${discHits}</span>` : ''}</div>
     <div class="dmain">${main}</div>
     ${sub ? `<div class="dsubs">${sub}</div>` : ''}
@@ -344,17 +344,56 @@ const tableSort = createSort();
 function toggleTableSort(col) {
   tableSort.toggle(col);
 }
+/** 汇总表属性格悬浮：计算详情——当前/目标达成率 + 基础→加成→最终分解 + 各来源明细 + 账号实测差异 */
+function statDetailHtml(R, s, current, targetVal, rate) {
+  const fmt = (v) => formatValue(s, v);
+  let src = s;
+  let base = R.base?.[s];
+  let bonus = R.bonus?.[s];
+  let final = R.final?.[s];
+  // 「属性伤害加成」目标：实际键取 final 首个伤害加成键（来源明细按实际键列）
+  if (s === '属性伤害加成') {
+    const dbKey = Object.keys(R.final || {}).find((k) => isDamageBonus(k));
+    if (dbKey) {
+      src = dbKey;
+      base = null;
+      bonus = null;
+      final = R.final[dbKey];
+    }
+  }
+  const parts = [`<b>${s}</b>　当前 <b>${fmt(current)}</b>`];
+  if (targetVal != null && rate != null) {
+    const targetInternal = targetPercents.has(s) ? Number(targetVal) / 100 : Number(targetVal);
+    parts.push(
+      `<span style="color:var(--dim)">目标 ${fmt(targetInternal)} → 达成 <span class="${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span></span>`
+    );
+  }
+  if (final != null && base != null) {
+    parts.push(`基础 ${fmt(base)} + 加成 ${fmt(bonus)} = 最终 <b>${fmt(final)}</b>`);
+  } else if (final != null) {
+    parts.push(`合计 <b>${fmt(final)}</b>`);
+  }
+  const srcs = R.sources?.[src];
+  if (srcs?.length) parts.push(srcs.map((t) => `<span style="color:var(--dim)">· ${t}</span>`).join('<br>'));
+  // 账号实测与推算差异（实测为展示主值；差异超阈值才提示，避免取整噪音）
+  const act = R.actual?.[s]?.final;
+  if (act != null && final != null && Math.abs(act - final) > (targetPercents.has(s) ? 0.005 : 1))
+    parts.push(`<span style="color:var(--dim);font-size:14px">账号实测 ${fmt(act)}（推算 ${fmt(final)}）</span>`);
+  return parts.join('<br>');
+}
 function cellStats(R, target, s) {
   const current = resolveStatCurrent(R, s);
   if (current == null) return `<td class="tstat">—<div class="tbar tbar-empty"></div></td>`;
   const targetVal = target[s];
-  if (targetVal == null || !Number(targetVal))
-    return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><div class="tbar tbar-empty"></div></td>`;
-  let targetInternal = Number(targetVal);
-  if (targetPercents.has(s)) targetInternal = targetVal / 100;
-  const rate = current / targetInternal;
+  const rate =
+    targetVal == null || !Number(targetVal)
+      ? null
+      : current / (targetPercents.has(s) ? Number(targetVal) / 100 : Number(targetVal));
+  const tip = ` data-detail="${escapeHtml(statDetailHtml(R, s, current, targetVal, rate))}" title="悬浮查看计算详情"`;
+  if (rate == null)
+    return `<td class="tstat"${tip}><span class="tv">${formatValue(s, current)}</span><div class="tbar tbar-empty"></div></td>`;
   const width = Math.min(100, rate * 100).toFixed(0);
-  return `<td class="tstat"><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></div></td>`;
+  return `<td class="tstat"${tip}><span class="tv">${formatValue(s, current)}</span><span class="tpct ${rateClass(rate)}">${(rate * 100).toFixed(0)}%</span><div class="tbar"><span class="tfill" style="width:${width}%;background:${rateColor(rate)}"></span></div></td>`;
 }
 
 function renderTable(list, container) {
@@ -411,7 +450,7 @@ function renderTable(list, container) {
         ? `<br>${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}`
         : '') +
       (wengineEffect
-        ? `<br><span style="color:var(--dim);font-size:12px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
+        ? `<br><span style="color:var(--dim);font-size:14px">${wengineEffect.length > 110 ? wengineEffect.slice(0, 110) + '…' : wengineEffect}</span>`
         : '');
     cell['音擎'] =
       `<td class="twe">${wengineIcon ? `<img class="t-ico" src="${wengineIcon}" data-detail="${escapeHtml(wengineDetail)}">` : wengine.name || '未佩戴'}</td>`;

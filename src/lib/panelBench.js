@@ -82,7 +82,8 @@ function tierStat(vals) {
 
 /**
  * 推荐三档统计：每角色每属性 low/mid/high 的 mean/median/sd/CV。
- * 过滤 low=mid=0 的占位属性（冲击力/异常掌控/能量自动回复/穿透率等只有 high 有值，三档统计无意义 → 只保留 high）。
+ * 过滤 low=mid=0 的占位属性（冲击力/异常掌控/能量自动回复/穿透率等方案里只有 high 有值或无值，
+ * 三档统计无意义 → low/mid 置 null，前端只显示有信息的区间）。
  * @param {object} plans  plans.json：{ avatarId: { name, plans: [...] } }，plan.panel = [{name, low, mid, high}]
  * @returns {Object<string, Object<string, {low:Stat|null, mid:Stat|null, high:Stat|null}>}
  *   Stat = {count, mean, median, sd, cv}；cv 用于「共识度」（推荐体系指标）。
@@ -109,8 +110,8 @@ export function computeRecTierStats(plans) {
       const low = tierStat(tiers.low);
       const mid = tierStat(tiers.mid);
       const high = tierStat(tiers.high);
-      // low/mid 恒为 0 的占位属性：三档统计无意义，只保留 high
-      if (low && low.median === 0 && mid && mid.median === 0 && high) {
+      // low/mid 恒为 0 的占位属性：三档统计无意义（无论 high 是否存在）→ low/mid 置 null
+      if (low && low.median === 0 && mid && mid.median === 0) {
         out[name][attr] = { low: null, mid: null, high };
       } else {
         out[name][attr] = { low, mid, high };

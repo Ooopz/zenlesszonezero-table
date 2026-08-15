@@ -19,7 +19,7 @@ import {
 } from './data.js';
 import { render, setMyTab } from './render.js';
 import { setWikiTab } from './wiki.js';
-import { setRecommendTab, setSelectedRole, setSelectedAbyssRole } from './recommend.js';
+import { setRecommendTab, setSelectedRole } from './recommend.js';
 import { setSelectedDisc } from './discstats.js';
 
 // ---------- 提示条 ----------
@@ -494,10 +494,6 @@ export function initUi() {
     },
     selectDisc: (name) => {
       setSelectedDisc(name); // 驱动盘图表卡片区的盘下拉
-      render();
-    },
-    selectAbyssRole: (name) => {
-      setSelectedAbyssRole(name); // 深渊配队面板的角色下拉
       render();
     },
     myTab: (key) => {
