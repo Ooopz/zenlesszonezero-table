@@ -26,11 +26,11 @@ import {
   computeRankLayers,
   computeRankDist,
   computeSkillStats,
-  computePlayerProfiles,
   computeRoleDiscStats,
-  computeAbyssStats,
-  computeAbyssTeamStats,
-  bin2D,
+  computeRoleCooccurrence,
+  computeCompleteness,
+  computeRankRelic,
+  computeSkillComboStats,
 } from '../lib/workshopStats.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
@@ -40,7 +40,6 @@ import { installProxyFetch, resolveProxyUrl, maskProxyUrl } from './proxy.js';
 
 const OUT_FILE = path.join(DATA_DIR, 'workshop.json');
 const STATS_FILE = path.join(DATA_DIR, 'workshop-stats.json');
-const ABYSS_FILE = path.join(DATA_DIR, 'workshop-abyss.json'); // uid 级深渊战绩（裁剪后；前端不加载，聚合层消费）
 const WEIGHTS_FILE = path.join(DATA_DIR, 'workshop-weights.json'); // 角色默认流派权重（工坊有效词条口径）
 // 逆向提取的静态数据表（合并文件）：装备 / 角色基础 / 套装 / 武器
 const S = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/sync', 'workshop-static.json'), 'utf8'));
@@ -185,26 +184,6 @@ if (proxyUrl) {
 //   · 跳过判断 = 恢复出的 entries 实际覆盖的 uid 集合（fileUids），文件里没有的 uid 一律重爬（自愈）；
 //   · 写文件原子化（tmp + rename），中断只损坏临时文件，旧文件完好。
 // 崩溃续爬 = 旧文件断点：上次「写入文件后」爬的 uid 不在文件里 → 本次自动重爬，永不静默丢数据。
-
-/** 分批写「对象头 + 大数组」为 JSON 文件（原子写：临时文件 + rename，中断不损坏旧文件）。
- *  每次只 JSON.stringify 一批（防条目过多时一次性序列化超过 V8 字符串上限 Invalid string length）。
- *  prefix 形如 `{"meta":{...},"entries":[`，函数补上分批数组与 `]}`。 */
-function writeJsonArrayStream(file, prefix, arr, batchSize = 5000) {
-  const tmp = `${file}.tmp`;
-  const fd = fs.openSync(tmp, 'w');
-  try {
-    fs.writeSync(fd, prefix);
-    for (let i = 0; i < arr.length; i += batchSize) {
-      if (i > 0) fs.writeSync(fd, ',');
-      // 去 [ ] 只留元素（逗号分隔），分批发序列化
-      fs.writeSync(fd, JSON.stringify(arr.slice(i, i + batchSize)).slice(1, -1));
-    }
-    fs.writeSync(fd, ']}');
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmp, file); // 原子替换：写成功才覆盖旧文件
-}
 
 // ---------- 大文件流式处理（防 OOM：90 万+ 条目全量进内存 ≈ 7GB，超 Node 默认 4GB 堆） ----------
 /** 本次新增配装条目的暂存文件（裸逗号流：`e1,e2,...`，无 [ ] 头尾）。
@@ -501,39 +480,6 @@ function computeEnkaPanel(ij) {
 }
 
 // ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------
-/** 深渊战绩聚合（读 workshop-abyss.json）：基础分布 + 「uid 平均评分 × 深渊层数」配对密度网格。
- *  评分×层数配对需要 entries 的 uid 平均评分（一次流式遍历）。 */
-function buildAbyssStats() {
-  if (!fs.existsSync(ABYSS_FILE)) return { layerDist: {}, ratingDist: {}, teams: [], relicLayer: null, abyssTeam: null };
-  const abyssEntries = [];
-  for (const raw of streamJsonArrayElements(ABYSS_FILE)) abyssEntries.push(JSON.parse(raw));
-  const base = computeAbyssStats(abyssEntries);
-  // uid 平均评分（来自 workshop entries；0/缺失排除）
-  const relicByUid = new Map(); // uid -> {sum, n}
-  for (const e of iterWorkshopEntries()) {
-    if (!e || e.uid == null) continue;
-    const rp = Number(e.relic_point);
-    if (!Number.isFinite(rp) || rp <= 0) continue;
-    let p = relicByUid.get(e.uid);
-    if (!p) relicByUid.set(e.uid, (p = { sum: 0, n: 0 }));
-    p.sum += rp;
-    p.n++;
-  }
-  const xv = [];
-  const yv = [];
-  for (const a of abyssEntries) {
-    if (!a || !a.abyss || a.abyss.max_layer == null) continue;
-    const p = relicByUid.get(a.uid);
-    if (!p || !p.n) continue;
-    xv.push(p.sum / p.n);
-    yv.push(a.abyss.max_layer);
-  }
-  const grid = xv.length ? bin2D(xv, yv, 24) : null;
-  // 深渊配队聚合（出场榜/双队 Top/S 评级 Top/队友共现）
-  const abyssTeam = computeAbyssTeamStats(abyssEntries);
-  return { ...base, relicLayer: grid ? { xName: '平均装配评分', yName: '深渊层数', ...grid } : null, abyssTeam };
-}
-
 export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   if (!fs.existsSync(OUT_FILE)) return null;
   // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：聚合函数 for...of 兼容 generator，
@@ -542,14 +488,17 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   const panelCorr = computePanelCorrelations(iterWorkshopEntries()); // 属性相关（按角色，同条目配对）
   const discDetails = computeWorkshopDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap }); // 驱动盘单盘真实统计
   const panelScatter = computePanelScatter(iterWorkshopEntries()); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-  // 新指标：练度评分 / 影画分层与占比 / 技能练度 / 玩家画像 / 角色盘画像 / 深渊战绩
+  // 新指标：练度评分 / 影画分层与占比 / 技能练度 / 玩家画像 / 角色盘画像
   const relicStats = computeRelicStats(iterWorkshopEntries());
   const rankLayers = computeRankLayers(iterWorkshopEntries());
   const rankDist = computeRankDist(iterWorkshopEntries());
   const skillStats = computeSkillStats(iterWorkshopEntries());
-  const playerProfiles = computePlayerProfiles(iterWorkshopEntries());
   const roleDiscStats = computeRoleDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap });
-  const abyssStats = buildAbyssStats(); // 读 workshop-abyss.json（内部多一次 entries 遍历配对评分×层数）
+  // 2026-10 新增：配队亲和 / 完成度 / 影画×评分 / 技能组合
+  const roleCooccurrence = computeRoleCooccurrence(iterWorkshopEntries());
+  const completeness = computeCompleteness(iterWorkshopEntries());
+  const rankRelic = computeRankRelic(iterWorkshopEntries());
+  const skillCombos = computeSkillComboStats(iterWorkshopEntries());
   const data = {
     meta: { scrapedAt: new Date().toISOString(), entries: totalEntries ?? -1 },
     ...stats,
@@ -560,9 +509,11 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     rankLayers,
     rankDist,
     skillStats,
-    playerProfiles,
     roleDiscStats,
-    abyssStats,
+    roleCooccurrence,
+    completeness,
+    rankRelic,
+    skillCombos,
   };
   // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;
@@ -796,50 +747,6 @@ export function extractBuild(v3Data, roleId, ctx) {
   return null;
 }
 
-/** 裁剪 abyss_data_json（深渊战绩）：去掉图片 URL 与长文本，保留可分析的结构化字段。
- *  原始单条 ~23KB（图片 URL/buffs 文本占大头），25k+ uid 全量落盘会膨胀数百 MB；裁剪后 ~1-2KB/条。
- *  保留：层数/评级/最快通关/实战配队（上场角色+影画+邦布）/通关时间/怪物 id+名/buff 标题/参战角色。 */
-export function extractAbyss(ab) {
-  if (!ab) return null;
-  const node = (n) => {
-    if (!n) return null;
-    return {
-      battle_time: n.battle_time,
-      buddy: n.buddy ? { id: n.buddy.id, level: n.buddy.level, rarity: n.buddy.rarity } : null,
-      avatars: (n.avatars || []).map((a) => ({
-        id: a.id,
-        rank: a.rank,
-        level: a.level,
-        rarity: a.rarity,
-        element_type: a.element_type,
-        avatar_profession: a.avatar_profession,
-      })),
-      monsters: ((n.monster_info && n.monster_info.list) || []).map((m) => ({ id: m.id, name: m.name })),
-    };
-  };
-  return {
-    max_layer: ab.max_layer,
-    rating_list: ab.rating_list || [],
-    fast_layer_time: ab.fast_layer_time,
-    battle_time_47: ab.battle_time_47,
-    schedule_id: ab.schedule_id,
-    begin_time: ab.begin_time,
-    end_time: ab.end_time,
-    all_roles: ab.all_roles || [],
-    floors: (ab.all_floor_detail || []).map((f) => ({
-      layer_id: f.layer_id,
-      layer_index: f.layer_index,
-      zone_name: f.zone_name,
-      rating: f.rating,
-      challenge_time: f.challenge_time,
-      floor_challenge_time: f.floor_challenge_time,
-      buffs: (f.buffs || []).map((b) => ({ title: b.title })),
-      node_1: node(f.node_1),
-      node_2: node(f.node_2),
-    })),
-  };
-}
-
 // ---------- 主流程 ----------
 /** 构建字典 ctx（音擎/驱动盘/装备表，供 2025 源配装映射）+ 角色列表（一次请求返回） */
 async function buildCtx() {
@@ -934,7 +841,6 @@ export async function fetchWorkshopData(onProgress) {
       (newUids.length ? '' : '；如需全量重爬请删除 data/workshop.json')
   );
   onProgress?.({ step: 'fetch', done: 0, skipped: skippedCount, total: newUids.length }); // 初始进度：前端从第一秒就显示跳过数
-  const abyssList = []; // 本次新爬 uid 的深渊战绩（裁剪后）
   let fail = 0,
     done = 0,
     consecutiveFail = 0; // 连续失败计数（防加剧风控：连续失败过多时暂停 60s）
@@ -944,8 +850,6 @@ export async function fetchWorkshopData(onProgress) {
     try {
       const j = await apiPost('/api/v1/user_role/v3', { uid, refresh: false, type: 'ranking' });
       const nick = j.data && j.data.nick_name;
-      // 深渊战绩（uid 级，响应顶层）：裁剪掉图片 URL/长文本后落盘，供「练度 → 实战成绩」对标
-      abyssList.push({ uid, nick, abyss: extractAbyss(j.data && j.data.abyss_data_json) });
       // 爬该 uid 下所有角色（不只排名上榜的角色），每角色一条；排除未毕业（角色<60 / 音擎<60 / 驱动盘非 6 块 15 级）
       const roles = (j.data && j.data.roles) || [];
       for (const role of roles) {
@@ -1006,20 +910,6 @@ export async function fetchWorkshopData(onProgress) {
   }
   fs.rmSync(PART_FILE, { force: true }); // 合并完成，清理暂存
 
-  // 深渊战绩落盘（断点续爬合并：旧文件已有条目 + 本次新增，uid 去重）
-  const prevAbyss = [];
-  if (fs.existsSync(ABYSS_FILE)) {
-    for (const raw of streamJsonArrayElements(ABYSS_FILE)) prevAbyss.push(JSON.parse(raw));
-  }
-  const abyssMap = new Map(prevAbyss.map((a) => [a.uid, a]));
-  for (const a of abyssList) abyssMap.set(a.uid, a);
-  const abyssMerged = [...abyssMap.values()];
-  writeJsonArrayStream(
-    ABYSS_FILE,
-    `{"meta":${JSON.stringify({ scrapedAt: new Date().toISOString(), uidCount: abyssMerged.length })},"entries":[`,
-    abyssMerged
-  );
-
   // 角色默认流派权重（system_data 的 weight_json）独立落盘 + 并入 stats（供有效词条/评分口径复现）
   const weightJson = {};
   for (const r of roles) {
@@ -1044,7 +934,7 @@ export async function fetchWorkshopData(onProgress) {
   const g = await fetchWorkshopGrad(onProgress); // 同时更新全服配装统计（workshop-grad.json）
   console.log(
     `\n完成：本次新爬 ${done} 个 uid（跳过 ${skippedCount} 个已缓存，失败 ${fail}），` +
-      `配装条目共 ${totalCount} 条写入 ${OUT_FILE}，深渊 ${abyssMerged.length} 条写入 ${ABYSS_FILE}`
+      `配装条目共 ${totalCount} 条写入 ${OUT_FILE}`
   );
   return { stats: { entries: totalCount, roles: g.stats.roles } };
 }

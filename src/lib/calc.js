@@ -297,7 +297,10 @@ export function calculateCharacter(character) {
   // 核心技当前等级的百分比提升（攻击力%/生命值%/防御力%/冲击力%）进入对应属性百分比乘区
   for (const baseName of ['攻击力', '生命值', '防御力', '冲击力']) {
     const v = coreSkillBoostAt(libCharacter, baseName + '%', coreLevel);
-    if (v) accumulate(baseName, v);
+    if (v) {
+      accumulate(baseName, v);
+      recordSource(baseName, `核心技${coreLevel}级`, v);
+    }
   }
 
   // ③ 汇总（最终面板）

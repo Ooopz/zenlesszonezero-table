@@ -10,7 +10,7 @@ import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
 import { discSetEffectsHtml } from './shared.js';
-import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption } from './charts.js';
+import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption } from './charts.js';
 
 let selectedDisc = '';
 export function setSelectedDisc(name) {
@@ -106,18 +106,32 @@ function statGridHtml(card) {
   </div>`;
 }
 
-/** 底部图表卡片区：456 主词条占比 / 副词条出现频率 / 词条组合 Top（玩家实况） */
+/** 底部图表卡片区：456 主词条占比 / 副词条出现频率 / 词条组合 Top / 主词条×副词条协同 / 组合画像（玩家实况） */
 function chartCardsHtml(selectedDetail) {
   if (!selectedDetail) return '';
   const id = `disc-chart-${selectedDetail.name}`;
   registerChart(`${id}-main`, discMain456Option(selectedDetail));
   registerChart(`${id}-subs`, discSubsOption(selectedDetail.subs, selectedDetail.equips));
   registerChart(`${id}-combo`, discComboOption(selectedDetail.subCombos));
+  const crossOpt = mainSubCrossOption(selectedDetail);
+  if (Object.keys(crossOpt).length) registerChart(`${id}-cross`, crossOpt);
+  // A5 组合画像：双暴 / 攻击+双暴 等标签组合占比（subCombos 盘数 / 总盘数）
+  const total = selectedDetail.equips || 0;
+  const sum = (pred) =>
+    total ? (selectedDetail.subCombos || []).filter((c) => pred(c.combo)).reduce((s, c) => s + c.count, 0) : 0;
+  const pct = (n) => (total ? ((n / total) * 100).toFixed(0) + '%' : '—');
+  const bothCrit = sum((combo) => combo.includes('暴击率') && combo.includes('暴击伤害'));
+  const atkBoth = sum((combo) => combo.includes('攻击力%') && combo.includes('暴击率') && combo.includes('暴击伤害'));
+  const portrait = `<span style="color:var(--acc);font-weight:800">双暴 ${pct(bothCrit)}</span>　<span style="color:var(--green)">攻击+双暴 ${pct(atkBoth)}</span>　<span class="ds-dim">其余 ${pct(total - bothCrit)}</span>`;
+  const crossTip = `<b>主词条 × 副词条协同</b><br><span style="color:var(--dim)">每槽（4/5/6 号位）一图：行=该槽主词条、列=副词条，色 = 条件频率（该主词条盘中带此副词条的占比）——如「4 号位暴击率 → 暴伤 42%」式配装规律；悬浮格子看具体值</span>`;
+  const comboPortraitTip = `<b>组合画像</b><br><span style="color:var(--dim)">玩家词条组合标签：双暴 = 同时带 暴击率+暴击伤害 的盘占比；攻击+双暴 = 再含 攻击力% 的盘占比（subCombos 盘数 / 总盘数）</span>`;
   return `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(selectedDetail.name)} · 工坊真实穿戴（${selectedDetail.equips.toLocaleString()} 块盘）</h3>
     <div class="chart-grid">
       <div class="chart-card"><h4>456 主词条占比（玩家实况）</h4>${chartBox(`${id}-main`, 260)}</div>
       <div class="chart-card"><h4>副词条出现频率（带此词条的盘占比）</h4>${chartBox(`${id}-subs`, 300)}</div>
       <div class="chart-card"><h4>词条组合 Top</h4>${chartBox(`${id}-combo`, 300)}</div>
+      ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${crossTip}">主词条 × 副词条协同</h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
+      <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${comboPortraitTip}">组合画像</h3>${portrait}</div>
     </div>
   </div>`;
 }

@@ -16,18 +16,15 @@ import {
   registerChart,
   chartBox,
   heatmapOption,
-  consensusScatterOption,
+  consensusGridOption,
   violinBoxOption,
   densityScatterOption,
   rankPyramidOption,
-  playerScatterOption,
   relicBarOption,
-  layerGainOption,
-  tierBarOption,
   skillDistOption,
   tierRichOption,
+  rankRelicGapOption,
 } from './charts.js';
-
 export let recommendTab = 'detail';
 export function setRecommendTab(key) {
   recommendTab = key;
@@ -44,17 +41,13 @@ export function toggleRecommendSort(key) {
 const TABS = [
   { key: 'detail', label: '角色面板' },
   { key: 'discs', label: '驱动盘' },
-  { key: 'abyss', label: '深渊配队' },
-  { key: 'overview', label: '角色总览' },
-  { key: 'progress', label: '练度总览' },
+  { key: 'overview', label: '全服总览' },
 ];
 /** 子面板 key → 渲染函数（renderRecommend 键控分发，驱动盘复用 discstats） */
 const PANEL_RENDERERS = {
   detail: renderRoleDetail,
   discs: renderDiscStats,
-  abyss: renderAbyssTeams,
   overview: renderOverview,
-  progress: renderProgressOverview,
 };
 
 /** 统一空态：msg 为说明、hint 为操作提示/按钮（可选） */
@@ -177,124 +170,6 @@ function roleKeyedMap(source) {
   return _roleKeyedCache;
 }
 
-// ---------- 深渊配队（实战指导：出场榜 / 双队配队 Top / 队友共现 + 官方推荐对比） ----------
-let selectedAbyssRole = '';
-export function setSelectedAbyssRole(name) {
-  selectedAbyssRole = name;
-}
-/** 深渊角色 id → plans 角色名（grad item_id 体系与深渊 id 同源） */
-function abyssNameOf(id, idToName) {
-  const n = idToName?.get(String(id));
-  return n ? alignRoleName(n) : String(id);
-}
-/** plans 角色名 → 深渊角色 id（反查；无 → null） */
-function abyssIdOf(name, idToName) {
-  for (const [id, n] of idToName || []) if (alignRoleName(n) === name) return id;
-  return null;
-}
-/** 官方推荐队友：该角色全部方案的 team 角色名并集（去重） */
-function planTeammates(name) {
-  const set = new Set();
-  for (const p of plans[name]?.plans || []) for (const t of p.team || []) set.add(t);
-  return [...set];
-}
-
-function renderAbyssTeams() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
-  const at = workshopStats.abyssStats?.abyssTeam;
-  if (!at?.charUsage?.length)
-    return emptyState('暂无深渊战绩数据。', '请先运行 <b>node src/sync/workshop.js</b> 更新工坊数据（含深渊战绩）后刷新。');
-  const idToName = wsRoleIdMap();
-  const roleNames = Object.values(plans).map((v) => v.name);
-  if (!selectedAbyssRole || !roleNames.includes(selectedAbyssRole)) selectedAbyssRole = roleNames[0];
-
-  // ① 角色出场榜（横向进度条，全量）
-  const total = at.charUsage.reduce((s, c) => s + c.count, 0) || 1;
-  const usageBody = at.charUsage
-    .map((c) => {
-      const nm = abyssNameOf(c.id, idToName);
-      return `<tr><td class="ds-chars" style="text-align:left">${escapeHtml(nm)}</td><td class="ds-count">${c.count.toLocaleString()}</td><td style="min-width:140px">${gradPct((c.count / total) * 100)}</td></tr>`;
-    })
-    .join('');
-  const usageTable = `<div class="wiki-wrap"><table class="rec-table" style="min-width:0"><thead><tr><th>角色</th><th>出场次数</th><th>出场占比</th></tr></thead><tbody>${usageBody}</tbody></table></div>`;
-
-  // ② 双队配队 Top + S 评级配队 Top
-  const teamCard = (label, teams, tip) => {
-    if (!teams?.length) return '';
-    return `<div class="chart-card"><h4>${label}${tip ? `<span class="ad-sub">${tip}</span>` : ''}</h4>${teams
-      .map(
-        (t) =>
-          `<div class="ab-team"><span class="ad-chip both">${t.chars.map((c) => escapeHtml(abyssNameOf(c, idToName))).join(' / ')}</span><span class="ad-sub">×${t.count.toLocaleString()}</span></div>`
-      )
-      .join('')}</div>`;
-  };
-
-  // ③ 全角色下拉 → 选中角色：实战队友 Top vs 官方推荐
-  const myId = abyssIdOf(selectedAbyssRole, idToName);
-  const mates = myId ? at.teammates?.[myId] : null;
-  const mateList = mates
-    ? Object.entries(mates)
-        .map(([mid, cnt]) => ({ name: abyssNameOf(mid, idToName), cnt }))
-        .sort((a, b) => b.cnt - a.cnt)
-    : [];
-  const planMates = planTeammates(selectedAbyssRole);
-  const mateCell = (list) =>
-    list.length
-      ? list
-          .map((m) => {
-            const inPlan = planMates.includes(m.name);
-            return `<span class="ad-chip${inPlan ? ' both' : ''}">${escapeHtml(m.name)}${inPlan ? '★' : ''}<span class="ad-sub"> ${m.cnt != null ? m.cnt.toLocaleString() : ''}</span></span>`;
-          })
-          .join('')
-      : '—';
-  const abyssSelect = `<div class="chart-select"><label>角色</label><select onchange="ZZZ.selectAbyssRole(this.value)">${roleNames
-    .map((n) => `<option value="${escapeHtml(n)}"${n === selectedAbyssRole ? ' selected' : ''}>${escapeHtml(n)}</option>`)
-    .join('')}</select></div>`;
-
-  // ④ 全角色对照表：官方推荐队友 / 深渊实战队友 Top / 一致（按一致数降序，其次出场热度）
-  const rowObjs = roleNames
-    .map((name) => {
-      const off = planTeammates(name);
-      const id = abyssIdOf(name, idToName);
-      const live = id && at.teammates?.[id]
-        ? Object.entries(at.teammates[id]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([mid]) => abyssNameOf(mid, idToName))
-        : [];
-      const offSet = new Set(off);
-      const hit = live.filter((n) => offSet.has(n)).length;
-      const usage = id ? at.charUsage.find((c) => c.id === id)?.count ?? 0 : 0;
-      return { name, off, live, hit, usage };
-    })
-    .sort((a, b) => b.hit - a.hit || b.usage - a.usage);
-  const tableRows = rowObjs.map((r) => {
-    const offSet = new Set(r.off);
-    const offHtml = r.off.length
-      ? `<span class="ab-chiprow">${r.off.map((n) => `<span class="ad-chip">${escapeHtml(n)}</span>`).join('')}</span>`
-      : '—';
-    const liveHtml = r.live.length
-      ? `<span class="ab-chiprow">${r.live.map((n) => `<span class="ad-chip${offSet.has(n) ? ' both' : ''}">${escapeHtml(n)}</span>`).join('')}</span>`
-      : '<span class="ad-sub">深渊未出场</span>';
-    const hitHtml = r.hit
-      ? `<span class="ds-same">${r.live.filter((n) => offSet.has(n)).map((n) => escapeHtml(n)).join('、')}</span>`
-      : '<span class="ad-sub">—</span>';
-    return `<tr><td class="ds-chars" style="text-align:left">${escapeHtml(r.name)}</td><td class="ds-chars">${offHtml}</td><td class="ds-chars">${liveHtml}</td><td class="ds-chars">${hitHtml}</td></tr>`;
-  });
-
-  return `<div class="chart-grid">
-    <div class="chart-card" style="grid-column:1/-1"><h3>深渊角色出场榜（玩家池 · 谁在打深渊）</h3>${usageTable}</div>
-    ${teamCard('第一队实战配队 Top', at.nodeTeams[1], '（按通关楼层节点 1）')}
-    ${teamCard('第二队实战配队 Top', at.nodeTeams[2], '（节点 2）')}
-    ${teamCard('S/SS 评级配队 Top', at.sTeams, '（只看 S 评级通关）')}
-    <div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(selectedAbyssRole)} · 深渊实战队友 vs 官方推荐（★=官方也推荐）</h3>${abyssSelect}
-      <div class="ad-row"><span class="ad-row-label">实战队友</span><span class="ad-chips">${mateCell(mateList)}</span></div>
-      <div class="ad-row"><span class="ad-row-label">官方推荐</span><span class="ad-chips">${planMates.map((n) => `<span class="ad-chip">${escapeHtml(n)}</span>`).join('') || '—'}</span></div>
-    </div>
-    <div class="chart-card" style="grid-column:1/-1"><h3>全角色 · 官方推荐队友 vs 深渊实战队友（金色=两口径一致 · 按一致数排序）</h3>
-      <div class="wiki-wrap">${table(['角色', '官方推荐队友', '深渊实战队友 Top5', '一致'], tableRows, new Set(), 'stat-table')}</div>
-    </div>
-  </div>`;
-}
-
 // ---------- 工坊配装（全服真实：每角色 Top 音擎 / 套装组合及占比） ----------
 /** 套装组合文本顺序统一：4 件套在前、2 件套在后（工坊/方案两源一致；'其他' 等空组合原样返回） */
 const normCombo = (x) => {
@@ -392,14 +267,16 @@ function approxPercentile(v, dist) {
   return 50;
 }
 /** 密度散点卡片（方案二）：对每个属性对网格注册一张密度散点图并返回卡片 HTML（角色面板/角色总览共用）。
- *  fullWidth 时卡片占整行（单角色图），否则流式排列（全局图）。 */
+ *  fullWidth 时卡片占整行（单角色图），否则流式排列（全局图）。
+ *  标题只留属性对（短名），详细说明放悬浮。 */
 function scatterCardsHtml(prefix, grid, subtitle, fullWidth) {
   return Object.entries(grid)
     .map(([key, g]) => {
       const id = `${prefix}-${key}`;
-      registerChart(id, densityScatterOption(g, `${g.xName} × ${g.yName} · ${subtitle}`));
+      registerChart(id, densityScatterOption(g, `${g.xName} × ${g.yName}`));
       const cls = fullWidth ? ' style="grid-column:1/-1"' : '';
-      return `<div class="chart-card"${cls}><h3>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)} · ${escapeHtml(subtitle)}（密度=样本量，悬浮看坐标）</h3>${chartBox(id, 420)}</div>`;
+      const tip = `<b>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</b><br><span style="color:var(--dim)">${escapeHtml(subtitle)}：2D 密度散点——颜色越亮密度越高（每点=一位玩家的该属性组合），悬浮数据点可看坐标</span>`;
+      return `<div class="chart-card"${cls}><h3 data-detail="${escapeHtml(tip)}">${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</h3>${chartBox(id, 420)}</div>`;
     })
     .join('');
 }
@@ -411,7 +288,8 @@ function renderOverview() {
   const myCalc = new Map(myCharacters.map((c) => [c.name, c.calculate()]));
   const roleNames = Object.values(plans).map((v) => v.name);
 
-  // 1. 达标热力图：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档
+  // 1. 达标热力图：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
+  //    行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
   const heatAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter((a) =>
     roleNames.some((n) => wsPanel.get(n)?.[a])
   );
@@ -425,37 +303,79 @@ function renderOverview() {
         if (!dist || v == null) return null;
         const pct = approxPercentile(v, dist);
         const reached = rec[a]?.mid?.median != null && v >= rec[a].mid.median;
-        return { pct, reached };
+        const gap = rec[a]?.mid?.median != null ? rec[a].mid.median - v : null;
+        return { pct, reached, gap: gap != null && gap > 0 ? gap : null };
       });
       return { name, cells };
     })
-    .filter((r) => r.cells.some((c) => c));
+    .filter((r) => r.cells.some((c) => c))
+    .sort((a, b) => avgLag(b) - avgLag(a));
+  /** 平均落后度（50 − 百分位，仅有效格）：行排序依据 */
+  function avgLag(row) {
+    const vals = row.cells.filter((c) => c && c.pct != null).map((c) => 50 - c.pct);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  }
 
-  // 2. 共识度散点图：每属性一张（X=玩家 sd、Y=推荐 high.cv）
+  // 1b. 提升清单：我的角色 × 属性，缺口 = 推荐中档 − 我的值，按 缺口 × 落后度 排序取 Top
+  const upgradeRows = [];
+  for (const [name, my] of myCalc) {
+    const st = wsPanel.get(name) || {};
+    const rec = tiers[name] || {};
+    for (const a of heatAttrs) {
+      const dist = st[a];
+      const v = my.final[a];
+      const mid = rec[a]?.mid?.median;
+      if (v == null || mid == null) continue;
+      const pct = approxPercentile(v, dist);
+      if (pct == null) continue;
+      const gap = mid - v;
+      if (gap <= 0) continue; // 已达标不列入
+      upgradeRows.push({ name, attr: a, current: v, target: mid, pct, gap, score: gap * (50 - pct) });
+    }
+  }
+  upgradeRows.sort((x, y) => y.score - x.score);
+  const upgradeTip = `<b>提升清单</b><br><span style="color:var(--dim)">我的角色 × 落后属性：缺口 = 推荐中档 − 我的值，按 缺口 × 落后度（50 − 我的玩家百分位）排序——先做缺口大且百分位低的事；悬浮看各维度明细</span>`;
+  const upgradeCard =
+    upgradeRows.length > 0
+      ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(upgradeTip)}">提升清单</h3>${table(
+          ['角色', '属性', '我的', '推荐中档', '玩家百分位', '缺口'],
+          upgradeRows.slice(0, 12).map(
+            (r) => `<tr>
+            <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.attr)}</td>
+            <td>${formatValue(r.attr, r.current)}</td><td>${formatValue(r.attr, r.target)}</td>
+            <td style="color:${r.pct >= 50 ? 'var(--green)' : 'var(--orange)'}">P${Math.round(r.pct)}</td>
+            <td style="color:var(--red)">${formatValue(r.attr, r.gap)}</td>
+          </tr>`
+          ),
+          new Set()
+        )}</div>`
+      : '';
+
+  // 2. 共识度散点：一张大图，每属性一个子图（X=玩家 sd、Y=推荐 high.cv）
   const consensusAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter(
     (a) => roleNames.some((n) => wsPanel.get(n)?.[a]?.sd != null) && roleNames.some((n) => tiers[n]?.[a]?.high?.cv != null)
   );
-  const consensusCards = consensusAttrs
-    .map((a) => {
-      const points = roleNames
+  const consensusGrid = consensusAttrs
+    .map((a) => ({
+      attr: a,
+      points: roleNames
         .map((name) => ({
           name,
           sd: wsPanel.get(name)?.[a]?.sd ?? null,
           cv: tiers[name]?.[a]?.high?.cv ?? null,
         }))
-        .filter((p) => p.sd != null && p.cv != null);
-      registerChart(`overview-consensus-${a}`, consensusScatterOption(points));
-      return `<div class="chart-card"><h3>${escapeHtml(a)} · 玩家分化 vs 攻略分歧</h3>${chartBox(`overview-consensus-${a}`, 380)}</div>`;
-    })
-    .join('');
+        .filter((p) => p.sd != null && p.cv != null),
+    }))
+    .filter((g) => g.points.length);
+  if (consensusGrid.length) registerChart('overview-consensus', consensusGridOption(consensusGrid));
+  const consensusTip = `<b>玩家分化 vs 攻略分歧</b><br><span style="color:var(--dim)">每属性一个子图，每点一个角色：横轴=玩家分化（该属性全服玩家数值的标准差，越大玩家之间差距越大）；纵轴=攻略分歧（米游社推荐方案 high 档毕业值的变异系数 CV=标准差/均值，越大攻略之间分歧越大）。<br>左下=玩家与攻略均共识 · 左上=玩家共识但攻略分歧 · 右下=玩家分化大但攻略一致 · 右上=两方面均无共识（该属性参考价值低）</span>`;
+  const heatTip = `<b>面板达标</b><br><span style="color:var(--dim)">我的角色 × 核心属性：色 = 我的玩家百分位（相对全服样本），悬浮格子看是否达到推荐中档与缺口；行按平均落后度排序（越落后越靠上）</span>`;
 
   registerChart('overview-heat', heatmapOption(heatRows, heatAttrs));
 
-  // 面板属性对 trade-off：全体玩家真实配比（暴击率×暴伤、攻击×暴伤）全局密度散点
-  const scatterCards = scatterCardsHtml('overview-scatter', workshopStats.panelScatter?.global || {}, '全体玩家配比', false);
-
-  // 我的盘毕业度矩阵：每块盘有效词条数 vs 该盘工坊 effDist（百分位 = 优于 x% 玩家）
+  // 3. 我的盘毕业度矩阵 + 替换建议：有效词条 vs 该盘 effDist + 主词条是否该角色该槽主流（roleDiscStats）
   const discDetailsMap = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
+  const roleDiscMap = roleKeyedMap(workshopStats.roleDiscStats); // 角色名 → {main456}
   const myDiscRows = [];
   for (const c of myCalc) {
     const discs = c[1].discs || [];
@@ -469,26 +389,79 @@ function renderOverview() {
         const better = Object.entries(detail.effDist).filter(([k]) => Number(k) >= eff).reduce((s2, [, v]) => s2 + v, 0);
         pct = total ? Math.round((better / total) * 100) : null;
       }
-      myDiscRows.push({ char: c[0], disc: suit || '?', eff, pct });
+      // 主词条正确率：该角色该槽最常见主词条（roleDiscStats）vs 我的盘
+      const slot = disc.slot;
+      const roleDisc = roleDiscMap.get(c[0]);
+      const mainStat = (disc.mainStats || [])[0]?.name || null;
+      const mainstream = slot != null && roleDisc?.main456?.[slot]?.length ? roleDisc.main456[slot][0].name : null;
+      const mainOk = mainStat != null && mainstream != null && mainStat === mainstream;
+      const advice = eff < 2 && !mainOk ? '优先替换' : eff < 2 ? '可替换' : eff < 3 && !mainOk ? '词条/主词条待优化' : mainOk ? '' : '主词条待优化';
+      myDiscRows.push({ char: c[0], disc: suit || '?', eff, pct, mainStat, mainstream, mainOk, advice });
     }
   }
+  const adviceColor = (a) => (a === '优先替换' ? 'var(--red)' : a === '可替换' ? 'var(--orange)' : 'var(--dim)');
   const discMatrix = myDiscRows.length
-    ? `<div class="wiki-wrap"><table class="rec-table"><thead><tr><th>我的角色</th><th>驱动盘</th><th>有效词条</th><th>优于玩家</th></tr></thead><tbody>${myDiscRows
+    ? `<div class="wiki-wrap"><table class="rec-table"><thead><tr><th>我的角色</th><th>驱动盘</th><th>有效词条</th><th>优于玩家</th><th>主词条</th><th>建议</th></tr></thead><tbody>${myDiscRows
         .map(
           (r) => `<tr>
           <td>${escapeHtml(r.char)}</td><td>${escapeHtml(r.disc)}</td>
           <td style="color:${r.eff >= 3 ? 'var(--green)' : r.eff >= 2 ? 'var(--orange)' : 'var(--red)'}">${r.eff}</td>
           <td style="color:${r.pct != null && r.pct >= 70 ? 'var(--green)' : r.pct != null && r.pct >= 40 ? 'var(--orange)' : 'var(--red)'}">${r.pct != null ? `优于 ${r.pct}% 玩家` : '—'}</td>
+          <td>${r.mainStat ? escapeHtml(r.mainStat) : '—'}${r.mainstream && r.mainStat !== r.mainstream ? `<span class="ds-dim">（主流 ${escapeHtml(r.mainstream)}）</span>` : ''}</td>
+          <td style="color:${adviceColor(r.advice)}">${r.advice || '✓'}</td>
         </tr>`
         )
         .join('')}</tbody></table></div>`
     : '';
+  const discTip = `<b>驱动盘毕业度</b><br><span style="color:var(--dim)">我每块驱动盘：有效词条数 vs 该盘工坊分布（优于玩家 %）；主词条列对比该角色该槽主流选择（roleDiscStats）；建议列 = 有效词条 <2 或主词条偏离主流时提示替换</span>`;
+
+  // 4. 完成度矩阵：每角色 音擎60 / 盘满级 / 高评分(≥P75) 占比（completeness）
+  const compMap = roleKeyedMap(workshopStats.completeness);
+  const compRows = [];
+  for (const name of roleNames) {
+    const d = compMap.get(name);
+    if (!d || d.count == null || d.count === 0) continue;
+    compRows.push({ name, w60: d.w60, discMax: d.discMax, relicTop: d.relicTop, count: d.count });
+  }
+  const pctCell = (v) => (v == null ? '—' : `${(v * 100).toFixed(0)}%`);
+  const compTip = `<b>完成度矩阵</b><br><span style="color:var(--dim)">玩家池每角色：音擎 60 级占比 / 驱动盘满级（≥15 级）占比 / 高评分占比（装配评分 ≥ 该角色 P75）；字段缺失的条目不计入对应维度</span>`;
+  const compCard =
+    compRows.length > 0
+      ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(compTip)}">完成度矩阵</h3>${table(
+          ['角色', '音擎60', '盘满级', '高评分(≥P75)', '样本'],
+          compRows.map(
+            (r) => `<tr>
+            <td>${escapeHtml(r.name)}</td>
+            <td style="color:${r.w60 != null && r.w60 >= 0.5 ? 'var(--green)' : 'var(--orange)'}">${pctCell(r.w60)}</td>
+            <td style="color:${r.discMax != null && r.discMax >= 0.5 ? 'var(--green)' : 'var(--orange)'}">${pctCell(r.discMax)}</td>
+            <td style="color:${r.relicTop != null && r.relicTop >= 0.5 ? 'var(--green)' : 'var(--orange)'}">${pctCell(r.relicTop)}</td>
+            <td class="ds-dim">${r.count.toLocaleString()}</td>
+          </tr>`
+          ),
+          new Set()
+        )}</div>`
+      : '';
+
+  // 5. 影画 × 装配评分：每角色 6影 median − 0影 median（rankRelic）
+  const rankRelicMap = roleKeyedMap(workshopStats.rankRelic);
+  const rrRows = [];
+  for (const name of roleNames) {
+    const d = rankRelicMap.get(name);
+    if (!d?.[0] || !d?.[6]) continue;
+    rrRows.push({ name, gap: +(d[6].median - d[0].median).toFixed(1), r0: d[0].median, r6: d[6].median });
+  }
+  rrRows.sort((a, b) => a.gap - b.gap);
+  if (rrRows.length) registerChart('overview-rank-relic', rankRelicGapOption(rrRows));
+  const rrTip = `<b>影画 × 装配评分</b><br><span style="color:var(--dim)">每角色：6 影玩家池装配评分中位数 − 0 影玩家池评分中位数（rankRelic）——正=氪满影画的玩家配装评分整体更高（投入相关性）；悬浮看各档中位与差距</span>`;
 
   return `<div class="chart-grid">
-    <div class="chart-card" style="grid-column:1/-1"><h3>我的角色 · 面板达标（色=我的玩家百分位，悬浮看是否达推荐中档）</h3>${chartBox('overview-heat', 720)}</div>
-    ${discMatrix ? `<div class="chart-card" style="grid-column:1/-1"><h3>我的驱动盘毕业度（有效词条数 vs 该盘工坊分布）</h3>${discMatrix}</div>` : ''}
-    ${consensusCards}
-    ${scatterCards}
+    ${upgradeCard}
+    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(heatTip)}">面板达标</h3>${chartBox('overview-heat', 720)}</div>
+    ${discMatrix ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(discTip)}">驱动盘毕业度</h3>${discMatrix}</div>` : ''}
+    ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(consensusTip)}">玩家分化 vs 攻略分歧</h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
+    ${compCard}
+    ${rrRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(rrTip)}">影画 × 装配评分</h3>${chartBox('overview-rank-relic', Math.max(320, rrRows.length * 16))}</div>` : ''}
+    ${progressCardsHtml()}
   </div>`;
 }
 
@@ -533,15 +506,16 @@ function renderRoleDetail() {
     mine: myFinal?.[a] ?? null,
   }));
   registerChart('detail-violin', violinBoxOption(violinItems));
-  // 小提琴图上下两行时高度翻倍（每行 ~230px）
-  const violinH = violinItems.length > 4 ? 500 : 360;
+  // 小提琴图上下两行时高度翻倍（每行 ~280px）
+  const violinH = violinItems.length > 4 ? 560 : 400;
 
-  // 2. 推荐三档 × 玩家分布增强图：每属性显示 玩家 P10-P90 / 三档 median±sd / 我的值+百分位
+  // 2. 推荐三档 × 玩家分布增强图：每属性显示 玩家 P10-P90 / 三档 median±sd / 我的值+百分位；
+  //    三档全缺但玩家有分布（如异常掌控等占位属性）仍显示玩家区间与我的
   const tierItems = [];
   for (const a of violinAttrs) {
     const recA = rec[a];
-    if (!recA?.low && !recA?.mid && !recA?.high) continue;
     const d = st[a];
+    if (!recA?.low && !recA?.mid && !recA?.high && !d?.p10 && !d?.p90) continue;
     tierItems.push({
       attr: a,
       player: { p10: d?.p10 ?? null, p90: d?.p90 ?? null },
@@ -558,17 +532,94 @@ function renderRoleDetail() {
   // 角色配装对标：工坊实况 vs 方案推荐（音擎/套装 + 差异）——放在面板属性对密度散点上方
   const gradBench = gradBenchHtml(name);
 
+  // B6 配队亲和：玩家实配队友（roleCooccurrence）vs 攻略配队（plans team）两口径对比
+  const matesCard = matesCardsHtml(name);
+
+  // B9 技能组合：玩家拉满模式 Top + 我的对照（skillCombos）
+  const skillComboCard = skillComboCardsHtml(name);
+
   // 面板属性对 trade-off：该角色玩家真实配比（暴击率×暴伤、攻击×暴伤）密度散点
   const scatterCards = scatterCardsHtml('detail-scatter', workshopStats.panelScatter?.perRole?.[roleIdFor(name)] || {}, '玩家真实配比', true);
 
+  // 图表卡标题悬浮说明（标题本身只留短名，详情放悬浮）
+  const violinTip = `<b>${escapeHtml(name)} · 玩家分布箱线</b><br><span style="color:var(--dim)">对每个有玩家样本的属性（样本≥30）展示玩家真实分布：小提琴密度 + 箱线（中位/四分位/离群点），叠加推荐方案三档点位（低/中/高）与我的数值（金色）</span>`;
+  const tiersTip = `<b>推荐三档 × 玩家区间</b><br><span style="color:var(--dim)">每属性 4 行对比：玩家 P10-P90 区间（蓝）vs 推荐三档 median±sd（绿/金/橙）；金色竖线 = 我的值及其玩家百分位，悬浮图表行可看具体数值</span>`;
+  const skillTip = `<b>技能等级分布</b><br><span style="color:var(--dim)">该角色玩家池的 6 类技能等级分布子图（普攻/闪避/支援/特殊/终结/核心），金色柱 = 我的等级</span>`;
+  const gradTip = `<b>角色配装对标</b><br><span style="color:var(--dim)">${escapeHtml(name)} 工坊玩家实况（音擎/套装使用占比）与米游社方案推荐并排对比，标注仅方案推荐/仅实况使用等差异</span>`;
+
   return `<div class="chart-grid">
     ${roleSelectHtml(name)}
-    <div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(name)} · 玩家分布箱线 / 推荐三档 / 我的</h3>${chartBox('detail-violin', violinH)}</div>
-    <div class="chart-card" style="grid-column:1/-1"><h3>玩家区间 × 推荐三档 × 我的（蓝=玩家P10-P90 · 绿/金/橙=三档median±sd · 金竖线=我的+百分位）</h3>${chartBox('detail-tiers', tiersH)}</div>
-    <div class="chart-card" style="grid-column:1/-1"><h3>技能等级分布（玩家池 · 金=我的等级）</h3>${skillBenchHtml(name)}</div>
-    ${gradBench ? `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(name)} · 角色配装（工坊实况 vs 方案推荐）</h3>${gradBench}</div>` : ''}
+    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(violinTip)}">玩家分布箱线</h3>${chartBox('detail-violin', violinH)}</div>
+    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tiersTip)}">推荐三档 × 玩家区间</h3>${chartBox('detail-tiers', tiersH)}</div>
+    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(skillTip)}">技能等级分布</h3>${skillBenchHtml(name)}</div>
+    ${skillComboCard}
+    ${gradBench ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(gradTip)}">角色配装对标</h3>${gradBench}</div>` : ''}
+    ${matesCard}
     ${scatterCards}
   </div>`;
+}
+
+/** B6 配队亲和卡：玩家实配队友（同 uid 同练角色共现）vs 攻略配队（方案 team 成员）两口径 Top6 对比 */
+function matesCardsHtml(name) {
+  const coMap = roleKeyedMap(workshopStats.roleCooccurrence);
+  const partners = (coMap.get(name) || [])
+    .slice(0, 6)
+    .map(([rid, cnt]) => ({ pname: alignRoleName(wsRoleIdMap().get(String(rid)) || rid), cnt }))
+    .filter((x) => x.pname !== name);
+  const planCnt = new Map();
+  for (const v of Object.values(plans || {})) {
+    for (const p of v.plans || []) {
+      const team = p.team || [];
+      if (!team.includes(name)) continue;
+      for (const m of team) if (m !== name) planCnt.set(m, (planCnt.get(m) || 0) + 1);
+    }
+  }
+  const planMates = [...planCnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!partners.length && !planMates.length) return '';
+  const cell = (items, fmt) =>
+    items.length ? items.map(fmt).join('<br>') : '<span class="ds-dim">无数据</span>';
+  const tip = `<b>配队亲和</b><br><span style="color:var(--dim)">该角色的队友两口径对比：左=玩家实配（同 uid 玩家同练角色共现，roleCooccurrence，真实组队行为）；右=攻略配队（米游社方案 team 里同队成员次数）</span>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">配队亲和</h3>${table(
+    ['玩家实配队友(同练)', '攻略配队(方案)'],
+    [
+      `<tr><td class="ds-main">${cell(partners, (x) => `${escapeHtml(x.pname)} <span class="ds-rolecnt">${x.cnt} 人同练</span>`)}</td><td class="ds-main">${cell(
+        planMates,
+        ([mn, c]) => `${escapeHtml(mn)} <span class="ds-rolecnt">${c} 个方案</span>`
+      )}</td></tr>`,
+    ],
+    new Set()
+  )}</div>`;
+}
+
+/** B9 技能组合卡：玩家「哪些技能拉满」的组合模式 Top（skillCombos）+ 我的模式对照。
+ *  拉满定义与聚合层一致：普攻/闪避/支援/特殊/终结 ≥12 级，核心 =7 级。 */
+function skillComboCardsHtml(name) {
+  const scMap = roleKeyedMap(workshopStats.skillCombos);
+  const sc = scMap.get(name);
+  const my = myCharacters.find((c) => c.name === name);
+  if (!sc || !sc.count) return '';
+  const FULL = { 0: 12, 1: 12, 2: 12, 3: 12, 4: 12, 5: 7 };
+  const LABEL = { 0: '普攻', 1: '闪避', 2: '支援', 3: '特殊', 4: '终结', 5: '核心' };
+  let mine = null;
+  if (my?.skills?.length) {
+    const levels = {};
+    for (const s of my.skills) {
+      const t = OFFICIAL_SKILL_TYPE[s.type] ?? s.type;
+      if (FULL[t] != null) levels[t] = s.level;
+    }
+    const keys = Object.keys(levels);
+    if (keys.length) {
+      const names = keys.filter((t) => levels[t] >= FULL[t]).map((t) => LABEL[t]).join('+');
+      mine = keys.every((t) => levels[t] >= FULL[t]) ? '全拉满' : names || '无满级';
+    }
+  }
+  const tip = `<b>技能组合</b><br><span style="color:var(--dim)">玩家池「哪些技能拉满」的组合模式（拉满 = 普攻/闪避/支援/特殊/终结 ≥12 级、核心 =7 级）：全拉满率 ${(sc.fullPct * 100).toFixed(0)}%；末行是我的模式对照</span>`;
+  const rows = (sc.top || []).map(
+    (t) =>
+      `<tr><td>${escapeHtml(t.pattern)}</td><td>${t.count.toLocaleString()} 人</td><td>${((t.count / sc.count) * 100).toFixed(0)}%</td></tr>`
+  );
+  if (mine) rows.push(`<tr><td style="color:var(--acc);font-weight:800">我的：${escapeHtml(mine)}</td><td>—</td><td>—</td></tr>`);
+  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">技能组合</h3>${table(['玩家组合模式', '人数', '占比'], rows, new Set())}</div>`;
 }
 
 /** 渲染整个统计视图（tab + 当前子面板）；渲染前清空图表注册，render 后由 render.js 调 mountRecommendCharts */
@@ -582,13 +633,23 @@ export function renderRecommend() {
   return `<div class="wiki"><div class="wiki-tabs">${tabs}</div>${body}</div>`;
 }
 
-// ================= 练度总览（新子面板）：评分 / 影画 / 技能 / 深渊 / 玩家生态 / trade-off =================
+// ================= 练度总览（并入「全服总览」）：评分 / 影画 / 技能 / trade-off =================
 
 // 技能类型统一走 constants.SKILL_TYPES（canonical：普攻/闪避/支援/特殊/终结/核心）。聚合层（computeSkillStats）
 // 已按源把工坊 type 归一化为 canonical（mys=官方语义、2025=1.x ID 语义）；官方（账号）type 匹配我的等级时
 // 经 OFFICIAL_SKILL_TYPE 映射（官方 1特殊技→3、2闪避→1、3终结/连携→4、6支援→2）。
 
-/** 属性相关（panelCorr）→ HTML 表格（角色 × 属性对，色标正负） */
+/** 属性相关（panelCorr）→ HTML 表格（角色 × 属性对，色标正负）。
+ *  列序固定（不依赖数据键序，数据缺列时显示 —）。 */
+const PANEL_CORR_COLS = [
+  ['攻击力_防御力', '攻击×防御'],
+  ['攻击力_生命值', '攻击×生命'],
+  ['防御力_生命值', '防御×生命'],
+  ['暴击率_暴击伤害', '暴击率×暴伤'],
+  ['攻击力_暴击伤害', '攻击×暴伤'],
+  ['攻击力_暴击率', '攻击×暴击率'],
+  ['异常精通_异常掌控', '异常精通×异常掌控'],
+];
 function panelCorrTableHtml() {
   const corr = workshopStats.panelCorr || {};
   const planNames = Object.values(plans).map((v) => v.name);
@@ -596,39 +657,50 @@ function panelCorrTableHtml() {
   for (const [rid, pairs] of Object.entries(corr)) {
     const name = alignRoleName(wsRoleIdMap().get(String(rid)) || rid);
     if (!planNames.includes(name)) continue;
-    const cells = Object.entries(pairs)
-      .map(([key, r]) => {
-        if (r == null || !Number.isFinite(r)) return `<td>—</td>`;
-        const color = r > 0.2 ? 'var(--green)' : r < -0.2 ? 'var(--red)' : 'var(--dim)';
-        const title = key.replace('_', ' × ');
-        return `<td style="color:${color}" title="${title}">${r.toFixed(2)}</td>`;
-      })
-      .join('');
+    const cells = PANEL_CORR_COLS.map(([key, label]) => {
+      const r = pairs[key];
+      if (r == null || !Number.isFinite(r)) return `<td>—</td>`;
+      const color = r > 0.2 ? 'var(--green)' : r < -0.2 ? 'var(--red)' : 'var(--dim)';
+      return `<td style="color:${color}" title="${label}">${r.toFixed(2)}</td>`;
+    }).join('');
     rows.push(`<tr><td>${escapeHtml(name)}</td>${cells}</tr>`);
   }
-  const heads = ['角色', '攻击×防御', '攻击×生命', '防御×生命', '暴击率×暴伤'].map((h) => `<th>${h}</th>`).join('');
-  return `<div class="wiki-wrap"><table class="rec-table"><thead><tr>${heads}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  const heads = ['角色', ...PANEL_CORR_COLS.map(([, label]) => label)].map((h) => `<th>${h}</th>`).join('');
+  // 不包 .wiki-wrap（限高滚动容器）：直接铺开完整展示，页面整体滚动
+  return `<table class="rec-table"><thead><tr>${heads}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
-/** 练度总览：评分分布 / 影画金字塔与收益 / 技能 P90 热力 / 深渊分布与评分×层数 / 玩家生态 / 属性 trade-off */
-function renderProgressOverview() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
+/** 练度总览内容（并入「全服总览」）：评分分布 / 影画金字塔 / 属性 trade-off。
+ *  返回 chart-card 片段（由 renderOverview 统一包 chart-grid）。 */
+function progressCardsHtml() {
+  if (!Object.keys(plans || {}).length) return '';
   const R = workshopStats;
   const roleNames = Object.values(plans).map((v) => v.name);
   const cards = [];
 
-  // 1. 全角色装配评分中位分布
+  // 1. 全角色装配评分箱线分布
   const relicMap = roleKeyedMap(R.relicStats);
   const relicRows = [];
   for (const name of roleNames) {
     const d = relicMap.get(name);
     if (!d || d.count == null) continue;
-    relicRows.push({ name, median: +d.median.toFixed(1), p10: +d.p10.toFixed(1), p90: +d.p90.toFixed(1), count: d.count });
+    relicRows.push({
+      name,
+      median: +d.median.toFixed(1),
+      p10: +d.p10.toFixed(1),
+      p90: +d.p90.toFixed(1),
+      p25: +d.p25.toFixed(1),
+      p75: +d.p75.toFixed(1),
+      whiskerLow: d.whiskerLow != null ? +d.whiskerLow.toFixed(1) : null,
+      whiskerHigh: d.whiskerHigh != null ? +d.whiskerHigh.toFixed(1) : null,
+      outliers: d.outliers,
+      count: d.count,
+    });
   }
   if (relicRows.length) {
     registerChart('prog-relic', relicBarOption(relicRows));
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3>玩家装配评分分布（工坊 relic_point · 中位条 + P10-P90 区间）</h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`);
+    const tip = `<b>装配评分分布</b><br><span style="color:var(--dim)">每角色一条箱线（工坊装配评分 relic_point）：盒 = P25-P75、线 = 中位、须 = IQR 1.5 规则（塌缩时退化为 P10/P90），悬浮看分位明细与离群数</span>`;
+    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">装配评分分布</h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`);
   }
 
   // 2. 影画金字塔（每角色 0-6 影占比）
@@ -642,76 +714,20 @@ function renderProgressOverview() {
     pyramidRows.push({ name, ranks: [0, 1, 2, 3, 4, 5, 6].map((r) => +(((d[r] || 0) / total) * 100).toFixed(1)) });
   }
   if (pyramidRows.length) {
+    // 按 0 影占比升序（0 影段为堆叠最左段，占比小的排前，形成金字塔递进）
+    pyramidRows.sort((a, b) => a.ranks[0] - b.ranks[0]);
     registerChart('prog-pyramid', rankPyramidOption(pyramidRows));
-    cards.push(`<div class="chart-card"><h3>影画档位金字塔（玩家池 0-6 影占比）</h3>${chartBox('prog-pyramid', Math.max(360, pyramidRows.length * 16))}</div>`);
+    const tip = `<b>影画档位金字塔</b><br><span style="color:var(--dim)">每角色一条堆叠横条：玩家池 0-6 影画占比（青→蓝→绿→金→橙→红，影画越高越醒目）；按 0 影占比升序排列</span>`;
+    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">影画档位金字塔</h3>${chartBox('prog-pyramid', Math.max(380, pyramidRows.length * 20))}</div>`);
   }
 
-  // 3. 影画收益：0 影 vs 6 影 攻击力 P50
-  const layerMap = roleKeyedMap(R.rankLayers);
-  const gainRows = [];
-  for (const name of roleNames) {
-    const l = layerMap.get(name);
-    const a0 = l?.['0']?.['攻击力'];
-    const a6 = l?.['6']?.['攻击力'];
-    if (!a0 || !a6 || a0.count < 30 || a6.count < 30) continue;
-    gainRows.push({ name, attr: '攻击力', rank0: +a0.median.toFixed(0), rank6: +a6.median.toFixed(0) });
-  }
-  if (gainRows.length) {
-    registerChart('prog-gain', layerGainOption(gainRows));
-    cards.push(`<div class="chart-card"><h3>影画收益：0 影 vs 6 影 攻击力中位（样本≥30）</h3>${chartBox('prog-gain', Math.max(320, gainRows.length * 18))}</div>`);
-  }
-
-  // 4. 技能 P90 热力图（角色 × 技能；canonical 列，玩家池无「支援」数据 → 压缩掉该列）
-  const skillMap = roleKeyedMap(R.skillStats);
-  const skillRows = [];
-  for (const name of roleNames) {
-    const s = skillMap.get(name);
-    if (!s) continue;
-    const cells = SKILL_TYPES.map((t) => {
-      const d = s[t.key];
-      if (!d) return null;
-      return { pct: d.p90, label: `P90 ${d.p90} 级`, reached: null };
-    });
-    skillRows.push({ name, cells });
-  }
-  const skillRows2 = skillRows.filter((r) => r.cells.some((c) => c));
-  if (skillRows2.length) {
-    const used = SKILL_TYPES.map((_, i) => i).filter((i) => skillRows2.some((r) => r.cells[i]));
-    const skillRows3 = skillRows2.map((r) => ({ name: r.name, cells: used.map((i) => r.cells[i]) }));
-    registerChart('prog-skills', heatmapOption(skillRows3, used.map((i) => SKILL_TYPES[i].label)));
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3>技能等级 P90 热力图（玩家池 · 色=前 90% 玩家的等级）</h3>${chartBox('prog-skills', Math.max(320, skillRows2.length * 16))}</div>`);
-  }
-
-  // 5. 深渊层数分布 + 评分×层数密度
-  const ab = R.abyssStats || {};
-  const layerDist = ab.layerDist || {};
-  const layerKeys = Object.keys(layerDist).map(Number).sort((a, b) => a - b);
-  if (layerKeys.length) {
-    const total = layerKeys.reduce((a, k) => a + layerDist[k], 0);
-    registerChart(
-      'prog-abyss',
-      tierBarOption(layerKeys.map((k) => ({ tier: `第 ${k} 层`, count: layerDist[k], pct: +(((layerDist[k] || 0) / total) * 100).toFixed(1) })))
-    );
-    cards.push(`<div class="chart-card"><h3>深渊战绩分布（玩家池通关层数）</h3>${chartBox('prog-abyss', 300)}</div>`);
-  }
-  if (ab.relicLayer) {
-    registerChart('prog-relic-layer', densityScatterOption(ab.relicLayer, '平均装配评分 × 深渊层数'));
-    cards.push(`<div class="chart-card"><h3>练度 → 实战验证（评分越高是否层数越高）</h3>${chartBox('prog-relic-layer', 340)}</div>`);
-  }
-
-  // 6. 玩家生态散点
-  const pp = (R.playerProfiles || []).filter((p) => p.avgRelic != null);
-  if (pp.length > 10) {
-    registerChart('prog-players', playerScatterOption(pp));
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3>玩家生态（${pp.length} 位玩家 · 角色池 × 平均评分）</h3>${chartBox('prog-players', 360)}</div>`);
-  }
-
-  // 7. 属性 trade-off 表
+  // 4. 属性 trade-off 表
   if (Object.keys(R.panelCorr || {}).length) {
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3>面板属性相关（绿=正相关 · 红=负相关 · 悬浮看属性对）</h3>${panelCorrTableHtml()}</div>`);
+    const tip = `<b>面板属性相关</b><br><span style="color:var(--dim)">全服玩家面板属性对的皮尔逊相关：绿=正相关（同涨同跌）· 红=负相关（此消彼长）· 灰=无明显关系；悬浮看具体相关系数</span>`;
+    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">面板属性相关</h3>${panelCorrTableHtml()}</div>`);
   }
 
-  return `<div class="chart-grid">${cards.join('')}</div>`;
+  return cards.join('');
 }
 
 // ================= 角色面板增强：技能对标 + 提升优先级清单 =================

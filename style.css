@@ -1,24 +1,30 @@
 :root {
-  --bg: #0d0d0d;
-  --card: #171717;
-  --card2: #1e1e1e;
-  --line: #2b2b2b;
+  /* 灰调基底（无蓝）：近黑灰背景 + 灰阶卡片层级 */
+  --bg: #0e0e0e;
+  --bg-top: #161616;
+  --card: #161616;
+  --card2: #1d1d1d;
+  --card3: #242424;
+  --line: #2c2c2c;
   --txt: #ece9e2;
   --dim: #8b8a83;
+  /* 琥珀金渐变：交互元素统一走渐变（金→琥珀） */
   --acc: #f7d41d;
   --acc2: #ffb300;
+  --acc-deep: #c8860a;
+  --grad-gold: linear-gradient(135deg, #ffe27a 0%, var(--acc) 45%, var(--acc2) 100%);
   --red: #e5484d;
   --blue: #59b7ff;
   --green: #7fd8a4;
   --purple: #b48cff;
   --orange: #ff9b5c;
   /* 视觉体系：圆角 / 阴影 / 过渡 / 光晕 */
-  --radius: 8px;
-  --radius-sm: 4px;
-  --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 14px 44px rgba(0, 0, 0, 0.55);
+  --radius: 12px;
+  --radius-sm: 6px;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 44px rgba(0, 0, 0, 0.6);
   --glow: 0 0 0 1px rgba(247, 212, 29, 0.28), 0 0 20px rgba(247, 212, 29, 0.12);
-  --t: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  --t: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 * {
   box-sizing: border-box;
@@ -27,8 +33,10 @@
 }
 body {
   background:
-    radial-gradient(1100px 520px at 50% -12%, #17171c 0%, rgba(13, 13, 13, 0) 62%),
+    radial-gradient(1100px 520px at 50% -12%, var(--bg-top) 0%, rgba(14, 14, 14, 0) 62%),
+    radial-gradient(900px 600px at 85% 108%, #1a1a1a 0%, rgba(14, 14, 14, 0) 58%),
     var(--bg);
+  background-attachment: fixed;
   color: var(--txt);
   font-family: 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
   min-height: 100vh;
@@ -51,13 +59,13 @@ body::after {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2f2f2f;
-  border-radius: 5px;
+  background: linear-gradient(180deg, #3a3a3a, #2a2a2a);
+  border-radius: 6px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #434343;
+  background: linear-gradient(180deg, var(--acc) 0%, var(--acc2) 100%);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
@@ -69,8 +77,9 @@ header {
   align-items: center;
   gap: 16px;
   padding: 12px 24px;
-  background: rgba(13, 13, 13, 0.92);
-  backdrop-filter: blur(6px);
+  background: rgba(16, 16, 16, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   flex-wrap: wrap;
   row-gap: 8px;
 }
@@ -94,7 +103,7 @@ header .logo {
   filter: drop-shadow(0 0 8px rgba(247, 212, 29, 0.25));
 }
 header h1 {
-  font-size: 21px;
+  font-size: 23px;
   font-weight: 900;
   letter-spacing: 2px;
   background: linear-gradient(180deg, #ffe08a 0%, var(--acc) 52%, #c89a00 100%);
@@ -104,7 +113,7 @@ header h1 {
   filter: drop-shadow(0 1px 8px rgba(247, 212, 29, 0.3));
 }
 header .sub {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--dim);
 }
 .spacer {
@@ -115,29 +124,32 @@ header .sub {
   display: flex;
   background: #0a0a0a;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 999px;
+  padding: 3px;
   overflow: hidden;
   margin-right: 8px;
 }
 .view-tab {
   border: none;
-  border-radius: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--dim);
   font-weight: 700;
-  font-size: 13px;
-  padding: 6px 16px;
+  font-size: 15px;
+  padding: 5px 16px;
+  transition: background var(--t), color var(--t), box-shadow var(--t);
 }
 .view-tab + .view-tab {
-  border-left: 1px solid var(--line);
+  border-left: none;
 }
 .view-tab:hover {
   background: var(--card2);
   color: var(--txt);
 }
 .view-tab.on {
-  background: var(--acc);
-  color: #111;
+  background: var(--grad-gold);
+  color: #151008;
+  box-shadow: 0 2px 10px rgba(255, 179, 0, 0.35);
 }
 /* 同步下拉：header「同步数据 ▾」触发器 + 菜单 */
 .sync-menu {
@@ -151,10 +163,13 @@ header .sub {
   z-index: 30;
   min-width: 170px;
   padding: 6px;
-  background: var(--card2);
+  background: rgba(29, 29, 29, 0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  border-top: 2px solid var(--acc);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
 }
 .sync-dropdown.open {
   display: block;
@@ -164,11 +179,11 @@ header .sub {
   width: 100%;
   padding: 9px 14px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--txt);
   text-align: left;
-  font-size: 14px;
+  font-size: 16px;
 }
 .sync-dropdown button:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -180,18 +195,43 @@ button {
   background: transparent;
   color: var(--acc);
   padding: 6px 14px;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
-  border-radius: 3px;
-  transition: 0.15s;
+  border-radius: var(--radius-sm);
+  transition: background var(--t), color var(--t), box-shadow var(--t), border-color var(--t), transform 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+/* 光扫：hover 时一道斜向金光从左扫过（伪元素，pointer-events 不挡点击） */
+button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.5s ease;
+  pointer-events: none;
 }
 button:hover {
-  background: var(--acc);
-  color: #111;
-  box-shadow: 0 0 16px rgba(247, 212, 29, 0.35);
+  background: var(--grad-gold);
+  color: #151008;
+  border-color: var(--acc2);
+  box-shadow: 0 2px 14px rgba(247, 212, 29, 0.4), inset 0 0 12px rgba(255, 255, 255, 0.18);
+}
+button:hover::after {
+  left: 130%;
 }
 button:active {
   transform: translateY(1px);
+}
+/* 专用按钮不参与光扫（分段 tab / 下拉项 / 弹窗关闭等小型控件） */
+.view-tab::after,
+.sync-dropdown button::after,
+.modal-box .close::after {
+  content: none;
 }
 #status {
   position: fixed;
@@ -199,15 +239,17 @@ button:active {
   top: 64px;
   transform: translateX(-50%);
   z-index: 40;
-  background: #111;
+  background: rgba(17, 17, 17, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--acc);
   color: var(--txt);
   padding: 8px 16px;
-  font-size: 14px;
-  border-radius: 4px;
+  font-size: 16px;
+  border-radius: var(--radius-sm);
   display: none;
   max-width: 80vw;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 #status.show {
   display: block;
@@ -239,7 +281,9 @@ main::-webkit-scrollbar {
 }
 .card {
   position: relative;
-  background: var(--card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0) 90px),
+    var(--card);
   border: 1px solid var(--line);
   border-top: 3px solid var(--acc);
   border-radius: var(--radius);
@@ -249,9 +293,9 @@ main::-webkit-scrollbar {
   transition: transform var(--t), box-shadow var(--t), border-color var(--t);
 }
 .card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow);
-  border-color: #3d3d3d;
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(247, 212, 29, 0.22), 0 0 26px rgba(247, 212, 29, 0.1);
+  border-color: #4a4a4a;
 }
 /* 绝区零黄黑警示：卡片右侧竖条（克制点缀，不干扰内容） */
 .card::after {
@@ -312,7 +356,7 @@ main::-webkit-scrollbar {
   flex: 1;
 }
 .basic .name {
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 900;
   letter-spacing: 1px;
 }
@@ -323,13 +367,13 @@ main::-webkit-scrollbar {
   margin-top: 5px;
 }
 .note {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--acc);
   margin-top: 3px;
   line-height: 1.4;
 }
 .tag {
-  font-size: 12px;
+  font-size: 14px;
   padding: 1px 6px;
   border-radius: 2px;
   border: 1px solid var(--line);
@@ -355,7 +399,7 @@ main::-webkit-scrollbar {
   align-items: center;
   gap: 10px;
   padding: 6px 12px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .wengine img {
   width: 38px;
@@ -371,10 +415,10 @@ main::-webkit-scrollbar {
 }
 .wengine .wname {
   font-weight: 800;
-  font-size: 14px;
+  font-size: 16px;
 }
 .wengine .wmeta {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--dim);
   margin-top: 1px;
 }
@@ -409,7 +453,7 @@ main::-webkit-scrollbar {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  font-size: 11px;
+  font-size: 13px;
 }
 .skill-icon {
   width: 26px;
@@ -420,7 +464,7 @@ main::-webkit-scrollbar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   object-fit: cover;
   cursor: help;
   flex-shrink: 0;
@@ -450,7 +494,7 @@ main::-webkit-scrollbar {
   gap: 6px;
 }
 .ms-label {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   flex-shrink: 0;
 }
@@ -464,7 +508,7 @@ main::-webkit-scrollbar {
   border-radius: 50%;
   border: 1px solid var(--line);
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -480,7 +524,7 @@ main::-webkit-scrollbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--acc);
   font-weight: 800;
   letter-spacing: 2px;
@@ -531,24 +575,24 @@ main::-webkit-scrollbar {
   flex: 1;
 }
 .disc .dset {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--acc);
   line-height: 1.2;
 }
 .disc .dslot {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   margin-top: 1px;
 }
 .disc .dmain {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   margin-top: 3px;
   color: var(--txt);
 }
 .disc .dsubs {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--dim);
   margin-top: 2px;
   line-height: 1.5;
@@ -571,7 +615,7 @@ main::-webkit-scrollbar {
 }
 .d-hit {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--acc);
   font-weight: 800;
   flex-shrink: 0;
@@ -582,10 +626,10 @@ main::-webkit-scrollbar {
 .cs {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
 }
 .cs th {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   font-weight: 700;
   text-align: left;
@@ -597,11 +641,9 @@ main::-webkit-scrollbar {
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
 }
-.cs tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.015);
-}
 .cs tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 .cs tr.hl:hover td {
   background: rgba(247, 212, 29, 0.05);
@@ -623,14 +665,14 @@ main::-webkit-scrollbar {
 /* 核心输出属性（攻击/双暴/精通/穿透）数值金色突出，层次感 */
 .cs .cs-val[data-core='1'] {
   color: var(--acc);
-  font-size: 15px;
+  font-size: 17px;
   text-shadow: 0 0 14px rgba(247, 212, 29, 0.35);
 }
 .cs tr.hl .cs-val[data-core='1'] {
   text-shadow: 0 0 16px rgba(247, 212, 29, 0.55);
 }
 .cs .cs-val .break {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   font-weight: 400;
   margin-left: 3px;
@@ -639,7 +681,7 @@ main::-webkit-scrollbar {
   min-width: 92px;
   width: 26%;
   text-align: center;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .cs .cs-rate .rpct {
@@ -678,7 +720,7 @@ textarea {
   background: #0a0a0a;
   color: #8f8;
   border: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 15px;
   padding: 10px;
   border-radius: 4px;
   white-space: pre;
@@ -691,7 +733,7 @@ textarea {
   background: #0a0a0a;
   color: #8f8;
   border: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.7;
   padding: 10px;
   border-radius: 4px;
@@ -703,7 +745,9 @@ textarea {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 30;
   display: none;
   align-items: center;
@@ -715,9 +759,14 @@ textarea {
   animation: fadeIn 0.16s ease;
 }
 .modal-box {
-  background: var(--card);
-  border: 1px solid var(--acc);
-  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 120px),
+    rgba(24, 24, 24, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(247, 212, 29, 0.45);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   max-width: 760px;
   width: 100%;
   max-height: 86vh;
@@ -745,11 +794,11 @@ textarea {
 }
 .modal-box h2 {
   color: var(--acc);
-  font-size: 17px;
+  font-size: 19px;
   margin-bottom: 10px;
 }
 .modal-box p {
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.8;
   color: var(--txt);
 }
@@ -758,7 +807,7 @@ textarea {
   padding: 1px 5px;
   border-radius: 2px;
   color: var(--green);
-  font-size: 13px;
+  font-size: 15px;
 }
 .modal-box .close {
   float: right;
@@ -787,7 +836,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .titem label {
   width: 88px;
@@ -802,7 +851,7 @@ textarea {
   color: var(--txt);
   padding: 5px 8px;
   border-radius: 3px;
-  font-size: 14px;
+  font-size: 16px;
 }
 .titem select {
   flex: 1;
@@ -812,11 +861,18 @@ textarea {
   color: var(--txt);
   padding: 5px 8px;
   border-radius: 3px;
-  font-size: 14px;
+  font-size: 16px;
+}
+.titem input:focus,
+.titem select:focus,
+.chart-select select:focus {
+  outline: none;
+  border-color: var(--acc);
+  box-shadow: 0 0 0 2px rgba(247, 212, 29, 0.16), 0 0 12px rgba(247, 212, 29, 0.08);
 }
 .titem .unit {
   color: var(--dim);
-  font-size: 13px;
+  font-size: 15px;
   width: 18px;
   flex-shrink: 0;
 }
@@ -825,17 +881,18 @@ textarea {
   border: 1px solid var(--line);
   background: var(--card2);
   color: var(--dim);
-  font-size: 12px;
+  font-size: 14px;
   padding: 2px 8px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   margin-left: 8px;
   vertical-align: 2px;
+  transition: background var(--t), color var(--t), border-color var(--t), box-shadow var(--t);
 }
 .chk {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--txt);
 }
 /* 目标弹窗加宽 + 推荐方案表格 */
@@ -849,7 +906,7 @@ textarea {
 .plantable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .plantable th,
@@ -860,12 +917,17 @@ textarea {
   color: var(--txt);
 }
 .plantable th {
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 700;
   position: sticky;
   top: 0;
   z-index: 1;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.4);
+}
+.plantable tbody tr:hover td {
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 .plantable td.pname {
   text-align: left;
@@ -889,11 +951,11 @@ textarea {
 }
 .skill-detail-item > b {
   color: var(--acc);
-  font-size: 14px;
+  font-size: 16px;
 }
 .sd-desc {
   color: var(--txt);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.7;
   margin: 4px 0 8px;
 }
@@ -903,7 +965,7 @@ textarea {
 }
 .skill-table {
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 14px;
   width: 100%;
 }
 .skill-table th,
@@ -915,12 +977,13 @@ textarea {
   white-space: nowrap;
 }
 .skill-table th {
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 700;
   position: sticky;
   top: 0;
   z-index: 1;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.4);
 }
 .skill-table td.slv {
   color: var(--dim);
@@ -936,11 +999,12 @@ textarea {
 /* 列内各等级数值完全相同的标注（固定倍率，非抓取缺失） */
 .skill-table th .sd-fixed {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 400;
 }
-.skill-table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.03);
+.skill-table tbody tr:hover td {
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 .chk input {
   accent-color: var(--acc);
@@ -948,6 +1012,8 @@ textarea {
 .mini:hover {
   color: var(--acc);
   border-color: var(--acc);
+  background: rgba(247, 212, 29, 0.12);
+  box-shadow: none;
 }
 .good {
   color: var(--green);
@@ -966,7 +1032,7 @@ textarea {
 }
 table.tbl {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
   width: 100%;
   min-width: 900px;
 }
@@ -978,12 +1044,13 @@ table.tbl {
   white-space: nowrap;
 }
 .tbl th {
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 800;
   position: sticky;
   top: 0;
   z-index: 5;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.45);
 }
 .tbl td.tchar {
   text-align: center;
@@ -994,7 +1061,7 @@ table.tbl {
 .tbl td.tdisc {
   text-align: center;
   color: var(--dim);
-  font-size: 12px;
+  font-size: 14px;
   white-space: normal;
 }
 .tdisc-ico {
@@ -1006,7 +1073,7 @@ table.tbl {
   margin: 0 auto;
 }
 .tbl td.thit {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--dim);
 }
 .tbl td.thit .tv {
@@ -1026,7 +1093,7 @@ table.tbl {
 }
 .t-actions .mini {
   margin-left: 0;
-  font-size: 10px;
+  font-size: 12px;
   padding: 0 5px;
 }
 .tbl tr.drag-over {
@@ -1072,16 +1139,18 @@ table.tbl {
   position: fixed;
   z-index: 100;
   max-width: 340px;
-  background: #1c1c1c;
-  border: 1px solid var(--acc);
-  border-radius: 4px;
+  background: rgba(28, 28, 28, 0.97);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(247, 212, 29, 0.55);
+  border-radius: var(--radius-sm);
   padding: 8px 11px;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.65;
   color: var(--txt);
   display: none;
   pointer-events: none;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow);
 }
 .tip .hit {
   color: var(--acc);
@@ -1106,13 +1175,13 @@ table.tbl {
 }
 .tbl .tv {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 15px;
 }
 .tbl .tpct {
   display: inline-block;
   min-width: 34px;
   text-align: center;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   margin-left: 3px;
 }
@@ -1131,11 +1200,10 @@ table.tbl {
   display: block;
   height: 100%;
 }
-.tbl tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.02);
-}
-.tbl tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
+/* hover 高亮：整行从下而上渐渐变淡的金色（底部金线锚定，无竖条、无斑马纹） */
+.tbl tbody tr:hover td {
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 
 /* ---------- Wiki 数据库视图 ---------- */
@@ -1152,12 +1220,16 @@ table.tbl {
 }
 .wiki-tab {
   padding: 5px 18px;
-  font-size: 13px;
-  border-radius: 4px;
+  font-size: 15px;
+  border-radius: 999px;
+  border-color: var(--line);
+  transition: background var(--t), color var(--t), box-shadow var(--t);
 }
 .wiki-tab.on {
-  background: var(--acc);
-  color: #111;
+  background: var(--grad-gold);
+  color: #151008;
+  border-color: var(--acc2);
+  box-shadow: 0 2px 10px rgba(255, 179, 0, 0.35);
 }
 /* 我的角色视图：卡片子面板两列布局（body 在 .wiki 内，需自建 grid 承接 .card） */
 .mychars-body.cards {
@@ -1177,7 +1249,7 @@ table.tbl {
 }
 .wiki-table {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
   min-width: 1300px;
 }
 .wiki-table th,
@@ -1191,10 +1263,11 @@ table.tbl {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 800;
-  font-size: 12px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.4);
 }
 /* 表头点击排序：指针 + 当前排序列高亮 */
 .wiki-table th[data-sort],
@@ -1217,7 +1290,7 @@ table.tbl th.sorted,
   min-width: 180px;
   max-width: 300px;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--txt);
   line-height: 1.5;
 }
@@ -1225,7 +1298,7 @@ table.tbl th.sorted,
   min-width: 100px;
   max-width: 140px;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--txt);
 }
 .wiki-table td.wiki-tight {
@@ -1236,7 +1309,8 @@ table.tbl th.sorted,
   text-overflow: ellipsis;
 }
 .wiki-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 /* 统计视图表格（驱动盘/音擎/配队/角色数值/工坊配装共用视觉） */
 .discstats {
@@ -1245,12 +1319,12 @@ table.tbl th.sorted,
 }
 .discstats-table {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
   min-width: 950px; /* 驱动盘表信息密集，横向滚动 */
 }
 .rec-table {
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 15px;
   min-width: 720px;
 }
 .discstats-table th,
@@ -1267,10 +1341,11 @@ table.tbl th.sorted,
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 800;
-  font-size: 12px;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.4);
 }
 .discstats-table th[data-sort],
 .rec-table th[data-sort] {
@@ -1288,7 +1363,8 @@ table.tbl th.sorted,
 }
 .discstats-table tbody tr:hover td,
 .rec-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 /* 计数/数值格（方案推荐/全服使用/属性区间/使用角色数）：居中 + 等宽数字 + 限高滚动 */
 .discstats-table td.ds-count,
@@ -1298,7 +1374,7 @@ table.tbl th.sorted,
   max-height: 140px;
   overflow-y: auto;
   line-height: 1.5;
-  font-size: 12px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 /* 角色/词条列表格（匹配角色/推荐角色/副词条/456主属性）：左对齐 + 限高滚动 */
@@ -1311,7 +1387,7 @@ table.tbl th.sorted,
   max-height: 140px;
   overflow-y: auto;
   line-height: 1.5;
-  font-size: 12px;
+  font-size: 14px;
 }
 /* 驱动盘名称格：名称在上、图标在下居中（.ws-ico 统一图标类） */
 .discstats-table td.wiki-name .ds-dname {
@@ -1344,7 +1420,7 @@ table.tbl th.sorted,
 .discstats-table .ds-cold {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   opacity: 0.75;
 }
@@ -1355,21 +1431,21 @@ table.tbl th.sorted,
 .discstats-table .ds-eff {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
 }
 /* 占比小字（方案推荐/全服使用列的数字旁） */
 .ds-ratio {
   display: inline-block;
   margin-left: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--dim);
   font-weight: 400;
 }
 /* 推荐角色列：角色名旁标注推荐次数 */
 .ds-rolecnt {
   color: var(--dim);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
 }
 /* 方案 vs 实况差异分析（工坊配装面板） */
@@ -1379,20 +1455,20 @@ table.tbl th.sorted,
 }
 .ds-diff {
   color: var(--orange);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 /* 推荐 vs 实况对比色标 */
 .ds-flag-rare {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--red);
 }
 .ds-flag-pop {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--green);
 }
 /* 工坊配装统计：音擎/驱动盘图标（名称左对齐，进度条右对齐） */
@@ -1407,7 +1483,7 @@ table.tbl th.sorted,
 .rec-table .ws-item em {
   font-style: normal;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
 }
 .rec-table .ws-ico {
   width: 22px;
@@ -1428,7 +1504,7 @@ table.tbl th.sorted,
   min-width: 36px;
   text-align: right;
   font-weight: 800;
-  font-size: 12px;
+  font-size: 14px;
 }
 .rec-table .tbar {
   display: inline-block;
@@ -1446,7 +1522,7 @@ table.tbl th.sorted,
 }
 /* 工坊配装（grad-table）：每角色 Top 音擎/套装，整体字号稍大 */
 .rec-table.grad-table {
-  font-size: 14px;
+  font-size: 16px;
 }
 /* 角色配装对标（单角色）：表格铺满卡片宽度（与图表同宽），页宽不足时文本换行，所有内容顶端对齐 */
 .rec-table.grad-table {
@@ -1475,7 +1551,7 @@ table.tbl th.sorted,
 }
 .rec-table.grad-table td.ds-diff-row .ds-diff {
   color: var(--red); /* 方案与实况有区别时标红 */
-  font-size: 12px;
+  font-size: 14px;
 }
 .rec-table.grad-table td.wiki-name {
   display: flex;
@@ -1485,14 +1561,14 @@ table.tbl th.sorted,
   text-align: left;
 }
 .rec-table.grad-table td.ds-main {
-  font-size: 14px;
+  font-size: 16px;
 }
 .rec-table.grad-table .ws-ico {
   width: 26px;
   height: 26px;
 }
 .rec-table.grad-table .ws-item em {
-  font-size: 12px;
+  font-size: 14px;
 }
 /* 角色面板对标（角色数值子面板）：每属性一列分布带 */
 .rec-table td.pd-cell {
@@ -1562,7 +1638,7 @@ table.tbl th.sorted,
   justify-content: center;
   gap: 5px;
   margin-top: 2px;
-  font-size: 10px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1584,16 +1660,27 @@ table.tbl th.sorted,
   padding: 4px;
 }
 .chart-card {
-  background: var(--card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 80px),
+    var(--card);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.chart-card:hover {
+  border-color: #424242;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 .chart-card h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--acc);
   font-weight: 800;
+  padding-left: 10px;
+  border-left: 3px solid var(--acc);
+  line-height: 1.3;
+  background: linear-gradient(90deg, rgba(247, 212, 29, 0.12), transparent 70%);
 }
 .chart-init {
   width: 100%;
@@ -1612,11 +1699,11 @@ table.tbl th.sorted,
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: 15px;
 }
 .chart-select label {
   color: var(--dim);
-  font-size: 13px;
+  font-size: 15px;
 }
 /* 同步中心弹窗：数据新鲜度 / 同步选项 / 进度 */
 .sync-fresh {
@@ -1625,7 +1712,7 @@ table.tbl th.sorted,
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--card);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--dim);
 }
 .sync-fresh .fresh-row {
@@ -1647,7 +1734,7 @@ table.tbl th.sorted,
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
 }
 .sync-opts input[type='checkbox'] {
@@ -1658,7 +1745,7 @@ table.tbl th.sorted,
 .sync-progress {
   min-height: 22px;
   margin: 8px 0;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--acc);
   font-weight: 700;
   white-space: pre-wrap;
@@ -1670,7 +1757,7 @@ table.tbl th.sorted,
   border: 1px solid var(--red);
   border-radius: 4px;
   background: rgba(229, 72, 77, 0.08);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.7;
 }
 .sync-errors-title {
@@ -1731,7 +1818,7 @@ table.tbl th.sorted,
   box-shadow: 0 0 6px var(--acc66);
 }
 .wiki-icon .s-lbl {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1;
   color: var(--dim);
 }
@@ -1741,7 +1828,7 @@ table.tbl th.sorted,
   border-radius: 50%;
   border: 1px solid var(--line);
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1778,7 +1865,7 @@ table.tbl th.sorted,
     gap: 10px;
   }
   header h1 {
-    font-size: 18px;
+    font-size: 20px;
   }
   /* 弹窗输入/勾选两列 → 一列 */
   .tgrid {
@@ -1798,7 +1885,7 @@ table.tbl th.sorted,
   }
   /* 卡片面板表格字号略降，适配窄屏 */
   .cs {
-    font-size: 12px;
+    font-size: 14px;
   }
   .tbl-wrap {
     padding: 12px 10px;
@@ -1839,7 +1926,7 @@ table.tbl th.sorted,
 .empty::before {
   content: '◈';
   display: block;
-  font-size: 38px;
+  font-size: 40px;
   line-height: 1;
   margin-bottom: 10px;
   opacity: 0.4;
@@ -1879,6 +1966,25 @@ main > .card:nth-child(7) {
 }
 main > .card:nth-child(8) {
   animation-delay: 0.28s;
+}
+/* 视图切换淡入（E 动效）：各面板每次渲染/切换时轻淡入上浮 */
+.wiki-table,
+.discstats-table,
+.rec-table,
+table.tbl,
+.plantable,
+.chart-grid {
+  animation: viewIn 0.26s ease both;
+}
+@keyframes viewIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 /* 弹窗指南里的链接（同步页面网址） */
 a {
@@ -1930,7 +2036,7 @@ a:hover {
 .ad-ov-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 14px;
 }
 .ad-ov-table th,
 .ad-ov-table td {
@@ -1940,9 +2046,10 @@ a:hover {
   white-space: nowrap;
 }
 .ad-ov-table th {
-  background: var(--card2);
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--acc);
   font-weight: 800;
+  border-bottom: 1px solid rgba(247, 212, 29, 0.4);
 }
 .ad-ov-table td:first-child {
   text-align: left;
@@ -1950,33 +2057,45 @@ a:hover {
   cursor: pointer;
 }
 .ad-ov-table tbody tr:hover td {
-  background: rgba(255, 255, 255, 0.045);
+  background-image: linear-gradient(0deg, rgba(247, 212, 29, 0.16) 0%, rgba(247, 212, 29, 0.04) 60%, rgba(247, 212, 29, 0) 100%);
+  box-shadow: inset 0 -1px 0 rgba(247, 212, 29, 0.5);
 }
 .ad-ov-table tr.cur td {
   background: rgba(247, 212, 29, 0.08);
 }
 .ad-sub {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
 }
 .ad-card {
-  background: var(--card);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 80px),
+    var(--card);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 12px 14px;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.ad-card:hover {
+  border-color: #424242;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
 }
 .ad-card h3 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--acc);
   font-weight: 800;
+  padding-left: 10px;
+  border-left: 3px solid var(--acc);
+  line-height: 1.3;
+  background: linear-gradient(90deg, rgba(247, 212, 29, 0.12), transparent 70%);
 }
 .ad-sec {
   margin: 14px 0 0;
 }
 .ad-sec h4 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--acc);
 }
 .ad-row {
@@ -1988,7 +2107,7 @@ a:hover {
 .ad-row-label {
   flex-shrink: 0;
   color: var(--dim);
-  font-size: 12px;
+  font-size: 14px;
   padding-top: 3px;
   min-width: 56px;
 }
@@ -2002,7 +2121,7 @@ a:hover {
   border-radius: 10px;
   background: var(--card2);
   border: 1px solid var(--line);
-  font-size: 12px;
+  font-size: 14px;
 }
 .ad-chip.both {
   border-color: var(--acc);
@@ -2016,7 +2135,7 @@ a:hover {
 }
 .ad-slot h4 {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--txt);
 }
 .ad-bar {
@@ -2029,16 +2148,16 @@ a:hover {
   margin-bottom: 2px;
 }
 .ad-bar-name {
-  font-size: 12px;
+  font-size: 14px;
 }
 .ad-bar-val {
   margin-left: auto;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .ad-tag {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
   padding: 0 4px;
   border-radius: 3px;
@@ -2076,13 +2195,13 @@ a:hover {
 }
 .ad-extra {
   color: var(--dim);
-  font-size: 11px;
+  font-size: 13px;
   margin-top: 8px;
   line-height: 1.6;
 }
 .ad-drops {
   color: var(--dim);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.8;
 }
 .ad-drops del {

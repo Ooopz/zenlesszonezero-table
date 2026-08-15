@@ -26,7 +26,7 @@ export const ALIASES = {
   },
   [CATEGORY.WENGINE]: {},
   [CATEGORY.DISC]: {
-    荆棘玫瑰: '棘刺玫瑰', // 养成指南用词差异（原 discstats.DISC_ALIASES）
+    棘刺玫瑰: '荆棘玫瑰', // wiki 页面名（2026-10 起为「荆棘玫瑰」）；旧名兼容历史数据（plans/workshop 写时固化的旧标准名）
   },
   [CATEGORY.BANGBOO]: {},
 };

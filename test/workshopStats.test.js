@@ -1,4 +1,4 @@
-// test/workshopStats.test.js —— 工坊统计：驱动盘单盘 / 面板散点 / 新指标聚合（评分·影画分层·技能·玩家画像·角色盘·深渊）
+// test/workshopStats.test.js —— 工坊统计：驱动盘单盘 / 面板散点 / 新指标聚合（评分·影画分层·技能·角色盘）
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -10,10 +10,11 @@ import {
   computeRankLayers,
   computeRankDist,
   computeSkillStats,
-  computePlayerProfiles,
   computeRoleDiscStats,
-  computeAbyssStats,
-  computeAbyssTeamStats,
+  computeRoleCooccurrence,
+  computeCompleteness,
+  computeRankRelic,
+  computeSkillComboStats,
 } from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { streamJsonArrayElements } from '../src/lib/node.js';
@@ -55,7 +56,7 @@ test('discStatName：workshop 词条名 → 统一名（全表 + mys 源百分�
 });
 
 test('computeWorkshopDiscStats：两源混合聚合（主词条/副词条/槽位/角色/别名/幂等）', () => {
-  const discIndex = buildNameIndex(['静听嘉音', '棘刺玫瑰'], CATEGORY.DISC);
+  const discIndex = buildNameIndex(['静听嘉音', '荆棘玫瑰'], CATEGORY.DISC);
   const roleNameMap = new Map([
     ['1341', '维琳娜·艾嘉德'],
     ['1361', '艾莲'],
@@ -78,13 +79,13 @@ test('computeWorkshopDiscStats：两源混合聚合（主词条/副词条/槽位
         { name: '静听嘉音[5]', suit: '静听嘉音', main: [{ name: '穿透率', value: '4.8%' }], subs: [{ name: '攻击力', value: '6%' }, { name: '暴击率', value: '4.8%' }] },
       ],
     },
-    // —— 套装别名（荆棘玫瑰→棘刺玫瑰）+ 另一角色 ——
-    { uid: 'u3', role_id: '1361', equips: [{ name: '荆棘玫瑰[1]', suit: '荆棘玫瑰', main: [{ name: '防御力', value: '6%' }], subs: [{ name: '生命值', value: '224' }] }] },
+    // —— 套装别名（旧名棘刺玫瑰→荆棘玫瑰）+ 另一角色 ——
+    { uid: 'u3', role_id: '1361', equips: [{ name: '棘刺玫瑰[1]', suit: '棘刺玫瑰', main: [{ name: '防御力', value: '6%' }], subs: [{ name: '生命值', value: '224' }] }] },
   ];
   const out = computeWorkshopDiscStats(entries, discIndex, { roleNameMap });
   assert.equal(out.length, 2, '只含出现的盘');
   const 静听 = out.find((d) => d.name === '静听嘉音');
-  const 棘刺 = out.find((d) => d.name === '棘刺玫瑰');
+  const 棘刺 = out.find((d) => d.name === '荆棘玫瑰');
   assert.ok(静听 && 棘刺, '套装别名解析为规范名');
   // 静听嘉音：equips = 2 块 2025 + 1 块 mys = 3（物理盘数）
   assert.equal(静听.equips, 3);
@@ -99,7 +100,7 @@ test('computeWorkshopDiscStats：两源混合聚合（主词条/副词条/槽位
   assert.deepEqual(subMap, { '攻击力%': 2, 暴击伤害: 1, 暴击率: 2 });
   // 角色：两个 entry 同 role_id → 去重 1 个名字
   assert.deepEqual(静听.characters, ['维琳娜·艾嘉德']);
-  // 棘刺玫瑰：mys 盘（槽1 主词条防御力% 不在 456 范围），副词条 生命值，角色去重
+  // 荆棘玫瑰：mys 盘（槽1 主词条防御力% 不在 456 范围），副词条 生命值，角色去重
   assert.equal(棘刺.equips, 1);
   assert.deepEqual(棘刺.main456, { 4: [], 5: [], 6: [] }, '槽1 主词条不在 456 范围');
   assert.deepEqual(Object.fromEntries(棘刺.subs.map((f) => [f.name, f.count])), { 生命值: 1 });
@@ -162,7 +163,7 @@ test('真实数据冒烟：workshop.json 全量聚合不抛错、计数合法', 
 });
 
 test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 / 主词条×副词条协同', () => {
-  const discIndex = buildNameIndex(['静听嘉音', '棘刺玫瑰'], CATEGORY.DISC);
+  const discIndex = buildNameIndex(['静听嘉音', '荆棘玫瑰'], CATEGORY.DISC);
   const entries = [
     // —— 2025 源盘（id 末位=槽4）：主词条 + 4 个有效副词条 ——
     {
@@ -458,18 +459,6 @@ test('computeSkillStats：旧数据无 source 回退数组顺序判别；无法�
   assert.equal(out['1031'], undefined, '无法判源条目不贡献');
 });
 
-test('computePlayerProfiles：uid 聚合（角色数/评分/影画）', () => {
-  const out = computePlayerProfiles(NEW_META_ENTRIES);
-  const u1 = out.find((p) => p.uid === 'u1');
-  assert.ok(u1);
-  assert.equal(u1.chars, 1, 'u1 只有一个角色（两条同角色条目）');
-  assert.equal(u1.avgRelic, 225);
-  assert.equal(u1.maxRelic, 300);
-  assert.equal(u1.ranked, 1, 'rank>0 的角色数（rank 6 那条）');
-  const u2 = out.find((p) => p.uid === 'u2');
-  assert.equal(u2.avgRelic, null, '全 0 评分 → 平均分 null');
-});
-
 test('computeRoleDiscStats：每角色 456 主词条/副词条/有效词条', () => {
   const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
   const roleNameMap = new Map([['1011', '安比·德玛拉']]);
@@ -512,75 +501,54 @@ test('computeWorkshopDiscStats / computeRoleDiscStats：游戏规则白名单清
   for (const c of d.subCombos) assert.ok(c.combo.every((n) => ['暴击率', '攻击力%', '暴击伤害', '穿透值', '异常精通', '攻击力', '防御力', '防御力%', '生命值', '生命值%'].includes(n)));
 });
 
-test('computeAbyssStats：层数/评级分布 + 实战配队 Top', () => {
-  const abyssEntries = [
-    {
-      uid: 'u1',
-      abyss: {
-        max_layer: 7,
-        rating_list: [{ times: 4, rating: 'S' }],
-        floors: [
-          { node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: { avatars: [{ id: 1431 }, { id: 1501 }] } },
-        ],
-      },
-    },
-    {
-      uid: 'u2',
-      abyss: {
-        max_layer: 5,
-        rating_list: [{ times: 2, rating: 'A' }],
-        floors: [{ node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: null }],
-      },
-    },
-    { uid: 'u3', abyss: null }, // 无深渊
-  ];
-  const out = computeAbyssStats(abyssEntries);
-  assert.deepEqual(out.layerDist, { 7: 1, 5: 1 });
-  assert.deepEqual(out.ratingDist, { S: 1, A: 1 });
-  assert.equal(out.teams.length, 2);
-  // 1091,1311 共现 2 次（u1 node_1 + u2 node_1）→ Top1
-  const top = out.teams[0];
-  assert.deepEqual(top.team, ['1091', '1311']);
-  assert.equal(top.count, 2);
+// ---------- 2026-10 新增聚合：配队亲和 / 完成度 / 影画×评分 / 技能组合 ----------
+
+test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
+  const out = computeRoleCooccurrence([
+    { uid: 'u1', role_id: '1011' },
+    { uid: 'u1', role_id: '1031' },
+    { uid: 'u2', role_id: '1011' },
+    { uid: 'u2', role_id: '1031' },
+    { uid: 'u3', role_id: '1011' },
+    { uid: 'u3', role_id: '1051' },
+  ]);
+  const pair = out['1011'].find(([rid]) => rid === '1031');
+  assert.deepEqual(pair, ['1031', 2], '1011 与 1031 同现 2 次');
+  const pair2 = out['1011'].find(([rid]) => rid === '1051');
+  assert.deepEqual(pair2, ['1051', 1]);
+  assert.ok(out['1011'][0][1] >= out['1011'][1][1], '按次数降序');
 });
 
-test('computeAbyssTeamStats：出场榜 / 双队配队 Top / S 评级 Top / 队友共现', () => {
-  const abyssEntries = [
-    {
-      uid: 'u1',
-      abyss: {
-        max_layer: 7,
-        floors: [
-          {
-            rating: 'S',
-            node_1: { avatars: [{ id: 1091 }, { id: 1311 }, { id: 1011 }] },
-            node_2: { avatars: [{ id: 1431 }, { id: 1501 }] },
-          },
-        ],
-      },
-    },
-    {
-      uid: 'u2',
-      abyss: {
-        max_layer: 5,
-        floors: [{ rating: 'A', node_1: { avatars: [{ id: 1091 }, { id: 1311 }] }, node_2: null }],
-      },
-    },
-  ];
-  const out = computeAbyssTeamStats(abyssEntries);
-  // 出场榜：1091/1311 各 2 次、1011/1431/1501 各 1 次；ratio 合计 = 1
-  const usage = new Map(out.charUsage.map((c) => [c.id, c.count]));
-  assert.equal(usage.get('1091'), 2);
-  assert.equal(usage.get('1011'), 1);
-  assert.ok(Math.abs(out.charUsage.reduce((s, c) => s + c.ratio, 0) - 1) < 1e-9);
-  // 双队分开：第一队 Top = [1011,1091,1311]（3 人组合）×1 + [1091,1311]×1；第二队 = [1431,1501]
-  assert.deepEqual(out.nodeTeams[1][0].chars, ['1011', '1091', '1311']);
-  assert.equal(out.nodeTeams[1].length, 2);
-  assert.deepEqual(out.nodeTeams[2][0].chars, ['1431', '1501']);
-  // S 评级只看 u1 第一队
-  assert.deepEqual(out.sTeams[0].chars, ['1011', '1091', '1311']);
-  // 队友共现：1091 的队友 = 1311×2、1011×1
-  const mates = out.teammates['1091'];
-  assert.equal(mates['1311'], 2);
-  assert.equal(mates['1011'], 1);
+test('computeCompleteness：音擎 60 / 盘满级 / 高评分占比，字段缺失不污染分母', () => {
+  const out = computeCompleteness([
+    { role_id: '1011', weapon: { level: 60 }, equips: [{ level: 15 }, { level: 10 }], relic_point: 100 },
+    { role_id: '1011', weapon: { level: 50 }, equips: [{ level: 15 }], relic_point: 300 },
+    { role_id: '1011', weapon: {}, equips: [], relic_point: 200 },
+    { role_id: '1031', weapon: { level: 60 }, equips: [], relic_point: 0 }, // 评分 0 过滤
+  ]);
+  const r = out['1011'];
+  assert.equal(r.count, 3, '评分 >0 的条目数');
+  assert.equal(r.w60, 0.5, '2 条有武器等级，1 条满级');
+  assert.equal(r.discMax, 0.6667, '3 块盘有等级，2 块满级');
+  assert.equal(r.relicTop, 0.3333, '评分 ≥P75（300）的占比');
+  assert.equal(out['1031'].count, 0, '评分全 0 的条目不计入评分维度（音擎完成度仍产出）');
+});
+
+test('computeRankRelic：每角色×影画档评分统计', () => {
+  const out = computeRankRelic(NEW_META_ENTRIES);
+  assert.ok(out['1011']);
+  assert.equal(out['1011'][0].median, 150);
+  assert.equal(out['1011'][6].median, 300);
+  assert.equal(out['1011'][6].count, 1);
+  assert.equal(out['1031'], undefined, '评分 0 的角色无档位分布');
+});
+
+test('computeSkillComboStats：技能拉满组合（源归一 + 全拉满率）', () => {
+  const out = computeSkillComboStats(NEW_META_ENTRIES);
+  const r = out['1011'];
+  assert.ok(r);
+  assert.equal(r.count, 2, '两条目均可判源');
+  assert.equal(r.fullPct, 0.5, 'u1 第二条全拉满（普攻/闪避 12 级）');
+  assert.ok(r.top.some((t) => t.pattern === '全拉满' && t.count === 1));
+  assert.ok(r.top.some((t) => t.count === 1), '另一条为部分拉满组合');
 });

@@ -25,7 +25,7 @@ const WENGINES = {
   '「残响」-Ⅱ型': { name: '「残响」-Ⅱ型' },
   '「残响」-Ⅲ型': { name: '「残响」-Ⅲ型' },
 };
-const DISCS = { 棘刺玫瑰: { name: '棘刺玫瑰' }, 震星迪斯科: { name: '震星迪斯科' } };
+const DISCS = { 荆棘玫瑰: { name: '荆棘玫瑰' }, 震星迪斯科: { name: '震星迪斯科' } };
 
 test('buildNameIndex 支持对象与数组两种形态', () => {
   const obj = buildNameIndex(CHARS, CATEGORY.CHAR);
@@ -67,11 +67,11 @@ test('wengine：ASCII 罗马数字解析到 Unicode 规范名，Ⅰ/Ⅱ/Ⅲ 不�
   );
 });
 
-test('disc：别名 + 尾随空格', () => {
+test('disc：旧名别名 + 尾随空格', () => {
   const idx = buildNameIndex(DISCS, CATEGORY.DISC);
-  assert.equal(resolveName(CATEGORY.DISC, idx, '荆棘玫瑰').name, '棘刺玫瑰', '别名');
+  assert.equal(resolveName(CATEGORY.DISC, idx, '棘刺玫瑰').name, '荆棘玫瑰', '旧名别名（wiki 改名前的历史数据）');
   assert.equal(resolveName(CATEGORY.DISC, idx, '震星迪斯科 ').name, '震星迪斯科', 'normalize 剥空白');
-  assert.equal(DISC_ALIASES['荆棘玫瑰'], '棘刺玫瑰');
+  assert.equal(DISC_ALIASES['棘刺玫瑰'], '荆棘玫瑰');
 });
 
 test('fuzzy 子串仅 char 开启', () => {

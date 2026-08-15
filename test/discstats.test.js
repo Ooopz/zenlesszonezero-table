@@ -151,13 +151,13 @@ test('套装名去标点/空白归一化匹配（plans 侧尾随空格也能命�
   assert.deepEqual(rows[0].subStats, [{ name: '暴击率', count: 1, ratio: 1 }]);
 });
 
-test('已知别名也能命中（荆棘玫瑰→棘刺玫瑰，养成指南用词差异）', () => {
+test('已知别名也能命中（棘刺玫瑰→荆棘玫瑰，wiki 改名前的旧名兼容）', () => {
   const rows = computeDiscStats(
-    { a: { name: '本·比格', plans: [{ sets: [{ name: '荆棘玫瑰', cnt: 4 }], subStats: ['暴击率'], mainProps: {} }] } },
-    ['棘刺玫瑰']
+    { a: { name: '本·比格', plans: [{ sets: [{ name: '棘刺玫瑰', cnt: 4 }], subStats: ['暴击率'], mainProps: {} }] } },
+    ['荆棘玫瑰']
   );
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].name, '棘刺玫瑰');
+  assert.equal(rows[0].name, '荆棘玫瑰');
   assert.equal(rows[0].count, 1);
   assert.deepEqual(rows[0].characters, ['本·比格']);
 });
@@ -323,11 +323,11 @@ test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/�
       assert.ok(f.ratio >= 0 && f.ratio <= 1);
     }
   }
-  // 同效果组（棘刺玫瑰/灵魂摇滚 = 防御力0.16 二件套）替代互指
-  const j = rows.find((r) => r.name === '棘刺玫瑰');
+  // 同效果组（荆棘玫瑰/灵魂摇滚 = 防御力0.16 二件套）替代互指
+  const j = rows.find((r) => r.name === '荆棘玫瑰');
   const l = rows.find((r) => r.name === '灵魂摇滚');
   assert.ok(j.alternatives.includes('灵魂摇滚'));
-  assert.ok(l.alternatives.includes('棘刺玫瑰'));
+  assert.ok(l.alternatives.includes('荆棘玫瑰'));
 });
 
 // ---------- computeDiscAdvisor：两口径对齐 + 保留/分歧/可抛弃判定 ----------
