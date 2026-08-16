@@ -2,10 +2,13 @@
 // 供 workshopStats 聚合、workshopStats 相关计算与测试使用。
 
 /** 已排序数组的分位数（线性插值）：假设 arr 升序已排序，q∈[0,1]。
- *  computeDist 等已知排序好的场景直接用此函数，避免 quantile 重复排序。 */
+ *  computeDist 等已知排序好的场景直接用此函数，避免 quantile 重复排序。
+ *  q 会被夹到 [0,1]；非有限 q 返回 null（此前 q=2 会静默返回 undefined）。 */
 export function quantileSorted(arr, q) {
   if (!arr || !arr.length) return null;
-  const pos = q * (arr.length - 1);
+  if (!Number.isFinite(q)) return null;
+  const qq = Math.min(1, Math.max(0, q));
+  const pos = qq * (arr.length - 1);
   const lo = Math.floor(pos);
   const hi = Math.ceil(pos);
   return hi === lo ? arr[lo] : arr[lo] + (arr[hi] - arr[lo]) * (pos - lo);
@@ -19,19 +22,19 @@ export function quantile(arr, q) {
 export function median(sorted) {
   return quantile(sorted, 0.5);
 }
-/** 标准差（总体）；样本不足 2 返回 null */
+/** 标准差（总体）；样本不足 2 或入参非数组返回 null */
 export function sd(vals, mean) {
-  if (vals.length < 2) return null;
+  if (!Array.isArray(vals) || vals.length < 2) return null;
   return Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length);
 }
 /** 偏度（样本≥3）；右偏>0、左偏<0 */
 export function skew(vals, mean, s) {
-  if (vals.length < 3 || !s) return null;
+  if (!Array.isArray(vals) || vals.length < 3 || !s) return null;
   return vals.reduce((a, v) => a + (v - mean) ** 3, 0) / vals.length / s ** 3;
 }
 /** 超额峰度（样本≥4）：>0 尖峰、<0 平峰 */
 export function kurt(vals, mean, s) {
-  if (vals.length < 4 || !s) return null;
+  if (!Array.isArray(vals) || vals.length < 4 || !s) return null;
   return vals.reduce((a, v) => a + (v - mean) ** 4, 0) / vals.length / s ** 4 - 3;
 }
 /** 变异系数 CV = sd/mean（mean=0 或样本不足返回 null）；越小共识越高 */
@@ -39,12 +42,20 @@ export function cv(vals, mean) {
   const s = sd(vals, mean);
   return s != null && mean ? s / Math.abs(mean) : null;
 }
-/** 皮尔逊相关系数（配对数组）；样本不足 2 或方差为 0 返回 null */
+/** 皮尔逊相关系数（配对数组）；样本不足 2 或方差为 0 返回 null。
+ *  长度不等时按较短者配对——此前只取 a.length，越界读到 undefined 使结果静默变 NaN。 */
 export function pearson(a, b) {
-  const n = a.length;
+  if (!Array.isArray(a) || !Array.isArray(b)) return null;
+  const n = Math.min(a.length, b.length);
   if (n < 2) return null;
-  const ma = a.reduce((s, v) => s + v, 0) / n;
-  const mb = b.reduce((s, v) => s + v, 0) / n;
+  let ma = 0;
+  let mb = 0;
+  for (let i = 0; i < n; i++) {
+    ma += a[i];
+    mb += b[i];
+  }
+  ma /= n;
+  mb /= n;
   let num = 0;
   let da = 0;
   let db = 0;
@@ -56,11 +67,38 @@ export function pearson(a, b) {
   const den = Math.sqrt(da * db);
   return den ? num / den : null;
 }
-/** 值在分布中的百分位（0-100）：返回≤该值的比例 */
-/** 玩家分布统计对象：集中/离散/分位/形态 + 离群值排除（箱线图 IQR 1.5 规则）。供 workshopStats panelStats 复用 */
+/** computeDist 的空结果：与正常返回**同形**（键齐全、值为 null）。
+ *  此前空数组只返回 5 个键，消费端读 .p50/.hist 拿到 undefined 而无任何报错。 */
+const EMPTY_DIST = Object.freeze({
+  count: 0,
+  min: null,
+  max: null,
+  range: null,
+  mean: null,
+  median: null,
+  sd: null,
+  IQR: null,
+  p10: null,
+  p25: null,
+  p50: null,
+  p75: null,
+  p90: null,
+  p95: null,
+  p99: null,
+  skew: null,
+  kurt: null,
+  whiskerLow: null,
+  whiskerHigh: null,
+  outliers: 0,
+  hist: null,
+});
+
+/** 玩家分布统计对象：集中/离散/分位/形态 + 离群值排除（箱线图 IQR 1.5 规则）。供 workshopStats panelStats 复用。
+ *  非有限值（NaN/Infinity/null）会被过滤——否则单个 NaN 会污染 mean/sd/skew/kurt 并被写进 workshop-stats.json。 */
 export function computeDist(arr) {
-  if (!arr.length) return { count: 0, min: null, max: null, mean: null, median: null };
-  const s = [...arr].sort((a, b) => a - b);
+  if (!Array.isArray(arr) || !arr.length) return { ...EMPTY_DIST };
+  const s = arr.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!s.length) return { ...EMPTY_DIST };
   const n = s.length;
   const mean = s.reduce((a, v) => a + v, 0) / n;
   const sdev = sd(s, mean);

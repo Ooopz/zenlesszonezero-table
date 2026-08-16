@@ -58,8 +58,14 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseout', (e) => {
   const from = e.target.closest ? e.target.closest('[data-detail]') : null;
   const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('[data-detail]') : null;
-  if (from && from !== to) tipEl.style.display = 'none';
+  if (from && from !== to) hideTip();
 });
+/** 强制隐藏悬浮框。
+ *  悬浮框只由 mouseout 收起，而 render() 会整块替换 innerHTML：鼠标下的元素被直接移除时
+ *  浏览器不再派发 mouseout，提示框会一直挂在屏幕上（切子面板/切角色后尤为明显）。 */
+export function hideTip() {
+  tipEl.style.display = 'none';
+}
 
 // ---------- 渲染辅助 ----------
 /** 音擎展示信息（名称/精炼/图标/基础攻击/副属性/特效），卡片与表格共用 */
@@ -584,6 +590,7 @@ function resolveView() {
 // ---------- 渲染调度 ----------
 export function render() {
   const { view, legacy } = resolveView();
+  hideTip(); // 旧 DOM 即将被替换，挂在其上的悬浮框不会收到 mouseout
   // 高亮当前视图切换按钮
   document.querySelectorAll('.view-tab').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   grid.innerHTML = '';
@@ -616,5 +623,11 @@ export function render() {
   const body = grid.querySelector('.mychars-body');
   body.className = myTab === 'card' ? 'mychars-body cards' : 'mychars-body';
   if (myTab === 'table') renderTable(list, body);
-  else for (const character of list) body.appendChild(characterCard(character));
+  else
+    list.forEach((character, i) => {
+      const card = characterCard(character);
+      // 入场动画的错开延迟由 CSS 的 calc(var(--i) * 40ms) 算出；封顶 12 避免长列表末尾等太久
+      card.style.setProperty('--i', String(Math.min(i, 12)));
+      body.appendChild(card);
+    });
 }

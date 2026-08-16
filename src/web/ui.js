@@ -83,11 +83,13 @@ const syncCharacters = (cookie) =>
 const syncPlans = (cookie) => runSync('推荐方案', SYNC_KINDS.PLANS, '/api/sync-plans', { cookie: cookie || '' });
 const syncWorkshopData = () => runSync('工坊数据', SYNC_KINDS.WORKSHOP, '/api/sync-workshop');
 
-/** 打开同步中心弹窗：填充数据新鲜度 + 当前 cookie 明文 */
+/** 打开同步中心弹窗：填充数据新鲜度 + cookie 缓存状态（不回显明文，服务端已不再下发） */
 async function openSyncCenter() {
   const j = await apiRequest('/api/sync-status', { method: 'GET' });
   document.getElementById('syncCookieSnippet').textContent = CLIPBOARD_SCRIPT;
-  document.getElementById('syncCookieInput').value = j && j.cookie ? j.cookie : '';
+  const input = document.getElementById('syncCookieInput');
+  input.value = '';
+  input.placeholder = j && j.cached ? '已缓存 cookie（不回显）；需更换时在此粘贴新的' : '尚未缓存 cookie，请粘贴';
   document.getElementById('syncFreshness').innerHTML =
     j && j.ok ? renderFreshness(j.files) : '⚠ 未检测到本地服务器：请先运行 npm start';
   document.getElementById('syncProgress').textContent = '';

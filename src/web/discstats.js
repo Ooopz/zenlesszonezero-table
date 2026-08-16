@@ -10,7 +10,7 @@ import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
 import { discSetEffectsHtml } from './shared.js';
-import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption } from './charts.js';
+import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption, discSlotHeatOption } from './charts.js';
 
 let selectedDisc = '';
 export function setSelectedDisc(name) {
@@ -127,10 +127,42 @@ function chartCardsHtml(selectedDetail) {
       <div class="chart-card"><h4>456 主词条占比（玩家实况）</h4>${chartBox(`${id}-main`, 260)}</div>
       <div class="chart-card"><h4>副词条出现频率（带此词条的盘占比）</h4>${chartBox(`${id}-subs`, 300)}</div>
       <div class="chart-card"><h4>词条组合 Top</h4>${chartBox(`${id}-combo`, 300)}</div>
-      ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${crossTip}">主词条 × 副词条协同</h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
-      <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${comboPortraitTip}">组合画像</h3>${portrait}</div>
+      ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(crossTip)}">主词条 × 副词条协同</h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
+      <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(comboPortraitTip)}">组合画像</h3>${portrait}</div>
     </div>
   </div>`;
+}
+
+/** ④ 槽位分布（D7 套装×槽位交叉，单盘视角）：该套装被戴在各号位的占比，与均匀 16.7% 对照。
+ *  同一套装 6 个槽本应大致均分；某槽显著偏高 = 玩家主要拿这套凑 2 件套（挑最便宜的槽位）。 */
+function slotRowHtml(detail) {
+  const dist = detail?.slotDist;
+  if (!dist) return '';
+  const total = [1, 2, 3, 4, 5, 6].reduce((s, k) => s + (dist[k] || 0), 0);
+  if (!total) return '';
+  const cells = [1, 2, 3, 4, 5, 6]
+    .map((k) => {
+      const p = ((dist[k] || 0) / total) * 100;
+      const dev = p - 100 / 6;
+      const color = dev >= 3 ? 'var(--acc)' : dev <= -3 ? 'var(--dim)' : 'var(--txt)';
+      return `<span style="color:${color};font-weight:${dev >= 3 ? 800 : 400}">${k}号 ${p.toFixed(1)}%</span>`;
+    })
+    .join('　');
+  return `<div class="ad-sec">
+    <h4>④ 槽位分布（均匀基准 16.7%；金色 = 玩家明显偏好戴在该号位）</h4>
+    <div class="ad-drops">${cells}</div>
+  </div>`;
+}
+
+/** D7 全盘热力：套装 × 槽位交叉（行内归一为占比），一眼看出哪些套装被集中戴在特定号位 */
+function slotCrossCardHtml() {
+  const rows = (workshopStats.discDetails || [])
+    .filter((d) => d.slotDist && [1, 2, 3, 4, 5, 6].some((k) => d.slotDist[k]))
+    .sort((a, b) => (b.equips || 0) - (a.equips || 0));
+  if (!rows.length) return '';
+  registerChart('disc-slot-cross', discSlotHeatOption(rows));
+  const tip = `<b>套装 × 槽位交叉（D7）</b><br><span style="color:var(--dim)">行=套装（按玩家盘数降序）、列=1-6 号位，色 = 该号位占该套装总盘数的比例（每行合计 100%）。<br>六个槽位若被平等使用应各占 <b>16.7%</b>：某槽明显偏高说明玩家主要拿这套凑 <b>2 件套</b>（只挑成本最低的槽），偏低则说明该槽通常留给别的套装。悬浮格子看盘数与偏离幅度</span>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">套装 × 槽位交叉</h3>${chartBox('disc-slot-cross', Math.max(360, rows.length * 20 + 110))}</div>`;
 }
 
 /** 渲染驱动盘决策卡页面 */
@@ -139,6 +171,11 @@ export function renderDiscStats() {
     return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
   }
   const cards = allCards();
+  // cards 以 library.discs 为键：方案数据在、属性库缺失时它是空的，
+  // 直接取 [0][0] 会抛 TypeError 让整个统计视图白屏，降级成提示。
+  if (!cards.size) {
+    return '<div class="empty">暂无驱动盘属性库数据。<br>请在右上角 <b>同步数据 → 更新数据库</b> 后刷新查看。</div>';
+  }
   if (!selectedDisc || !cards.has(selectedDisc)) {
     selectedDisc = [...cards.entries()].sort((a, b) => b[1].equips - a[1].equips)[0][0];
   }
@@ -158,7 +195,8 @@ export function renderDiscStats() {
       ${rolesHtml(card)}
       ${dropsHtml(card)}
       ${statGridHtml(card)}
+      ${slotRowHtml(selectedDetail)}
     </div>
-    <div class="chart-grid">${chartCardsHtml(selectedDetail)}</div>
+    <div class="chart-grid">${chartCardsHtml(selectedDetail)}${slotCrossCardHtml()}</div>
   </div>`;
 }

@@ -68,6 +68,22 @@ export function mountCharts() {
     // 读数参考线（option 带 readLine 标记时启用：小提琴图等需要按鼠标位置读数的场景）
     if (opt.readLine) attachReadLine(chart, opt);
   });
+  pruneDetached();
+}
+
+/** 回收已从文档移除的图表实例。
+ *  切子面板/切角色时 render 会整块替换 innerHTML，旧容器连同 canvas 脱离文档，但实例仍留在
+ *  instances 里：既不会被 GC（每张图一块 canvas + option 数据），resizeCharts 也会对着
+ *  已脱离的 DOM 反复 resize。mountCharts 只 dispose「同 key 重新挂载」的那些，覆盖不到
+ *  本次没再出现的图，故在挂载后统一清理。 */
+function pruneDetached() {
+  for (const [key, chart] of instances) {
+    const dom = chart.getDom();
+    if (!dom || !dom.isConnected) {
+      chart.dispose();
+      instances.delete(key);
+    }
+  }
 }
 
 /** 灰色读数参考线：随鼠标移动的横虚线 + 数值标签。
@@ -144,7 +160,10 @@ function attachReadLine(chart, opt) {
 /** 窗口尺寸变化时 resize 所有已挂载图表（页面 resize 自动触发，防抖 150ms；
  *  多子图布局（技能分布/推荐三档等百分比 grid）依赖 resize 重算才能跟随容器宽度） */
 function resizeCharts() {
-  for (const c of instances.values()) c.resize();
+  for (const c of instances.values()) {
+    const dom = c.getDom();
+    if (dom && dom.isConnected) c.resize(); // 跳过已脱离文档的实例（下次 mountCharts 会回收）
+  }
 }
 // 页面宽度变化 → 重排所有已挂载图表（模块加载时注册一次）
 if (typeof window !== 'undefined') {
@@ -1076,6 +1095,93 @@ export function discComboOption(subCombos) {
         barWidth: 12,
         data: rows.map((r) => r.count).reverse(),
         itemStyle: { color: SOFT.blueBar70 },
+        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11 },
+      },
+    ],
+  };
+}
+
+/** D7 套装 × 槽位交叉热力图：行=套装、列=1-6 号位，色 = 该槽占该套装总盘数的比例（行内归一）。
+ *  基准是均匀 16.7%（六槽等概率）：明显偏高的槽 = 玩家主要把这套盘用在那个位置，
+ *  多见于「只吃 2 件套效果」的盘（玩家挑成本最低的两个槽凑）。
+ *  rows: [{name, slotDist:{1..6}, equips}] —— 按 equips 降序传入 */
+export function discSlotHeatOption(rows) {
+  const SLOTS = [1, 2, 3, 4, 5, 6];
+  const cells = [];
+  rows.forEach((r, i) => {
+    const total = SLOTS.reduce((s, k) => s + (r.slotDist?.[k] || 0), 0);
+    SLOTS.forEach((k, j) => {
+      const c = r.slotDist?.[k] || 0;
+      cells.push([j, i, total ? +((c / total) * 100).toFixed(1) : null, c]);
+    });
+  });
+  return {
+    grid: { left: 110, right: 20, top: 20, bottom: 70 },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => {
+        const [j, i, pctv, cnt] = p.value;
+        if (pctv == null) return '无数据';
+        const dev = pctv - 100 / 6;
+        const tag =
+          Math.abs(dev) < 2
+            ? `<span style="color:${CHART_COLORS.dim}">与均匀分布持平</span>`
+            : `<span style="color:${dev > 0 ? CHART_COLORS.acc : CHART_COLORS.dim}">${dev > 0 ? '高于' : '低于'}均匀分布 ${Math.abs(dev).toFixed(1)} 个百分点</span>`;
+        return `<b>${rows[i].name}</b> · ${SLOTS[j]} 号位<br>占该套装 <b>${pctv}%</b>（${cnt.toLocaleString()} 块）<br>${tag}`;
+      },
+    },
+    xAxis: { ...baseXAxis(SLOTS.map((s) => `${s} 号位`)), axisLabel: { ...AXIS_LABEL, interval: 0 } },
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    visualMap: {
+      // 色标以均匀分布 16.7% 为正中（9 与 24.4 对称分布在两侧，实测全部格子落在 9.5-23.8）：
+      // 冷=低于均匀（该槽通常留给别的套装）、金=高于均匀（玩家集中戴在这个槽）。
+      // 不要用 0-100 之类的宽区间——真实离散度只有 ±7 个百分点，铺宽了整张图会糊成一片。
+      min: 9,
+      max: 24.4,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 0,
+      inRange: { color: ['#252525', '#3d3d3d', '#8a6a1e', CHART_COLORS.acc] }, // 灰阶→琥珀，与项目无蓝色调一致
+      textStyle: { color: CHART_COLORS.dim },
+      formatter: (v) => `${Math.round(v)}%`,
+    },
+    series: [
+      {
+        type: 'heatmap',
+        data: cells,
+        label: { show: false },
+        itemStyle: { borderColor: '#000', borderWidth: 1 },
+      },
+    ],
+  };
+}
+
+/** D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关横向条。
+ *  r 越接近 1 = 该角色的工坊评分基本就是词条效率的另一种写法（可放心当毕业度代理）；
+ *  r 偏低 = 评分掺了词条效率之外的东西，看评分会误判毕业度。
+ *  rows: [{name, r, n}] —— 按 r **降序**传入（类目轴首项画在底部，故最脱节的落在图顶） */
+export function scoreRelicOption(rows) {
+  return {
+    grid: { left: 90, right: 60, top: 16, bottom: 40, containLabel: true },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => {
+        const d = p.data?.d || p.data;
+        return `<b>${d.name}</b><br>相关系数 r = <b>${d.r.toFixed(3)}</b><br>配对样本 ${d.n.toLocaleString()}<br><span style="color:${CHART_COLORS.dim}">${d.r >= 0.9 ? '评分与词条效率高度一致' : d.r >= 0.8 ? '基本一致' : '存在偏离，评分不宜直接当毕业度看'}</span>`;
+      },
+    },
+    xAxis: {
+      type: 'value', min: 0, max: 1,
+      axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE,
+    },
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    series: [
+      {
+        type: 'bar',
+        barWidth: 10,
+        data: rows.map((r) => ({ value: +r.r.toFixed(3), d: r })),
+        itemStyle: { color: (p) => (p.value >= 0.9 ? CHART_COLORS.green : p.value >= 0.8 ? CHART_COLORS.acc : CHART_COLORS.orange) },
         label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11 },
       },
     ],
