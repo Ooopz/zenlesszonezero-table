@@ -9,7 +9,6 @@ import {
   PANEL_STAT_MAP,
   MULT_STATS,
   MAX_LEVEL_STATS,
-  PERCENT_STATS,
   TARGET_STATS,
   TARGET_PERCENTS,
   TARGET_UNITS,
@@ -39,12 +38,10 @@ export function setCalcContext(c) {
 export const panelOrder = PANEL_ORDER;
 /** 面板属性 → 对应哪些有效副词条类型（用于按有效属性配置高亮面板行） */
 export const panelStatMap = PANEL_STAT_MAP;
-export const multStats = MULT_STATS; // 百分比加成按 基础×(1+Σ%)
+const multStats = MULT_STATS; // 百分比加成按 基础×(1+Σ%)
 /** 满级行仅含的基础属性（wiki 成长表「满级」只有这三项），wiki 视图的「满级X」列与此对齐 */
 export const maxLevelStats = MAX_LEVEL_STATS;
 export const isDamageBonus = isDamageBonusName;
-/** 百分比面板属性（值 ≤1 表示百分比），供 plans 等按属性名判定百分比的模块复用 */
-export const percentStats = PERCENT_STATS;
 
 export const targetStats = TARGET_STATS;
 export const targetPercents = TARGET_PERCENTS;
@@ -355,7 +352,7 @@ export function resolveStatCurrent(R, s) {
   return current ?? null;
 }
 
-/** 达成率颜色：≥98% 绿，≥70% 黄，否则红 */
+/** 达成率颜色：≥97% 绿，≥90% 琥珀金，否则红 */
 export function rateColor(rate) {
   return rate >= 0.97 ? 'var(--green)' : rate >= 0.9 ? 'var(--acc2)' : 'var(--red)';
 }

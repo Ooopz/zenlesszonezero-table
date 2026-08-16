@@ -1,6 +1,9 @@
 // src/lib/workshopStats.js —— 工坊配装数据（workshop.json）汇总纯函数（Node 与浏览器共用）
-// 输入：workshop.json 的 entries（每条约一个玩家角色的配装：weapon/equips/panel）
-// 输出：音擎 / 驱动盘按「配装条目数」聚合，角色面板按「真实样本统计」（分位/离散/形态，见 distStats.computeDist）+ 属性相关。
+// 输入：workshop.json 的 entries（每条约一个玩家角色的配装：weapon/equips/panel/skills/rank/relic_point）
+// 输出（按角色/盘/玩家聚合）：computeWorkshopStats（音擎/驱动盘条目数 + 面板真实样本统计）、
+//   computePanelCorrelations（属性相关）、computeWorkshopDiscStats（驱动盘单盘统计）、
+//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankLayers/rankDist/skillStats/roleDiscStats）、
+//   2026-10 新增（roleCooccurrence/completeness/rankRelic/skillCombos）、discStatName、bin2D。
 import { computeDist, pearson, quantile } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
@@ -35,7 +38,7 @@ function panelStats(arr) {
  *            discs:{name:string,count:number,characters:string[]}[],
  *            panels:{name:string,stats:Object<string,Dist>}[]}}
  *   wengines/discs：按配装条目数聚合（同配装同套装只计一次），characters 为去重角色 id。
- *   panels：每角色每属性的真实样本统计（computeDist：count/min/max/range/mean/median/sd/IQR/p10-p99/skew/kurt，百分比属性已归一化为小数）。
+ *   panels：每角色每属性的真实样本统计（computeDist：count/min/max/range/mean/median/sd/IQR/p10/p25/p50/p75/p90/p95/p99/skew/kurt/whiskerLow/whiskerHigh/outliers/hist，百分比属性已归一化为小数）。
  */
 export function computeWorkshopStats(entries) {
   const wMap = new Map(); // 音擎名 -> {name, count, chars:Set}
@@ -183,11 +186,13 @@ function freqPairs(map) {
  * @param {{roleNameMap?:Map<string,string>}} [opts]  roleNameMap：role_id 字符串 → 角色规范名（未提供时 characters 落回 role_id）
  * @returns {{name:string, equips:number, characters:string[],
  *            main456:{4:{name,count}[],5:{name,count}[],6:{name,count}[]},
- *            mainDenom:{4:number,5:number,6:number}, subs:{name,count}[]}[]}
+ *            mainDenom:{4:number,5:number,6:number}, subs:{name,count}[],
+ *            effDist:Object<string,number>, subCombos:{combo:string[],count:number}[],
+ *            mainSubCross:{4:{主词条:{副词条:count}},5:{},6:{}}}[]}
  *   name：library 规范盘名；equips：物理盘数（每块盘计一次，不做条目内去重）；
  *   characters：使用角色（去重）；main456：主词条分布（两源同构，已套 mainStatName 兜底）；
  *   mainDenom：每槽盘数（主词条 ratio 分母）；
- *   subs：副词条全量（含无效词条，统一名）。
+ *   subs：合法副词条全量（已按 SUBSTAT_TYPE_SET 白名单过滤非法词条；含对角色无效但类型合法的词条，统一名）。
  *   仅含工坊中出现的盘；未解析到 library 的套装 / '其他' 跳过。
  */
 export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
@@ -291,8 +296,8 @@ export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
   });
 }
 
-// ---------- 面板属性对 2D 密度（方案二：暴击率×暴伤、攻击×暴伤 的玩家真实 trade-off） ----------
-// 前端拿不到逐条 panel（workshop.json 764MB 不下发），散点必须在聚合时降采样为 2D 密度网格。
+// ---------- 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤 的玩家真实 trade-off） ----------
+// 前端拿不到逐条 panel（workshop.json 2.13GB 不下发），散点必须在聚合时降采样为 2D 密度网格。
 // 网格内 x/y 均为各自 min-max 归一到 [0,1]（攻击与双暴量纲不同，归一后才同轴可比），
 // 原始范围存 xMin/xMax/yMin/yMax 供前端 tooltip 反算实际值。
 
@@ -363,7 +368,7 @@ export function computePanelScatter(entries, pairs) {
   return { perRole, global };
 }
 
-// ================= 新指标聚合（练度总览 / 角色画像） =================
+// ================= 练度指标聚合（全服总览 / 角色画像） =================
 
 /** 轻量分布（无直方图/箱线，供 rankLayers/skillStats 防 stats 膨胀）：count/min/max/mean/median/p10/p90 */
 function lightDist(vals) {

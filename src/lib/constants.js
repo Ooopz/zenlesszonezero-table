@@ -163,15 +163,13 @@ export const VIEWS = {
   MY_CHARS: 'mychars',
 };
 
-// ---------- 驱动盘槽位 ----------
-export const DISC_SLOTS = [1, 2, 3, 4, 5, 6];
-
 // ---------- 技能类型（统一 canonical 编号，双源映射后消费） ----------
 /** 统一技能类型表（canonical，游戏 2.0 技能槽顺序：普攻/闪避/支援/特殊/终结/核心，无独立「连携」——
  *  连携技与终结技同槽共享等级，官方数据 type3 同时含两者）。不同数据源的 type 编号体系不同，**消费前必须映射**：
  *  - 官方（characters.json 账号数据）与工坊 mys 源：0普攻/1特殊技/2闪避/3终结+连携(共享等级)/5核心/6支援技 → OFFICIAL_SKILL_TYPE
  *  - 工坊 2025 源（游戏内嵌原始，1.x 技能 ID）：0普攻/1闪避/2特殊技/3连携/5核心/6终结 → WS2025_SKILL_TYPE
- *  判别：mys 条目 skills 数组按 UI 顺序 [0,2,6,1,3,5]（weapon.main 非空），2025 按 ID 顺序 [0,1,2,3,5,6]（weapon.main 空）。
+ *  判别：优先读条目 `source` 字段（extractBuild 写时固化）；旧数据回退 skills 数组顺序——
+ *  mys 条目按 UI 顺序 [0,2,6,1,3,5]（weapon.main 非空），2025 按 ID 顺序 [0,1,2,3,5,6]（weapon.main 空）。
  *  聚合层 computeSkillStats 已按源归一化；前端匹配「我的等级」时官方 type 必走 OFFICIAL_SKILL_TYPE。 */
 export const SKILL_TYPES = [
   { key: 0, label: '普攻' },

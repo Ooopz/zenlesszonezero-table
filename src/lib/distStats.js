@@ -1,5 +1,5 @@
-// src/lib/distStats.js —— 分布统计纯函数（分位/离散/形态/相关/战力/均衡/聚类/档位匹配），Node 与浏览器共用
-// 供 workshopStats 聚合扩展、统计视图图表、个人对标共用。
+// src/lib/distStats.js —— 分布统计纯函数（分位/离散/形态/相关/战力/聚类/档位匹配），Node 与浏览器共用
+// 供 workshopStats 聚合、workshopStats 相关计算与测试使用。
 
 /** 已排序数组的分位数（线性插值）：假设 arr 升序已排序，q∈[0,1]。
  *  computeDist 等已知排序好的场景直接用此函数，避免 quantile 重复排序。 */
@@ -57,12 +57,6 @@ export function pearson(a, b) {
   return den ? num / den : null;
 }
 /** 值在分布中的百分位（0-100）：返回≤该值的比例 */
-export function percentileOf(sorted, v) {
-  if (!sorted.length) return null;
-  let i = 0;
-  while (i < sorted.length && sorted[i] <= v) i++;
-  return (i / sorted.length) * 100;
-}
 /** 玩家分布统计对象：集中/离散/分位/形态 + 离群值排除（箱线图 IQR 1.5 规则）。供 workshopStats panelStats 复用 */
 export function computeDist(arr) {
   if (!arr.length) return { count: 0, min: null, max: null, mean: null, median: null };
@@ -152,21 +146,6 @@ export function computePowerScore(attrVals, medianMap, weights) {
     score += (v / m) * w;
   }
   return score;
-}
-/** 属性配比：{属性: 比例}（对总和归一化） */
-export function computeRatio(attrVals, attrs) {
-  const sum = (attrs || []).reduce((s, a) => s + (attrVals[a] || 0), 0);
-  if (!sum) return {};
-  const o = {};
-  for (const a of attrs || []) o[a] = (attrVals[a] || 0) / sum;
-  return o;
-}
-/** 属性均衡度：多属性值的变异系数（越小越均衡） */
-export function computeBalance(attrVals, attrs) {
-  const vals = (attrs || []).map((a) => attrVals[a]).filter((x) => x != null && x > 0);
-  if (vals.length < 2) return null;
-  const m = vals.reduce((s, v) => s + v, 0) / vals.length;
-  return cv(vals, m);
 }
 /** 简单 k-means 聚类（确定性初始化：前 k 个点作质心）。points 为等长数值向量，返回每项簇编号 */
 export function kmeans(points, k = 3, maxIter = 50) {

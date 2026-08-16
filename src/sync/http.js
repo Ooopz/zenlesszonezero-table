@@ -48,8 +48,6 @@ export async function requestJson(url, { headers = {}, cookies = null, retry = n
 
 /** 重试策略预设（复刻三脚本现状） */
 export const retry = {
-  /** 不重试（characters：账号接口失败即抛，避免拖慢） */
-  none: null,
   /** 简单重试（library 原 fetchJSON）：网络/HTTP 错误，间隔 800ms×(i+1) */
   simple(times = 3) {
     return {

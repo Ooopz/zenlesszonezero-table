@@ -1,4 +1,4 @@
-// test/workshop-extract.test.js —— 工坊提取扩展：技能等级（mys/2025 两源）+ 深渊战绩裁剪（extractAbyss）
+// test/workshop-extract.test.js —— 工坊提取：技能等级（mys/2025 两源）+ 面板/音擎/驱动盘同构
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { extractBuild } from '../src/sync/workshop.js';

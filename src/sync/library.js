@@ -112,9 +112,8 @@ function parseComponentData(comp) {
 }
 
 /** 从 HTML 文本里抽出「名称：值」对，返回 {规范名: 数值}。值带 % 转成小数；
- *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力）。
- *  导出供测试与潜在复用（wiki 成长表文本解析）。 */
-export function parseStatPairs(html) {
+ *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力）。 */
+function parseStatPairs(html) {
   const text = stripHtml(html);
   const out = {};
   const re = /([一-鿿A-Za-z]+)[：:]\s*(-?[\d.]+%?)/g;
@@ -126,9 +125,8 @@ export function parseStatPairs(html) {
 }
 
 /** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值}。
- *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。
- *  导出供测试与潜在复用（套装/音擎文本解析）。 */
-export function parseSignedStat(text) {
+ *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。 */
+function parseSignedStat(text) {
   const s = stripHtml(text);
   const m = s.match(/([一-鿿A-Za-z]+)([+\-＋－])([\d.]+%?)/);
   if (!m) return null;
@@ -146,7 +144,7 @@ async function fetchContentList() {
     retry: retry.simple(),
   });
   const children = jso.data.list[0].children;
-  // 实测分组: [0]=角色 [1]=音擎 [2]=邦布 [3]=驱动盘；用数量+抽样兜底，尽量不写死索引
+  // 实测分组固定：[0]=角色 [1]=音擎 [2]=邦布 [3]=驱动盘（按固定索引取）
   const groups = [
     { label: '角色', key: 'characters', idx: 0 },
     { label: '音擎', key: 'wengines', idx: 1 },
@@ -238,8 +236,6 @@ function fetchCharacterTags(page) {
   return out;
 }
 
-/** 音擎：特效效果说明（含各精炼档位数值）。
- *  结构不统一：有的「音擎效果」表单独一行是特效，有的特效与「满级面板」挤在同一格。 */
 /** 在 HTML 里定位特效段落的起点（含特效关键词的 <p>/<div> 标签位置） */
 function findEffectStart(html) {
   const m = /(对于|装备者|自身|队伍|触发|发动|获得|进入|造成的)/.exec(html);
@@ -248,6 +244,8 @@ function findEffectStart(html) {
   return before >= 0 ? before : m.index;
 }
 
+/** 音擎：特效效果说明（含各精炼档位数值）。
+ *  结构不统一：有的「音擎效果」表单独一行是特效，有的特效与「满级面板」挤在同一格。 */
 function fetchWengineEffect(page) {
   for (const m of page.modules || []) {
     for (const c of m.components || []) {
@@ -328,7 +326,6 @@ function fetchWengineStats(page) {
   };
 }
 
-/** 驱动盘：fe_ext.c_46 的 2/4 件套效果 */
 /** 驱动盘圆形光盘图标：modules 里出现次数最多的图片（圆形图标多尺寸变体，区别于方形主图 icon_url）。
  *  规律：驱动盘页面 modules 里圆形光盘图有 6 个尺寸变体（出现 6 次），其他图出现 2 次。 */
 function fetchDiscRound(page) {
@@ -351,6 +348,7 @@ function fetchDiscRound(page) {
   return bestN >= 3 ? best : null;
 }
 
+/** 驱动盘：fe_ext.c_46 的 2/4 件套效果 */
 function fetchDiscSet(page) {
   const fe = parseFe(page);
   const list = fe.c_46?.table?.list;

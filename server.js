@@ -1,5 +1,5 @@
 // server.js —— 本地服务器
-// 作用：① 提供服务页面 index.html 与前端模块；② 提供「更新数据库」「更新我的角色」两个接口，
+// 作用：① 提供服务页面 index.html 与前端模块；② 提供「数据库/我的角色/推荐方案/工坊配装」四个同步接口，
 //       供网页一键更新（账号接口 CORS 受限，浏览器直连不了，必须经本地服务器代理）；
 //       ③ 提供 /api/data 让前端读取 data/*.json 数据；
 //       ④ cookie 缓存到本地文件，更新时无需反复粘贴。
@@ -13,11 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { openBrowser } from './src/lib/node.js';
 import { parseCookies, serializeCookies } from './src/lib/util.js';
 import { SYNC_KINDS } from './src/lib/constants.js';
-import { fetchLibrary } from './src/sync/library.js';
+import { fetchLibrary, localizeDataFiles } from './src/sync/library.js';
 import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
 import { fetchAllPlans } from './src/sync/plans.js';
 import { fetchWorkshopData } from './src/sync/workshop.js';
-import { localizeDataFiles } from './src/sync/library.js';
 
 const PORT = process.env.PORT || 8718;
 // 项目根目录（server.js 位于根目录）
@@ -85,7 +84,6 @@ function respond(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-/** 读 data/ 下的 JSON（不存在或非法时返回 fallback） */
 /** 数据文件最后修改时间（ms；不存在返回 null），供同步中心展示数据新鲜度 */
 function mtimeOf(name) {
   try {
@@ -95,6 +93,7 @@ function mtimeOf(name) {
   }
 }
 
+/** 读 data/ 下的 JSON（不存在或非法时返回 fallback） */
 function readDataJson(name, fallback) {
   try {
     return JSON.parse(fs.readFileSync(path.join(ROOT, 'data', name), 'utf-8'));
@@ -107,7 +106,7 @@ function readDataJson(name, fallback) {
 
 /** 跑一次同步：互斥锁 + 进度上报 + 错误处理 + cookie 来源统一（请求体 > 本地缓存）。
  *  runSync(cookies, onProgress) 负责调用 fetch* 并返回 { stats }；内部自行写入 data/*.json。
- *  progressShape：'step' 表示 fetch* 上报 {step,done,total}（library）；'count' 表示上报 (done,total)（characters/plans）。 */
+ *  progressShape：'step' 表示 fetch* 上报 {step,done,total}（library/workshop）；'count' 表示上报 (done,total)（characters/plans）。 */
 async function runSync(
   req,
   res,
@@ -163,7 +162,7 @@ const cookieFromBodyOrCache = (body) => {
   return c || readCookieCache();
 };
 
-// 三个同步动作（同步耗时较长，请求期间页面显示「正在同步…」）。fetch* 内部已写入 data/*.json。
+// 四个同步动作（同步耗时较长，请求期间页面显示「正在同步…」）。fetch* 内部已写入 data/*.json。
 const syncLibraryHandler = (req, res) =>
   runSync(req, res, {
     kind: SYNC_KINDS.LIBRARY,
@@ -273,7 +272,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`\n  绝区零配装面板 本地服务器已启动`);
   console.log(`  浏览器打开: http://localhost:${PORT}`);
-  console.log(`  网页上「更新数据库」「更新我的角色」即为一键更新；cookie 会缓存在 data/.cookie.json`);
+  console.log(`  网页上「更新数据库/我的角色/推荐方案/工坊配装」即为一键更新；cookie 会缓存在 data/.cookie.json`);
   console.log(`  按 Ctrl+C 停止\n`);
   openBrowser(`http://localhost:${PORT}`);
 });

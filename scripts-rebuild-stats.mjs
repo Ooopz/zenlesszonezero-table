@@ -22,11 +22,17 @@ let weightJson;
 try { weightJson = JSON.parse(fs.readFileSync('data/workshop-weights.json', 'utf8')).weights || null; } catch { weightJson = null; }
 console.log(`weightJson: ${weightJson ? Object.keys(weightJson).length : 0} 个角色`);
 
-// 3. 重算 stats（流式遍历，约 2-4 分钟）
+// 3. 重算 stats（流式遍历，约 2-4 分钟）；totalEntries 从 workshop.json 头部 meta 读取（保持与真实条目数一致）
 console.log('重算 workshop-stats.json …');
 const t0 = Date.now();
-const stats = buildWorkshopStats(roleNameMap, weightJson, 605665);
-console.log(`完成: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+let entryCount = -1;
+try {
+  const head = fs.readFileSync('data/workshop.json', 'utf8').slice(0, 256);
+  const m = /"meta":\s*\{[^}]*?"entryCount"\s*:\s*(\d+)/.exec(head);
+  if (m) entryCount = Number(m[1]);
+} catch { /* 读取失败时保持 -1（meta.entries 写 -1） */ }
+const stats = buildWorkshopStats(roleNameMap, weightJson, entryCount);
+console.log(`完成: ${((Date.now() - t0) / 1000).toFixed(1)}s（meta.entries=${entryCount}）`);
 console.log(`panels: ${stats.panels.length} 角色 | wengines: ${stats.wengines.length} | discs: ${stats.discs.length} | discDetails: ${stats.discDetails.length}`);
-const p = stats.panels.find((x) => x.name === '1091');
-console.log(`抽查 1091 攻击力样本: ${p?.stats['攻击力']?.count}（完整数据应为 33851 附近）`);
+const p = stats.panels[0];
+console.log(`抽查 ${p?.name} 样本: ${p ? Object.values(p.stats)[0]?.count : '无'}（对比上次重算 49692 附近；若明显偏离说明 workshop.json 被改动）`);

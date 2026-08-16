@@ -9,11 +9,12 @@
 //       HTTPS_PROXY / ALL_PROXY / HTTP_PROXY（仅 api.zzzmap.com 走代理，其余请求不受影响，
 //       见 src/sync/proxy.js）。Node 24+ 也可用原生 `node --use-env-proxy`。
 // 排名收集：角色级并发 + 每角色 7 影画组内并行翻页（实测 6.4× 提速）。
-// 输出：data/workshop.json（配装条目）、data/workshop-stats.json（汇总，自动生成）
+// 输出：data/workshop.json（配装条目）、data/workshop-grad.json（全服统计）、
+//       data/workshop-stats.json（汇总）、data/workshop-weights.json（角色默认流派权重）
 // 断点续爬：以 workshop.json 实际内容为准（文件里没有的 uid 自动重爬），写文件原子化（tmp+rename）；
 // 不再使用进度文件（旧 data/.workshop-progress.json 已废弃，可删除）
-// 注：本文件整合了面板计算（原 workshop-panel.js）、汇总生成（原 workshop-stats.js）；
-//     workshop-grad.js（全服统计）独立保留。提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算）。
+// 注：本文件整合了面板计算（原 workshop-panel.js）、汇总生成（原 workshop-stats.js）、
+//     全服统计（原 workshop-grad.js，fetchWorkshopGrad 一并并入）。提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算）。
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -152,9 +153,6 @@ async function apiPost(path, data) {
   });
 }
 
-// 供 workshop-grad.js（全服统计）复用
-export { apiGet, apiPost, filterParams, makeSign, sleep };
-
 // ---------- 参数 ----------
 const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模式）
 // 每影画拉多少条：实测每角色×影画档的排行榜上限 ≈298 去重 uid（offset≥300 返回空），
@@ -163,7 +161,7 @@ const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模�
 // type 变体（weapon/relic/player/all）返回空；uid 自增扫描不可行（uid 空间 10^7~1.5×10^9，
 // 无效 uid 也返回 code:0 data:null 需完整请求才能判定，命中率极低且易触发风控）。
 const PER_RANK = Number(process.argv[3] || 300); // 每影画拉多少条（默认 300 = 榜单全量）
-// v3 配装请求并发（默认 10）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
+// v3 配装请求并发（默认 6）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
 // 调高可加速配装爬取（响应大、吃带宽，注意工坊 API 限流）
 const CONCURRENCY = Number(process.argv[4] || 6);
 
@@ -195,7 +193,7 @@ const PART_FLUSH = 10000; // 内存条目达到该数即落盘一批（常驻内
 /** 把内存中的 entries 追加写进 PART 裸流并**清空数组**（partCount 累计已落盘条数）。
  *  ⚠️ 必须清空：不清空会让 entries 长度持续 ≥ 阈值，每个 build 都触发 flush，
  *  每次重写全部条目导致 partCount 虚高（O(n²)）与 PART 写放大（曾出现 870 万虚高计数）。 */
-export function flushPart(entries, partCount, file = PART_FILE) {
+function flushPart(entries, partCount, file = PART_FILE) {
   if (!entries.length) return partCount;
   const fd = fs.openSync(file, 'a');
   try {
@@ -215,7 +213,7 @@ export function flushPart(entries, partCount, file = PART_FILE) {
 /** 流式复制 src（{"meta":...,"entries":[...]} 结构）的 entries 到 outFd：
  *  用 streamJsonArrayElements 逐条解析后原样写入——不能做字符级 slice 块切分
  *  （条目含中文 UTF-8 多字节字符，块边界切断会损坏 JSON，曾致解析卡死 OOM）。 */
-export function copyEntriesTo(outFd, srcFile) {
+function copyEntriesTo(outFd, srcFile) {
   let first = true;
   for (const raw of streamJsonArrayElements(srcFile)) {
     fs.writeSync(outFd, first ? '[' : ',');
@@ -225,7 +223,7 @@ export function copyEntriesTo(outFd, srcFile) {
 }
 
 /** 流式复制 PART 裸流到 outFd（内容即元素逗号流，无头尾；整块搬移，无字符切分问题） */
-export function appendPartTo(outFd, file = PART_FILE) {
+function appendPartTo(outFd, file = PART_FILE) {
   const buf = Buffer.alloc(1 << 20);
   const fd = fs.openSync(file, 'r');
   try {
@@ -239,7 +237,7 @@ export function appendPartTo(outFd, file = PART_FILE) {
 }
 
 /** 流式遍历 workshop.json 的 entries（generator）：聚合函数 for...of 天然兼容，不把大数组放内存 */
-export function* iterWorkshopEntries() {
+function* iterWorkshopEntries() {
   for (const raw of streamJsonArrayElements(OUT_FILE)) yield JSON.parse(raw);
 }
 
@@ -488,7 +486,7 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   const panelCorr = computePanelCorrelations(iterWorkshopEntries()); // 属性相关（按角色，同条目配对）
   const discDetails = computeWorkshopDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap }); // 驱动盘单盘真实统计
   const panelScatter = computePanelScatter(iterWorkshopEntries()); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-  // 新指标：练度评分 / 影画分层与占比 / 技能练度 / 玩家画像 / 角色盘画像
+  // 练度指标：评分分布 / 影画分层 / 影画占比 / 技能练度 / 角色盘画像
   const relicStats = computeRelicStats(iterWorkshopEntries());
   const rankLayers = computeRankLayers(iterWorkshopEntries());
   const rankDist = computeRankDist(iterWorkshopEntries());
@@ -785,13 +783,12 @@ async function fetchRankRows(itemId, rank) {
   return rows;
 }
 
-/** 全量爬取（排名 + 配装） */
-/** 全量更新：排名 + 配装（workshop.json）+ 全服统计（workshop-grad.json）+ 汇总（workshop-stats.json）。
+/** 全量更新：排名 + 配装（workshop.json）+ 全服统计（workshop-grad.json）+ 汇总（workshop-stats.json）+ 权重（workshop-weights.json）。
  *  onProgress({step, done, total}) 供 server 进度轮询。 */
 export async function fetchWorkshopData(onProgress) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   console.log(
-    `开始爬取：前 ${MAX_ROLES} 角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘）\n`
+    `开始爬取：前 ${MAX_ROLES} 角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘且全 R5）\n`
   );
   const { ctx, roles } = await buildCtx();
   const targets = roles.slice(0, MAX_ROLES);
@@ -850,7 +847,7 @@ export async function fetchWorkshopData(onProgress) {
     try {
       const j = await apiPost('/api/v1/user_role/v3', { uid, refresh: false, type: 'ranking' });
       const nick = j.data && j.data.nick_name;
-      // 爬该 uid 下所有角色（不只排名上榜的角色），每角色一条；排除未毕业（角色<60 / 音擎<60 / 驱动盘非 6 块 15 级）
+      // 爬该 uid 下所有角色（不只排名上榜的角色），每角色一条；排除未毕业（角色<60 / 音擎<60 / 驱动盘非 6 块 15 级 / 非全 R5）
       const roles = (j.data && j.data.roles) || [];
       for (const role of roles) {
         if (!isMaxedRole(role)) continue;
@@ -923,7 +920,7 @@ export async function fetchWorkshopData(onProgress) {
     })
   );
 
-  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails 输出角色名）
+  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails / roleDiscStats 输出角色名）
   const roleNameMap = new Map(
     roles.map((r) => [
       String(r.item_id),

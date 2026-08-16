@@ -489,7 +489,7 @@ export function initUi() {
       render();
     },
     selectRole: (name) => {
-      setSelectedRole(name); // 角色详情/分布分析面板的角色下拉
+      setSelectedRole(name); // 角色面板的角色下拉
       render();
     },
     selectDisc: (name) => {

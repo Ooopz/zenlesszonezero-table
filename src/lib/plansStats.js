@@ -1,5 +1,5 @@
 // src/lib/plansStats.js —— 从 plans.json 统计每角色 Top 音擎 / 驱动盘套装（结构与 workshop-grad 一致），纯函数（Node 与浏览器共用）
-// 用途：工坊配装面板里与 workshop-grad（全服实况）并排对比「方案推荐」侧数据，并分析差异。
+// 用途：角色面板「角色配装对标」卡片里与 workshop-grad（全服实况）并排对比「方案推荐」侧数据，并分析差异。
 
 /** 组合内套装件数（num/cnt 字段兼容） */
 const setCount = (s) => Number(s?.num ?? s?.cnt ?? 0);

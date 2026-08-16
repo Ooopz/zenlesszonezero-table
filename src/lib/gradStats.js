@@ -1,7 +1,7 @@
 // src/lib/gradStats.js —— 从 workshop-grad.json 聚合的全服真实使用统计（纯函数，Node 与浏览器共用）
-// 数据源：data/workshop-grad.json（工坊 grad_stat 接口，全服累计占比，非前100采样）。
-// 与 workshopStats.js（基于 workshop.json 前100爬取的高段样本）口径不同，本模块是「全服真实」视角。
-// 用途：统计视图「音擎/驱动盘」面板的「全服使用」对比列。
+// 数据源：data/workshop-grad.json（工坊 grad_stat 接口，全服累计占比）。
+// 与 workshopStats.js（基于 workshop.json 排行榜全量上榜 uid 的高练度标杆池）口径不同，本模块是「全服真实」视角。
+// 注意：前端「角色配装对标」卡片直接读 workshopGrad.roles（不经本模块）；computeGradStats 保留模块与测试。
 
 /** 可用的音擎/套装/组合名：非空、非'其他'（'其他' 只计入总量分母，不单独成行） */
 const usable = (name) => typeof name === 'string' && name.trim() !== '' && name !== '其他';

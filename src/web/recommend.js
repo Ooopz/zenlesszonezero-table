@@ -1,11 +1,13 @@
-// src/web/recommend.js —— 统计视图（原推荐）：五个二级子面板（角色面板 / 角色配装 / 驱动盘 / 角色配队 / 角色总览）
-// 数据源：plans.json（方案推荐）+ workshop-grad.json（全服真实占比，工坊 grad_stat 接口）+ library.json。
-// 供「角色面板」/「角色总览」作玩家样本对标（不当作全服分布）。
+// src/web/recommend.js —— 统计视图：三个二级子面板（角色面板 / 驱动盘 / 全服总览）
+// 数据源：plans.json（方案推荐）+ workshop-grad.json（全服真实占比，工坊 grad_stat 接口）
+//       + workshop-stats.json（玩家样本聚合）+ characters.json（我的角色）。
+// 供「角色面板」/「全服总览」作玩家样本对标（高练度标杆池，不当作全服分布）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序。
 import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex } from './data.js';
-import { CHAR_ALIASES, computeRecTierStats } from '../lib/panelBench.js';
+import { computeRecTierStats } from '../lib/panelBench.js';
+import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
-import { renderDiscStats, resetDiscStatsSort } from './discstats.js';
+import { renderDiscStats } from './discstats.js';
 import { escapeHtml, escapeJsAttr, renderRichText, formatValue, statEntries, romanNumeralUnicode } from '../lib/util.js';
 import { resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
 import { createSort } from '../lib/sort.js';
@@ -29,7 +31,6 @@ export let recommendTab = 'detail';
 export function setRecommendTab(key) {
   recommendTab = key;
   recSort.reset(); // 切子面板清空统计视图排序
-  resetDiscStatsSort(); // 驱动盘面板排序也复位
 }
 
 // 排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js；各面板共用）
@@ -54,7 +55,7 @@ const PANEL_RENDERERS = {
 function emptyState(msg, hint = '') {
   return `<div class="empty">${msg}${hint ? `<br>${hint}` : ''}</div>`;
 }
-/** 渲染可排序表格（rec-table 骨架；内容列复用 .ds-count/.ds-main/.ds-chars 等类） */
+/** 渲染可排序表格（rec-table 骨架；内容列复用 .ds-main/.ds-dim/.ds-rolecnt 等类） */
 function table(headers, rows, sortable = new Set(), className = '') {
   const head = headers
     .map((h) => {
@@ -176,7 +177,7 @@ const normCombo = (x) => {
   if (!x?.sets || !x.sets.length) return x;
   return { ...x, ...orderComboSets4First(x.sets) };
 };
-/** 角色配装对标（单角色）：工坊实况 vs 方案推荐的音擎/套装对比（原「角色配装」面板按角色下钻到「角色面板」）。 */
+/** 角色配装对标（单角色）：工坊实况 vs 方案推荐的音擎/套装对比（角色面板内卡片） */
 function gradBenchHtml(name) {
   const data = workshopGrad.roles || [];
   if (!data.length) return '';
@@ -244,7 +245,7 @@ function gradBenchHtml(name) {
   );
 }
 
-// ---------- 对标总览（全局总览层：达标热力图 / 共识度散点） ----------
+// ---------- 全服总览（全局总览层：提升清单 / 达标热力图 / 毕业度矩阵 / 共识度 / 完成度 / 影画×评分） ----------
 /** 我的值在玩家分布中的近似百分位（分位插值，处理零宽区间/零分位避免 NaN；无分布返回 null） */
 function approxPercentile(v, dist) {
   if (v == null || !dist || dist.p10 == null || dist.p99 == null) return null;
@@ -266,17 +267,15 @@ function approxPercentile(v, dist) {
   }
   return 50;
 }
-/** 密度散点卡片（方案二）：对每个属性对网格注册一张密度散点图并返回卡片 HTML（角色面板/角色总览共用）。
- *  fullWidth 时卡片占整行（单角色图），否则流式排列（全局图）。
+/** 密度散点卡片：对每个属性对网格注册一张密度散点图并返回卡片 HTML（角色面板 perRole 用，卡片占整行）。
  *  标题只留属性对（短名），详细说明放悬浮。 */
-function scatterCardsHtml(prefix, grid, subtitle, fullWidth) {
+function scatterCardsHtml(prefix, grid, subtitle) {
   return Object.entries(grid)
     .map(([key, g]) => {
       const id = `${prefix}-${key}`;
       registerChart(id, densityScatterOption(g, `${g.xName} × ${g.yName}`));
-      const cls = fullWidth ? ' style="grid-column:1/-1"' : '';
       const tip = `<b>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</b><br><span style="color:var(--dim)">${escapeHtml(subtitle)}：2D 密度散点——颜色越亮密度越高（每点=一位玩家的该属性组合），悬浮数据点可看坐标</span>`;
-      return `<div class="chart-card"${cls}><h3 data-detail="${escapeHtml(tip)}">${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</h3>${chartBox(id, 420)}</div>`;
+      return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</h3>${chartBox(id, 420)}</div>`;
     })
     .join('');
 }
@@ -287,6 +286,11 @@ function renderOverview() {
   const tiers = computeRecTierStats(plans);
   const myCalc = new Map(myCharacters.map((c) => [c.name, c.calculate()]));
   const roleNames = Object.values(plans).map((v) => v.name);
+  /** 平均落后度（50 − 百分位，仅有效格）：行排序依据 */
+  const avgLag = (row) => {
+    const vals = row.cells.filter((c) => c && c.pct != null).map((c) => 50 - c.pct);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
+  };
 
   // 1. 达标热力图：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
   //    行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
@@ -310,11 +314,6 @@ function renderOverview() {
     })
     .filter((r) => r.cells.some((c) => c))
     .sort((a, b) => avgLag(b) - avgLag(a));
-  /** 平均落后度（50 − 百分位，仅有效格）：行排序依据 */
-  function avgLag(row) {
-    const vals = row.cells.filter((c) => c && c.pct != null).map((c) => 50 - c.pct);
-    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
-  }
 
   // 1b. 提升清单：我的角色 × 属性，缺口 = 推荐中档 − 我的值，按 缺口 × 落后度 排序取 Top
   const upgradeRows = [];
@@ -465,7 +464,7 @@ function renderOverview() {
   </div>`;
 }
 
-// ---------- 角色详情 / 分布分析（角色选择） ----------
+// ---------- 角色详情 / 角色面板（角色选择） ----------
 /** 详情/分布面板当前选中角色（默认首个有玩家分布的角色） */
 let selectedRole = '';
 export function setSelectedRole(name) {
@@ -481,7 +480,7 @@ function roleSelectHtml(current) {
   return `<div class="chart-select"><label>角色</label><select onchange="ZZZ.selectRole(this.value)">${opts}</select></div>`;
 }
 
-// ---------- 角色详情（单角色详情层：小提琴+箱线 / 配比雷达 / 对标仪表盘） ----------
+// ---------- 角色面板（单角色详情层：小提琴+箱线 / 推荐三档增强图 / 技能对标与组合 / 配装对标 / 配队亲和 / 密度散点） ----------
 function renderRoleDetail() {
   if (!Object.keys(plans || {}).length)
     return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
@@ -633,11 +632,7 @@ export function renderRecommend() {
   return `<div class="wiki"><div class="wiki-tabs">${tabs}</div>${body}</div>`;
 }
 
-// ================= 练度总览（并入「全服总览」）：评分 / 影画 / 技能 / trade-off =================
-
-// 技能类型统一走 constants.SKILL_TYPES（canonical：普攻/闪避/支援/特殊/终结/核心）。聚合层（computeSkillStats）
-// 已按源把工坊 type 归一化为 canonical（mys=官方语义、2025=1.x ID 语义）；官方（账号）type 匹配我的等级时
-// 经 OFFICIAL_SKILL_TYPE 映射（官方 1特殊技→3、2闪避→1、3终结/连携→4、6支援→2）。
+// ================= 练度图（并入「全服总览」）：评分 / 影画 / trade-off =================
 
 /** 属性相关（panelCorr）→ HTML 表格（角色 × 属性对，色标正负）。
  *  列序固定（不依赖数据键序，数据缺列时显示 —）。 */
@@ -730,7 +725,11 @@ function progressCardsHtml() {
   return cards.join('');
 }
 
-// ================= 角色面板增强：技能对标 + 提升优先级清单 =================
+// ================= 角色面板增强：技能对标与组合（提升清单在全服总览） =================
+
+// 技能类型统一走 constants.SKILL_TYPES（canonical：普攻/闪避/支援/特殊/终结/核心）。聚合层（computeSkillStats）
+// 已按源把工坊 type 归一化为 canonical（mys=官方语义、2025=1.x ID 语义）；官方（账号）type 匹配我的等级时
+// 经 OFFICIAL_SKILL_TYPE 映射（官方 1特殊技→3、2闪避→1、3终结/连携→4、6支援→2）。
 
 /** 我的技能 vs 玩家池技能等级分布（skillStats.dist）：每技能一个柱状子图，我的等级柱高亮金色。
  *  我的等级匹配：官方（账号）type 经 OFFICIAL_SKILL_TYPE 映射到 canonical 再对子图键（工坊已归一化）。 */

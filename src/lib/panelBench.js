@@ -19,9 +19,6 @@ export function traitKeyStats(trait) {
   return TRAIT_KEY_STATS[trait] || ['攻击力', '暴击率', '暴击伤害'];
 }
 
-/** 兼容旧引用：角色名别名已并入 src/lib/names.js 的统一别名表（维琳娜/星徽·比利/提缇/11号） */
-export { CHAR_ALIASES };
-
 /** 数值聚合：min / max / mean / median / count */
 function agg(vals) {
   if (!vals.length) return { count: 0, min: null, max: null, mean: null, median: null };

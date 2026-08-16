@@ -6,7 +6,7 @@
 //
 // 数据源: act.mihoyo.com 的「养成指南」H5（character-builder）背后接口
 //   nap_cultivate_tool 的 user/feed（「切换方案」长列表，分页）+ avatar_simple_info /
-//   plan_detail（补齐非列表方案）。feed 每角色可返回大量方案，按顺序取前 50 个。
+//   plan_detail（补齐非列表方案）。feed 翻页直到 end 全量爬取（防死循环上限 MAX_PLANS=5000）。
 //   每个方案含：推荐面板(low/mid/high 三档)、推荐音擎(主+备)、驱动盘套装、
 //   4/5/6 号位主词条、副词条推荐、技能等级、配队。
 //
@@ -119,7 +119,7 @@ function substatKey(name) {
   return normalizeStatKey(substatName(name));
 }
 
-/** 单个方案 → 精简结构。item 结构在 beta_plan_list 与 plan_detail 返回中一致。 */
+/** 单个方案 → 精简结构。item 结构在 feed 与 plan_detail 返回中一致。 */
 export function extractPlan(p) {
   const item = p.item || {};
   const mainProps = item.equip || {};
@@ -128,7 +128,7 @@ export function extractPlan(p) {
     name: p.name || '',
     desc: p.desc || '',
     releasedAt: p.released_at || '',
-    // 推荐面板：low/mid/high 三档（低配/毕业/高配）。percent 按属性名判定（见 PERCENT_PANEL）
+    // 推荐面板：low/mid/high 三档（低配/毕业/高配）。percent 按属性名判定（见 PERCENT_STATS）
     panel: (item.avatar || []).map((a) => {
       const name = normalizeStatKey(a.property_name);
       const percent = isPercentPanel(name);

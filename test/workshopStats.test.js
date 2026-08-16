@@ -135,7 +135,7 @@ test('真实数据冒烟：workshop.json 全量聚合不抛错、计数合法', 
   const grad = loadDataFile('workshop-grad.json', 'node src/sync/workshop.js');
   const discIndex = buildNameIndex(lib.discs, CATEGORY.DISC);
   const roleNameMap = new Map((grad.roles || []).map((r) => [String(r.item_id), r.name]));
-  // workshop.json 可达数百 MB，一次性 readFileSync 会超 V8 字符串上限（Invalid string length），
+  // workshop.json 达 2.13GB，一次性 readFileSync 会超 V8 字符串上限（Invalid string length），
   // 用流式读抽样前 5 万条验证聚合逻辑（全量聚合在同步脚本 buildWorkshopStats 里做）
   const entries = [];
   try {
