@@ -30,8 +30,8 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    // 根目录辅助脚本（Node，如 scripts-*.mjs）
-    files: ['*.mjs'],
+    // 辅助脚本（Node）：scripts/ 下的运维脚本
+    files: ['*.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   {

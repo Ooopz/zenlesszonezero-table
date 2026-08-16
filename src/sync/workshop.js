@@ -18,21 +18,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import {
-  computeWorkshopStats,
-  computePanelCorrelations,
-  computeWorkshopDiscStats,
-  computePanelScatter,
-  computeRelicStats,
-  computeRankLayers,
-  computeRankDist,
-  computeSkillStats,
-  computeRoleDiscStats,
-  computeRoleCooccurrence,
-  computeCompleteness,
-  computeRankRelic,
-  computeSkillComboStats,
-} from '../lib/workshopStats.js';
+import { computeAllWorkshopStats } from '../lib/workshopStats.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
@@ -193,7 +179,7 @@ const PART_FLUSH = 10000; // 内存条目达到该数即落盘一批（常驻内
 /** 把内存中的 entries 追加写进 PART 裸流并**清空数组**（partCount 累计已落盘条数）。
  *  ⚠️ 必须清空：不清空会让 entries 长度持续 ≥ 阈值，每个 build 都触发 flush，
  *  每次重写全部条目导致 partCount 虚高（O(n²)）与 PART 写放大（曾出现 870 万虚高计数）。 */
-function flushPart(entries, partCount, file = PART_FILE) {
+export function flushPart(entries, partCount, file = PART_FILE) {
   if (!entries.length) return partCount;
   const fd = fs.openSync(file, 'a');
   try {
@@ -212,28 +198,55 @@ function flushPart(entries, partCount, file = PART_FILE) {
 
 /** 流式复制 src（{"meta":...,"entries":[...]} 结构）的 entries 到 outFd：
  *  用 streamJsonArrayElements 逐条解析后原样写入——不能做字符级 slice 块切分
- *  （条目含中文 UTF-8 多字节字符，块边界切断会损坏 JSON，曾致解析卡死 OOM）。 */
+ *  （条目含中文 UTF-8 多字节字符，块边界切断会损坏 JSON，曾致解析卡死 OOM）。
+ *  只写元素与分隔逗号，**不写数组括号**——括号由调用方统一负责，
+ *  否则与调用方写的 '[' 叠加成 `"entries":[[…`（曾导致落盘文件不是合法 JSON，
+ *  仅因 streamJsonArrayElements 解析宽松而长期未被发现）。
+ *  @returns {number} 实际复制的条目数（调用方据此决定是否需要补分隔逗号） */
 function copyEntriesTo(outFd, srcFile) {
-  let first = true;
+  let n = 0;
   for (const raw of streamJsonArrayElements(srcFile)) {
-    fs.writeSync(outFd, first ? '[' : ',');
+    if (n++) fs.writeSync(outFd, ',');
     fs.writeSync(outFd, raw);
-    first = false;
   }
+  return n;
 }
 
-/** 流式复制 PART 裸流到 outFd（内容即元素逗号流，无头尾；整块搬移，无字符切分问题） */
+/** 流式复制 PART 裸流到 outFd（内容即元素逗号流，无头尾）。
+ *  ⚠️ 必须按**字节**搬运：buf.toString('utf8', 0, n) 会独立解码每个 1MB 块，
+ *  跨块边界的中文字符被截断成 U+FFFD（2.2GB 文件 ≈ 2100 处损坏）。 */
 function appendPartTo(outFd, file = PART_FILE) {
   const buf = Buffer.alloc(1 << 20);
   const fd = fs.openSync(file, 'r');
   try {
     let n;
     while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
-      outFd && fs.writeSync(outFd, buf.toString('utf8', 0, n));
+      if (outFd) fs.writeSync(outFd, buf, 0, n); // Buffer 重载：原样写字节，不经解码
     }
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/** 合并写出 workshop.json（原子：tmp + rename）：meta + 旧文件 entries（流式复制）+ PART 裸流。
+ *  数组括号在此统一负责——helper 只写元素与分隔逗号，避免重复写 '[' 产生非法 JSON。 */
+export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile }) {
+  const tmp = `${outFile}.tmp`;
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeSync(fd, `{"meta":${JSON.stringify(meta)},"entries":[`);
+    // 用实际复制条数（而非 existsSync）判断是否补分隔逗号——旧文件存在但为空时不能写 `[,`
+    let copied = 0;
+    if (oldFile && fs.existsSync(oldFile)) copied = copyEntriesTo(fd, oldFile);
+    if (partCount > 0 && partFile && fs.existsSync(partFile)) {
+      if (copied > 0) fs.writeSync(fd, ',');
+      appendPartTo(fd, partFile);
+    }
+    fs.writeSync(fd, ']}');
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmp, outFile);
 }
 
 /** 流式遍历 workshop.json 的 entries（generator）：聚合函数 for...of 天然兼容，不把大数组放内存 */
@@ -480,23 +493,29 @@ function computeEnkaPanel(ij) {
 // ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------
 export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   if (!fs.existsSync(OUT_FILE)) return null;
-  // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：聚合函数 for...of 兼容 generator，
-  // 每次调用独立遍历一遍文件（~1-2 分钟），峰值内存只留聚合 Map
-  const stats = computeWorkshopStats(iterWorkshopEntries());
-  const panelCorr = computePanelCorrelations(iterWorkshopEntries()); // 属性相关（按角色，同条目配对）
-  const discDetails = computeWorkshopDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap }); // 驱动盘单盘真实统计
-  const panelScatter = computePanelScatter(iterWorkshopEntries()); // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-  // 练度指标：评分分布 / 影画分层 / 影画占比 / 技能练度 / 角色盘画像
-  const relicStats = computeRelicStats(iterWorkshopEntries());
-  const rankLayers = computeRankLayers(iterWorkshopEntries());
-  const rankDist = computeRankDist(iterWorkshopEntries());
-  const skillStats = computeSkillStats(iterWorkshopEntries());
-  const roleDiscStats = computeRoleDiscStats(iterWorkshopEntries(), libDiscs, { roleNameMap });
-  // 2026-10 新增：配队亲和 / 完成度 / 影画×评分 / 技能组合
-  const roleCooccurrence = computeRoleCooccurrence(iterWorkshopEntries());
-  const completeness = computeCompleteness(iterWorkshopEntries());
-  const rankRelic = computeRankRelic(iterWorkshopEntries());
-  const skillCombos = computeSkillComboStats(iterWorkshopEntries());
+  // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：generator 逐条产出，峰值内存只留聚合 Map。
+  // 14 项聚合合并为**一次**遍历（computeAllWorkshopStats）：此前每项各调一次 iterWorkshopEntries，
+  // 等于把 2.13GB 文件流式解析 13 遍（每遍 ~27s，白白多花 ~6 分钟）。合并后输出逐位不变（见 workshopStats.js 累加器说明）
+  const {
+    stats,
+    panelCorr, // 属性相关（按角色，同条目配对）
+    discDetails, // 驱动盘单盘真实统计（含 D7 套装×槽位 slotDist、有效强化次数 effDist）
+    panelScatter, // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
+    // 练度指标：评分分布 / 影画分层 / 影画占比 / 技能练度 / 角色盘画像
+    relicStats,
+    rankLayers,
+    rankDist,
+    skillStats,
+    roleDiscStats,
+    // 2026-10 新增：配队亲和 / 影画×评分 / 技能组合
+    roleCooccurrence,
+    rankRelic,
+    skillCombos,
+    // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）/ 两源一致性审计（D10）
+    rollEfficiency,
+    sourceAudit,
+    // weightJson 同时供 effDist 的「按角色区分有效副词条」与 rollEfficiency 使用，必须在聚合前传入
+  } = computeAllWorkshopStats(iterWorkshopEntries(), libDiscs, { roleNameMap, weightJson });
   const data = {
     meta: { scrapedAt: new Date().toISOString(), entries: totalEntries ?? -1 },
     ...stats,
@@ -509,9 +528,10 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     skillStats,
     roleDiscStats,
     roleCooccurrence,
-    completeness,
     rankRelic,
     skillCombos,
+    rollEfficiency,
+    sourceAudit,
   };
   // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;
@@ -889,22 +909,7 @@ export async function fetchWorkshopData(onProgress) {
     uidCount: uidMap.size,
     entryCount: totalCount,
   };
-  {
-    const tmp = `${OUT_FILE}.tmp`;
-    const fd = fs.openSync(tmp, 'w');
-    try {
-      fs.writeSync(fd, `{"meta":${JSON.stringify(outMeta)},"entries":[`);
-      if (fs.existsSync(OUT_FILE)) {
-        copyEntriesTo(fd, OUT_FILE); // 旧 entries（含 '['）
-        if (partCount > 0) fs.writeSync(fd, ',');
-      }
-      if (partCount > 0) appendPartTo(fd); // 本次新增裸流
-      fs.writeSync(fd, ']}');
-    } finally {
-      fs.closeSync(fd);
-    }
-    fs.renameSync(tmp, OUT_FILE);
-  }
+  mergeWorkshopFile({ meta: outMeta, oldFile: OUT_FILE, partFile: PART_FILE, partCount, outFile: OUT_FILE });
   fs.rmSync(PART_FILE, { force: true }); // 合并完成，清理暂存
 
   // 角色默认流派权重（system_data 的 weight_json）独立落盘 + 并入 stats（供有效词条/评分口径复现）

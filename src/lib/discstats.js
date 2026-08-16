@@ -147,6 +147,9 @@ export function computeDiscStats(plans, discNames, discSet2) {
  *            subs:{name,official,live,verdict:'keep'|'drop'}[], combos, effDist,
  *            equips:number, alternatives:string[]}}
  *   equips：实况盘数（live.equips）；alternatives：同效果二件套盘（official.alternatives）。
+ *   ⚠️ combos / effDist 目前只做透传，web/discstats.js 的决策卡尚未渲染这两项。
+ *   effDist 自 2026-08 起是「有效**强化次数**」分布（0-9，见 workshopStats.substatRolls），
+ *   不再是旧的「有效词条个数」（上限 4 且 99.95% 恒为 4，无区分度）。
  */
 export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03) {
   const t = threshold;

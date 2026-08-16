@@ -50,9 +50,10 @@ export function serializeCookies(cookies) {
 export const CLIPBOARD_SCRIPT =
   "var cookie=document.cookie;var ask=confirm('Cookie:'+cookie+'\\n\\nDo you want to copy the cookie to the clipboard?');if(ask==true){copy(cookie);msg=cookie}else{msg='Cancel'}";
 
-/** 转义用于 data-detail 属性（dataset 读取时还原，内嵌 HTML 照常渲染） */
+/** 转义用于 data-detail 属性（dataset 读取时还原，内嵌 HTML 照常渲染）。
+ *  用 ?? 而非 ||：`escapeHtml(0)` 曾返回空串，把合法的 0 从 DOM 里抹掉。 */
 export function escapeHtml(s) {
-  return String(s || '')
+  return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;');
@@ -62,7 +63,7 @@ export function escapeHtml(s) {
  *  先 JS 转义 \ 与 '（防止提前终止字符串），再 HTML 转义 & " <（防止闭合属性或实体注入）；
  *  HTML 解码发生在 JS 执行前，故两层缺一不可。 */
 export function escapeJsAttr(s) {
-  return String(s || '')
+  return String(s ?? '')
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
     .replace(/&/g, '&amp;')
@@ -70,10 +71,12 @@ export function escapeJsAttr(s) {
     .replace(/</g, '&lt;');
 }
 
-/** 数值格式化展示（百分比 / 大数 / 特殊属性） */
+/** 数值格式化展示（百分比 / 大数 / 特殊属性）。
+ *  name 缺失时按无单位数值展示——此前无保护，畸形词条名会让整次面板计算抛错。 */
 export function formatValue(name, value) {
   if (value == null || !Number.isFinite(value)) return '—';
   if (value === 0) return '0';
+  if (name == null || typeof name !== 'string') return String(value);
   if (name === STAT.ENERGY) return (Math.trunc(value * 100) / 100).toFixed(2);
   if (name.endsWith('加成') || name.includes('暴击')) return (value * 100).toFixed(1) + '%';
   if (Math.abs(value) <= 1) return (value * 100).toFixed(1) + '%';
@@ -190,7 +193,7 @@ export function normalizeStatKeys(obj) {
 /** 游戏富文本 → 可渲染 HTML：把游戏标记 <color=#HEX> 转成 <span style="color">，
  *  把字面 \n 转成 <br>，保留标准 <span style>，移除 <script> 与事件属性（on*）。 */
 export function renderRichText(text) {
-  if (!text) return '';
+  if (text == null || text === '') return '';
   return String(text)
     .replace(/\\n/g, '<br>') // 字面反斜杠+n（游戏数据的换行）
     .replace(/\n/g, '<br>') // 真实换行符（兜底）

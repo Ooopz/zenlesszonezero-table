@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import {
+  computeWorkshopStats,
   computeWorkshopDiscStats,
   computePanelScatter,
   discStatName,
@@ -12,9 +13,13 @@ import {
   computeSkillStats,
   computeRoleDiscStats,
   computeRoleCooccurrence,
-  computeCompleteness,
   computeRankRelic,
   computeSkillComboStats,
+  substatRolls,
+  buildRoleSubstatWeights,
+  sourceOf,
+  computeRollEfficiency,
+  computeSourceAudit,
 } from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { streamJsonArrayElements } from '../src/lib/node.js';
@@ -162,7 +167,7 @@ test('真实数据冒烟：workshop.json 全量聚合不抛错、计数合法', 
   }
 });
 
-test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 / 主词条×副词条协同', () => {
+test('computeWorkshopDiscStats 新字段：有效强化次数分布 / 副词条组合 / 主词条×副词条协同', () => {
   const discIndex = buildNameIndex(['静听嘉音', '荆棘玫瑰'], CATEGORY.DISC);
   const entries = [
     // —— 2025 源盘（id 末位=槽4）：主词条 + 4 个有效副词条 ——
@@ -200,8 +205,10 @@ test('computeWorkshopDiscStats 新字段：有效词条分布 / 副词条组合 
   const out = computeWorkshopDiscStats(entries, discIndex, {});
   const 静听 = out.find((d) => d.name === '静听嘉音');
   assert.ok(静听, '应聚合出盘');
-  // 有效词条数分布：2025 盘 4 有效（攻击%/暴伤/暴率/异常精通）、mys 盘 2 有效（攻击%/暴率）
-  assert.deepEqual(静听.effDist, { 4: 1, 2: 1 });
+  // 有效强化次数分布（roll 口径，未传 weightJson → 有效集合退化为全部合法副词条）：
+  //   2025 盘 = 攻击% 480/300→2 + 暴伤 480/480→1 + 暴率 480/240→2 + 精通 12/9→1 = 6 次
+  //   mys  盘 = 攻击% 6/3→2 + 暴率 4.8/2.4→2（异常掌控不在 SUBSTAT_TYPE_SET，剔除）= 4 次
+  assert.deepEqual(静听.effDist, { 4: 1, 6: 1 });
   // 副词条组合：两盘各一个组合（归一名排序去重）
   assert.ok(静听.subCombos.length >= 2);
   assert.equal(静听.subCombos[0].count, 1);
@@ -256,8 +263,10 @@ test('computeWorkshopDiscStats：mys 与 2025 同构，主词条/协同统计两
   // 副词条：mys 的无效词条（防御力）也计入
   const subMap = Object.fromEntries(静听.subs.map((f) => [f.name, f.count]));
   assert.deepEqual(subMap, { '攻击力%': 1, 暴击伤害: 1, 暴击率: 1, 防御力: 1 });
-  // 有效词条数：2025 盘 2 有效（攻击%+暴伤）、mys 盘 2 有效（暴击率 + 防御力——防御力在 SUBSTAT_TYPE_SET 候选集内）
-  assert.deepEqual(静听.effDist, { 2: 2 });
+  // 有效强化次数：2025 盘 = 攻击% 480/300→2 + 暴伤 480/480→1 = 3；mys 盘 = 暴率 4.8/2.4→2 + 防御 15/15→1 = 3
+  assert.deepEqual(静听.effDist, { 3: 2 });
+  // D7 套装×槽位：两块盘都在 4 号位
+  assert.deepEqual(静听.slotDist, { 1: 0, 2: 0, 3: 0, 4: 2, 5: 0, 6: 0 });
   // 主词条×副词条协同：两源都参与
   assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1 });
   assert.deepEqual(静听.mainSubCross[4]['暴击伤害'], { 暴击率: 1, 防御力: 1 });
@@ -380,8 +389,8 @@ test('computeSkillStats：每角色×技能类型的等级分布', () => {
   const out = computeSkillStats(NEW_META_ENTRIES);
   assert.ok(out['1011']);
   assert.equal(out['1011'][0].count, 2);
-  assert.equal(out['1011'][0].median, 12, 'lightDist 分位取整：排序 [9,12] 的 0.5 分位 = s[1]');
-  assert.equal(out['1011'][1].median, 12);
+  assert.equal(out['1011'][0].median, 10.5, 'lightDist 分位与 computeDist 统一：排序 [9,12] 线性插值 = 10.5');
+  assert.equal(out['1011'][1].median, 9.5, '排序 [7,12] 线性插值 = 9.5');
   assert.equal(out['1031'][0].count, 1);
   assert.equal(out['1031'][0].mean, 10);
 });
@@ -430,7 +439,7 @@ test('computeSkillStats：2025 源按 1.x ID 语义归一化（1闪避→1、2�
   assert.equal(d[1].median, 11, '2025 type1 闪避 → canonical 1');
   assert.equal(d[2], undefined, '2025 无支援技数据');
   assert.equal(d[3].median, 10, '2025 type2 特殊技 → canonical 3');
-  assert.equal(d[4].median, 9, '2025 type3 连携 + type6 终结 → canonical 4（排序 [8,9] 的 0.5 分位 = s[1]）');
+  assert.equal(d[4].median, 8.5, '2025 type3 连携 + type6 终结 → canonical 4（排序 [8,9] 线性插值 = 8.5）');
   assert.equal(d[5].median, 7, '核心');
 });
 
@@ -459,7 +468,7 @@ test('computeSkillStats：旧数据无 source 回退数组顺序判别；无法�
   assert.equal(out['1031'], undefined, '无法判源条目不贡献');
 });
 
-test('computeRoleDiscStats：每角色 456 主词条/副词条/有效词条', () => {
+test('computeRoleDiscStats：每角色 456 主词条/副词条/有效强化次数', () => {
   const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
   const roleNameMap = new Map([['1011', '安比·德玛拉']]);
   const out = computeRoleDiscStats(NEW_META_ENTRIES, discIndex, { roleNameMap });
@@ -501,7 +510,7 @@ test('computeWorkshopDiscStats / computeRoleDiscStats：游戏规则白名单清
   for (const c of d.subCombos) assert.ok(c.combo.every((n) => ['暴击率', '攻击力%', '暴击伤害', '穿透值', '异常精通', '攻击力', '防御力', '防御力%', '生命值', '生命值%'].includes(n)));
 });
 
-// ---------- 2026-10 新增聚合：配队亲和 / 完成度 / 影画×评分 / 技能组合 ----------
+// ---------- 2026-10 新增聚合：配队亲和 / 影画×评分 / 技能组合 ----------
 
 test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
   const out = computeRoleCooccurrence([
@@ -517,21 +526,6 @@ test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
   const pair2 = out['1011'].find(([rid]) => rid === '1051');
   assert.deepEqual(pair2, ['1051', 1]);
   assert.ok(out['1011'][0][1] >= out['1011'][1][1], '按次数降序');
-});
-
-test('computeCompleteness：音擎 60 / 盘满级 / 高评分占比，字段缺失不污染分母', () => {
-  const out = computeCompleteness([
-    { role_id: '1011', weapon: { level: 60 }, equips: [{ level: 15 }, { level: 10 }], relic_point: 100 },
-    { role_id: '1011', weapon: { level: 50 }, equips: [{ level: 15 }], relic_point: 300 },
-    { role_id: '1011', weapon: {}, equips: [], relic_point: 200 },
-    { role_id: '1031', weapon: { level: 60 }, equips: [], relic_point: 0 }, // 评分 0 过滤
-  ]);
-  const r = out['1011'];
-  assert.equal(r.count, 3, '评分 >0 的条目数');
-  assert.equal(r.w60, 0.5, '2 条有武器等级，1 条满级');
-  assert.equal(r.discMax, 0.6667, '3 块盘有等级，2 块满级');
-  assert.equal(r.relicTop, 0.3333, '评分 ≥P75（300）的占比');
-  assert.equal(out['1031'].count, 0, '评分全 0 的条目不计入评分维度（音擎完成度仍产出）');
 });
 
 test('computeRankRelic：每角色×影画档评分统计', () => {
@@ -551,4 +545,185 @@ test('computeSkillComboStats：技能拉满组合（源归一 + 全拉满率）'
   assert.equal(r.fullPct, 0.5, 'u1 第二条全拉满（普攻/闪避 12 级）');
   assert.ok(r.top.some((t) => t.pattern === '全拉满' && t.count === 1));
   assert.ok(r.top.some((t) => t.count === 1), '另一条为部分拉满组合');
+});
+
+// ---------- computeWorkshopStats（顶层聚合，统计视图全部数据的入口） ----------
+// 此前无任何测试覆盖：音擎/套装的「按配装条目计数」与「4 件套只计一次」去重口径、
+// 面板百分比归一（'70%' → 0.7）、空串视为缺失，全靠 2.2GB 真实数据跑一遍才能发现问题。
+
+test('computeWorkshopStats：音擎按配装条目计数，characters 去重', () => {
+  const out = computeWorkshopStats([
+    { role_id: '1011', weapon: { name: '玖歌' }, panel: [], equips: [] },
+    { role_id: '1011', weapon: { name: '玖歌' }, panel: [], equips: [] },
+    { role_id: '1031', weapon: { name: '玖歌' }, panel: [], equips: [] },
+    { role_id: '1041', weapon: { name: '其他' }, panel: [], equips: [] }, // 占位名不计入
+    { role_id: '1051', panel: [], equips: [] }, // 无音擎
+  ]);
+  const w = out.wengines.find((x) => x.name === '玖歌');
+  assert.equal(w.count, 3, '按配装条目数累加');
+  assert.deepEqual(w.characters.sort(), ['1011', '1031'], '角色去重');
+  assert.equal(out.wengines.some((x) => x.name === '其他'), false, '「其他」占位不进统计');
+});
+
+test('computeWorkshopStats：同配装内同套装只计一次（4 件套不重复计数）', () => {
+  const out = computeWorkshopStats([
+    {
+      role_id: '1011',
+      panel: [],
+      // 4 块「静听嘉音」+ 2 块「河豚电音」：应各计 1
+      equips: [
+        { suit: '静听嘉音' }, { suit: '静听嘉音' }, { suit: '静听嘉音' }, { suit: '静听嘉音' },
+        { suit: '河豚电音' }, { suit: '河豚电音' },
+      ],
+    },
+  ]);
+  assert.equal(out.discs.find((d) => d.name === '静听嘉音').count, 1, '4 件套只计一次');
+  assert.equal(out.discs.find((d) => d.name === '河豚电音').count, 1, '2 件套只计一次');
+});
+
+test('computeWorkshopStats：面板百分比归一为小数，空串/非法值视为缺失', () => {
+  const out = computeWorkshopStats([
+    { role_id: '1011', equips: [], panel: [{ name: '暴击率', final: '70%' }, { name: '攻击力', final: '3000' }] },
+    { role_id: '1011', equips: [], panel: [{ name: '暴击率', final: '50%' }, { name: '攻击力', final: '' }] },
+    { role_id: '1011', equips: [], panel: [{ name: '暴击率', final: null }] },
+  ]);
+  const s = out.panels.find((p) => p.name === '1011').stats;
+  assert.equal(s['暴击率'].count, 2, '空串与 null 不计入样本');
+  assert.equal(s['暴击率'].min, 0.5, '百分比归一为小数');
+  assert.equal(s['暴击率'].max, 0.7);
+  assert.equal(s['攻击力'].count, 1, '空串 final 被丢弃');
+});
+
+test('computeWorkshopStats：空输入返回同形空结果，不抛错', () => {
+  for (const input of [[], null, undefined]) {
+    const out = computeWorkshopStats(input);
+    assert.deepEqual(out.wengines, []);
+    assert.deepEqual(out.discs, []);
+    assert.deepEqual(out.panels, []);
+  }
+});
+
+// ---------- 2026-08 新增：强化次数口径 / 角色权重 / 源判别 / 加权效率分 / 两源审计 ----------
+
+test('substatRolls：两源同一词条还原同一次数（2025 数值 ×100、mys 字符串带 %）', () => {
+  // 2025 源（number，百分比按 ×100 存）：480/240 → 2 次暴击率
+  assert.equal(substatRolls('暴击率', 480), 2);
+  assert.equal(substatRolls('暴击伤害', 480), 1); // 480/100/4.8
+  assert.equal(substatRolls('攻击力%', 900), 3); // 900/100/3
+  // mys 源（string，百分比就是显示数）：同一块盘还原出同样的次数
+  assert.equal(substatRolls('暴击率', '4.8%'), 2);
+  assert.equal(substatRolls('暴击伤害', '4.8%'), 1);
+  assert.equal(substatRolls('攻击力%', '9%'), 3);
+  // 固定值两源同量纲，不做 ÷100
+  assert.equal(substatRolls('攻击力', 57), 3);
+  assert.equal(substatRolls('攻击力', '57'), 3);
+  assert.equal(substatRolls('异常精通', 27), 3);
+  assert.equal(substatRolls('生命值', 112), 1);
+  // 钳制与兜底：>6 收到 6、<1 归 0、未知名/非法值归 0
+  assert.equal(substatRolls('暴击率', 99999), 6, '异常大值钳到量程上限');
+  assert.equal(substatRolls('暴击率', 1), 0, '不足一次强化不计入');
+  assert.equal(substatRolls('异常掌控', 480), 0, '不在基数表（非合法副词条）');
+  assert.equal(substatRolls('攻击力', 'abc'), 0);
+  assert.equal(substatRolls('攻击力', null), 0);
+  // 非整数商靠 round 兜底（实测 19/144 万条异常值）
+  assert.equal(substatRolls('暴击率', 500), 2, '500/100/2.4=2.08 → 2');
+});
+
+test('buildRoleSubstatWeights：权重 key → 副词条名展开，0/缺失 key 不入表', () => {
+  const weightJson = {
+    1011: {
+      factions: [{ name: '默认流派', weights: [{ key: '攻击', weight: 1 }, { key: '暴击', weight: 0.9 }, { key: '暴伤', weight: 0.9 }, { key: '生命', weight: 0 }, { key: '能量', weight: 1 }] }],
+    },
+    1021: { factions: [{ name: '默认流派', weights: [{ key: '精通', weight: 1 }] }] },
+    1031: { factions: [] }, // 无流派 → 不入表
+    1041: { factions: [{ name: '默认流派', weights: [{ key: '能量', weight: 1 }] }] }, // 只有主词条 key → 不入表
+  };
+  const m = buildRoleSubstatWeights(weightJson);
+  assert.deepEqual([...m.keys()], ['1011', '1021'], '无可映射副词条的角色不入表');
+  const a = m.get('1011');
+  // 「攻击」一个 key 同时展开到 攻击力% 与 攻击力（权重表不区分百分比/固定值）
+  assert.deepEqual(Object.fromEntries(a), { 暴击率: 0.9, 暴击伤害: 0.9, '攻击力%': 1, 攻击力: 1 });
+  assert.equal(a.has('生命值'), false, 'weight=0 视为不吃该属性');
+  assert.equal(a.has('异常精通'), false, '缺 key 即不吃');
+  assert.deepEqual(Object.fromEntries(m.get('1021')), { 异常精通: 1 });
+  // 空输入不抛错
+  assert.equal(buildRoleSubstatWeights(null).size, 0);
+  assert.equal(buildRoleSubstatWeights({}).size, 0);
+});
+
+test('sourceOf：source 字段 → rarity 类型 → skills 顺序 三级兜底', () => {
+  // ① source 字段最优先（即使 rarity 反着写）
+  assert.equal(sourceOf({ source: 'mys', equips: [{ rarity: 4 }] }), 'mys');
+  assert.equal(sourceOf({ source: '2025', equips: [{ rarity: 'S' }] }), '2025');
+  // ② 无 source：rarity 类型判别（number=2025、string=mys），跳过 rarity 缺失的空盘
+  assert.equal(sourceOf({ equips: [{ rarity: 4 }] }), '2025');
+  assert.equal(sourceOf({ equips: [{ rarity: 'S' }] }), 'mys');
+  assert.equal(sourceOf({ equips: [{}, { rarity: 'S' }] }), 'mys', 'rarity 缺失的盘跳过继续找');
+  // ③ 连 rarity 都没有才回退 skills 数组顺序（mys 第 2 位=2、2025=1）
+  assert.equal(sourceOf({ equips: [], skills: [{ type: 0 }, { type: 2 }] }), 'mys');
+  assert.equal(sourceOf({ equips: [], skills: [{ type: 0 }, { type: 1 }] }), '2025');
+  // rarity 与 skills 顺序冲突时以 rarity 为准（实测分歧 160/20 万，全是数组顺序法误判）
+  assert.equal(sourceOf({ equips: [{ rarity: 'S' }], skills: [{ type: 0 }, { type: 1 }] }), 'mys');
+  // 三种信号都拿不到 → null（该条不贡献技能统计/两源审计）
+  assert.equal(sourceOf({ equips: [], skills: [{ type: 0 }] }), null);
+  assert.equal(sourceOf({}), null);
+  assert.equal(sourceOf(null), null);
+});
+
+test('computeRollEfficiency：加权分 = Σ 次数×权重，歪词条不计分，槽均值与 D9 相关', () => {
+  const weightJson = { 1011: { factions: [{ name: '默认流派', weights: [{ key: '暴击', weight: 1 }, { key: '暴伤', weight: 1 }, { key: '攻击', weight: 0.75 }] }] } };
+  const entries = [
+    {
+      role_id: '1011',
+      relic_point: 100,
+      equips: [
+        // 槽4：暴击率 2 次(×1) + 攻击力% 3 次(×0.75) + 生命值% 2 次（角色不吃 → 不计分也不计有效次数）
+        { id: '11114', suit: '静听嘉音', subs: [{ name: '暴击率百分比', value: 480 }, { name: '攻击力百分比', value: 900 }, { name: '生命值百分比', value: 600 }] },
+        // 槽5：暴击伤害 1 次(×1)
+        { id: '11115', suit: '静听嘉音', subs: [{ name: '暴击伤害百分比', value: 480 }] },
+      ],
+    },
+    // 未佩戴任何盘 → 不进样本（否则把分布往 0 拉）
+    { role_id: '1011', relic_point: 50, equips: [{ id: '11114' }] },
+    // 无权重角色整体跳过
+    { role_id: '9999', equips: [{ id: '99994', suit: '静听嘉音', subs: [{ name: '暴击率百分比', value: 480 }] }] },
+  ];
+  const out = computeRollEfficiency(entries, { weightJson });
+  assert.deepEqual(Object.keys(out), ['1011'], '无权重角色不产出');
+  const r = out['1011'];
+  // 权重表随统计一起产出，供前端用同一张表复算「我的盘」
+  assert.deepEqual(r.weights, { 暴击率: 1, 暴击伤害: 1, '攻击力%': 0.75, 攻击力: 0.75 });
+  assert.equal(r.score.count, 1, '空装条目不进样本');
+  assert.equal(r.score.mean, 2 * 1 + 3 * 0.75 + 1 * 1, '歪词条（生命值%）不计分');
+  assert.equal(r.effRolls.mean, 6, '有效强化次数 = 2 + 3 + 1（生命值% 不计）');
+  assert.deepEqual(r.slotEff, { 4: { count: 1, mean: 5 }, 5: { count: 1, mean: 1 } });
+  assert.equal(r.scoreVsRelic, null, '配对样本 <30 不给相关系数');
+  // 样本足量时才产出 D9 相关：构造 40 条评分与词条数同步递增的条目 → 强正相关
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    role_id: '1011',
+    relic_point: 10 + i,
+    equips: [{ id: '11114', suit: '静听嘉音', subs: [{ name: '暴击率百分比', value: 240 * ((i % 6) + 1) }] }],
+  }));
+  const out2 = computeRollEfficiency(many, { weightJson });
+  assert.equal(out2['1011'].scoreVsRelic.n, 40);
+  assert.ok(Number.isFinite(out2['1011'].scoreVsRelic.r));
+});
+
+test('computeSourceAudit：两源分别计数取均值，任一源 <30 时 diff 记 null', () => {
+  const mk = (src, atk) => ({ role_id: '1011', equips: [{ rarity: src === 'mys' ? 'S' : 4 }], panel: [{ name: '攻击力', final: String(atk) }] });
+  // 小样本：只给均值不给 diff
+  const small = computeSourceAudit([mk('mys', 3000), mk('2025', 3300)]);
+  assert.deepEqual(small['1011'].counts, { mys: 1, 2025: 1 });
+  assert.equal(small['1011'].attrs['攻击力'].mys, 3000);
+  assert.equal(small['1011'].attrs['攻击力']['2025'], 3300);
+  assert.equal(small['1011'].attrs['攻击力'].diff, null, '样本 <30 不给 diff');
+  // 两源各 30 条：diff = (2025 均值 − mys 均值) / |mys 均值|
+  const big = [];
+  for (let i = 0; i < 30; i++) big.push(mk('mys', 3000), mk('2025', 3300));
+  const out = computeSourceAudit(big);
+  assert.deepEqual(out['1011'].counts, { mys: 30, 2025: 30 });
+  assert.ok(Math.abs(out['1011'].attrs['攻击力'].diff - 0.1) < 1e-12);
+  // 非审计属性不进表；无法判源的条目整条跳过
+  const skip = computeSourceAudit([{ role_id: '1011', equips: [], panel: [{ name: '攻击力', final: '3000' }] }]);
+  assert.deepEqual(skip, {}, '判不出源的条目不参与审计');
 });
