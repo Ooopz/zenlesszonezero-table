@@ -31,7 +31,7 @@ export const ALIASES = {
   [CATEGORY.BANGBOO]: {},
 };
 
-/** 兼容旧引用（原 panelBench.CHAR_ALIASES / discstats.DISC_ALIASES） */
+/** 类别别名表便捷引用（CHAR_ALIASES 供 recommend.js 使用；DISC_ALIASES 仅测试使用） */
 export const CHAR_ALIASES = ALIASES[CATEGORY.CHAR];
 export const DISC_ALIASES = ALIASES[CATEGORY.DISC];
 

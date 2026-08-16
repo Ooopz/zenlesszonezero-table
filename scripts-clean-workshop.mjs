@@ -136,7 +136,8 @@ let total = 0, ok = 0, bad = 0, garb = 0, dup = 0;
 // ---------- 5. 写回（原子） ----------
 const tmp = `${OUT}.tmp`;
 {
-  const head = Buffer.from(`{"meta":${JSON.stringify({ ...oldMeta, scrapedAt: new Date().toISOString() })},"entries":[`);
+  // 清洗会丢弃坏段/重复段，meta.entryCount 必须重算为实际写入条数（否则与内容不符）
+  const head = Buffer.from(`{"meta":${JSON.stringify({ ...oldMeta, scrapedAt: new Date().toISOString(), entryCount: chunks.length })},"entries":[`);
   const tail = Buffer.from(']}');
   const fd = fs.openSync(tmp, 'w');
   try {

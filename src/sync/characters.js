@@ -274,7 +274,7 @@ export async function fetchMyCharacters(cookies, onProgress, { strict = false } 
   const charList = await fetchCharacterList(cookies, uid);
 
   console.log('⑥ 并发拉取角色详情…（并发 3，避免触发接口风控）');
-  // 复用 library.js 的并发池：结果按下标对齐，顺序与角色列表一致；失败项为 null，最后过滤
+  // 复用 lib/node.js 的并发池：结果按下标对齐，顺序与角色列表一致；失败项为 null，最后过滤
   const results = (
     await pool(
       charList,

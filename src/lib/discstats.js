@@ -142,8 +142,11 @@ export function computeDiscStats(plans, discNames, discSet2) {
  * @param {object|null} live      discDetails 行 {equips, characters, main456, mainDenom, subs}；null=无实况数据
  * @param {object} mainOptions    456 主词条候选（MAIN_STAT_OPTIONS）
  * @param {number} [threshold=0.03] 占比保留阈值（官方/实况任一 ≥ 阈值即保留）
- * @returns {{roles:{official:string[],live:string[],both:string[]}, mains:Object,
- *            subs:{name,official,live,verdict:'keep'}[], combos, effDist}}
+ * @returns {{roles:{official:string[],live:string[],both:string[]},
+ *            mains:{4,5,6:{name,official,live,verdict:'keep'|'split'|'drop'}[]},
+ *            subs:{name,official,live,verdict:'keep'|'drop'}[], combos, effDist,
+ *            equips:number, alternatives:string[]}}
+ *   equips：实况盘数（live.equips）；alternatives：同效果二件套盘（official.alternatives）。
  */
 export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03) {
   const t = threshold;

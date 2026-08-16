@@ -24,9 +24,6 @@ const SOFT = {
   blueBar: 'rgba(89,183,255,0.45)',
   blueBar70: 'rgba(89,183,255,0.7)', // 副词条/组合横向条
   acc: 'rgba(247,212,29,0.12)', // 箱线盒体
-  accBar: 'rgba(247,212,29,0.7)', // 中位条（relic 箱线改版后暂未使用，保留备用）
-  green: 'rgba(127,216,164,0.8)', // 0 影
-  purple: 'rgba(180,140,255,0.85)', // 6 影
 };
 
 /** 坐标轴/网格/标签（统一引用主题色） */
@@ -40,9 +37,6 @@ const CHART_LEGEND = { textStyle: { color: CHART_COLORS.dim }, top: 4 };
 const CHART_TITLE = { textStyle: { color: '#eee', fontSize: 15 } };
 /** 多子图的小标题（每个子图上方） */
 const CHART_SUBTITLE = { textStyle: { color: CHART_COLORS.dim, fontSize: 13 } };
-
-/** 图表通用 grid 边距 */
-export const CHART_GRID = { left: 44, right: 20, top: 40, bottom: 30, containLabel: true };
 
 /** 已注册待挂载的图表 option：key → option */
 let pending = {};
@@ -149,7 +143,7 @@ function attachReadLine(chart, opt) {
 }
 /** 窗口尺寸变化时 resize 所有已挂载图表（页面 resize 自动触发，防抖 150ms；
  *  多子图布局（技能分布/推荐三档等百分比 grid）依赖 resize 重算才能跟随容器宽度） */
-export function resizeCharts() {
+function resizeCharts() {
   for (const c of instances.values()) c.resize();
 }
 // 页面宽度变化 → 重排所有已挂载图表（模块加载时注册一次）
@@ -166,9 +160,6 @@ if (typeof window !== 'undefined') {
 export function baseXAxis(cats) {
   return { type: 'category', data: cats, axisLine: AXIS_LINE, axisLabel: AXIS_LABEL, axisTick: { show: false } };
 }
-export function baseYAxis() {
-  return { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE };
-}
 /** 暗色 tooltip（统一悬浮风格） */
 export const DARK_TOOLTIP = {
   backgroundColor: CHART_COLORS.card,
@@ -176,13 +167,12 @@ export const DARK_TOOLTIP = {
   textStyle: { color: '#eee', fontSize: 14 },
 };
 
-// ---------- 各图表的 option 构建函数（数据由 recommend.js 各面板准备） ----------
+// ---------- 各图表的 option 构建函数（数据由 recommend.js / discstats.js 各面板准备） ----------
 
-
-/** 热力图：角色×属性，色 = 数值（百分位或技能等级）。
- *  @param {number} [max] visualMap 上限：达标热力图默认 100（百分位）；技能热力图传 12（等级上限）。 */
+/** 热力图：角色×属性，色 = 数值（百分位）。
+ *  @param {number} [max] visualMap 上限：达标热力图默认 100（百分位）。 */
 export function heatmapOption(data, attrs, max = 100) {
-  // data: [{name, cells: [{pct, reached}|null]}]，attrs: 属性列表
+  // data: [{name, cells: [{pct, reached, gap}|null]}]（gap = 推荐中档 − 我的值，仅未达标时非 null），attrs: 属性列表
   const rows = [];
   data.forEach((r, i) => {
     r.cells.forEach((c, j) => {
@@ -199,7 +189,7 @@ export function heatmapOption(data, attrs, max = 100) {
         if (!c || c.pct == null || !Number.isFinite(c.pct)) return '无数据';
         const hit = c.reached == null ? '' : c.reached ? `<span style="color:${CHART_COLORS.green}">✓ 达到推荐中档</span>` : `<span style="color:${CHART_COLORS.orange}">未达推荐中档</span>`;
         const gap = c.gap != null && Number.isFinite(c.gap) ? `<br>缺口 ${formatValue(attrs[p.value[0]], c.gap)}` : '';
-        return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}${max === 100 ? `玩家百分位 <b>${Math.round(c.pct)}%</b>` : `等级 <b>${c.pct}</b>`}${hit ? '<br>' + hit : ''}${gap}`;
+        return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}玩家百分位 <b>${Math.round(c.pct)}%</b>${hit ? '<br>' + hit : ''}${gap}`;
       },
     },
     xAxis: { ...baseXAxis(attrs), axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 35 } },
@@ -541,7 +531,7 @@ export function densityScatterOption(grid, title = '') {
 }
 
 /** 推荐三档 × 玩家分布 增强图：每属性一个子图，y 轴 4 行——
- *  玩家 P10-P90 区间 / 低配·毕业·高配 median±sd 区间，我的值用贯穿全图的红色竖线标记（带玩家百分位标签）。
+ *  玩家 P10-P90 区间 / 低配·毕业·高配 median±sd 区间，我的值用贯穿全图的金色竖线标记（带玩家百分位标签）。
  *  items = [{attr, player:{p10,p90}, low:{median,sd}, mid:{median,sd}, high:{median,sd}, mine, minePct}]
  *  区间用 markArea（半透明区域，无需堆叠；兼容性最稳），我的值用 markLine 竖线。
  *  @param {number} [height]  容器高度 px（标题用像素定位，避免百分比 + 像素高度混算把标题压进图内） */
@@ -742,7 +732,7 @@ export function tierRichOption(items, height = 380) {
   };
 }
 
-// ================= 练度总览 / 驱动盘新图表 =================
+// ================= 练度图（评分/影画/技能） / 驱动盘图 =================
 
 /** 影画金字塔：每角色 0-6 影占比堆叠横条（ranks 为 7 个占比，合计 ≤100） */
 export function rankPyramidOption(rows) {
@@ -929,11 +919,12 @@ export function skillDistOption(items) {
       trigger: 'axis',
       formatter: (params) => {
         const arr = Array.isArray(params) ? params : [params];
-        const it = items[arr[0]?.dataIndex != null ? 0 : 0];
         const p = arr[0];
         const lv = p?.name;
         const c = p?.value;
         if (lv == null) return '';
+        // 按系列名（子图名 = item.label）定位当前子图，避免多子图下悬停非首图时误取 items[0] 的我的等级
+        const it = items.find((x) => x.label === p.seriesName) || items[0];
         const mineMark = it?.mine != null && Number(lv) === it.mine ? '（<b style="color:#f7d41d">我的等级</b>）' : '';
         return `等级 <b>${lv}</b>${mineMark}<br>玩家数 <b>${c}</b>`;
       },

@@ -32,7 +32,6 @@ import { createSort } from '../lib/sort.js';
 import { STAT, VIEWS } from '../lib/constants.js';
 import { discSetEffectsHtml, richItemHtml, skillIconForType } from './shared.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
-import { toggleDiscStatsSort } from './discstats.js';
 import { renderRecommend, toggleRecommendSort, mountRecommendCharts } from './recommend.js';
 
 // ---------- 悬浮提示 ----------
@@ -553,7 +552,6 @@ grid.addEventListener('click', (e) => {
   const key = th.dataset.sort;
   if (th.closest('.wiki-table')) toggleWikiSort(key);
   else if (th.closest('table.tbl')) toggleTableSort(key);
-  else if (th.closest('table.discstats-table')) toggleDiscStatsSort(key);
   else if (th.closest('table.rec-table')) toggleRecommendSort(key);
   else return;
   render();

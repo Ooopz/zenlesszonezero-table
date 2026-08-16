@@ -16,9 +16,6 @@ let selectedDisc = '';
 export function setSelectedDisc(name) {
   selectedDisc = name;
 }
-// 本面板无表格排序，保留导出兼容 render.js 的表头排序委托
-export function resetDiscStatsSort() {}
-export function toggleDiscStatsSort() {}
 
 const pct = (v) => Math.round((v || 0) * 100);
 

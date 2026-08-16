@@ -1,4 +1,4 @@
-// src/web/wiki.js —— Wiki 数据库视图：四个子面板（角色 / 驱动盘 / 音擎 / 邦布）平铺展示
+// src/web/wiki.js —— Wiki 数据库视图：四个子面板（角色 / 音擎 / 驱动盘 / 邦布）平铺展示
 import { library } from './data.js';
 import { renderRichText, escapeHtml, escapeJsAttr, statEntries, formatValue, isEmptyVal } from '../lib/util.js';
 import { createSort } from '../lib/sort.js';

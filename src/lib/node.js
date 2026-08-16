@@ -68,7 +68,7 @@ export function writeDataFile(file, data, { label = '', validate = null, strict 
  * 流式读取「JSON 顶层数组」的元素（同步 generator）：每次只读一个文件块、逐字符解析，
  * yield 每个顶层元素的原始 JSON 字符串（调用方自行 JSON.parse）。
  *
- * 用于超大 JSON 数组文件（如 workshop.json 达数十万条、数百 MB）：一次性 fs.readFileSync +
+ * 用于超大 JSON 数组文件（如 workshop.json 达 90 万+ 条、2.13GB）：一次性 fs.readFileSync +
  * JSON.stringify 会超过 V8 单字符串上限（Invalid string length，约 5.36 亿字符）并撑爆堆，
  * 流式读可处理任意大小。文件形如 `{"meta":{...},"entries":[elem1,elem2,...]}`——
  * 自动跳过 meta 定位 `"entries":[`，只 yield entries 数组内的元素。
