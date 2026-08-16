@@ -10,7 +10,7 @@ import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
 import { discSetEffectsHtml } from './shared.js';
-import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption, discSlotHeatOption } from './charts.js';
+import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption } from './charts.js';
 
 let selectedDisc = '';
 export function setSelectedDisc(name) {
@@ -103,7 +103,7 @@ function statGridHtml(card) {
   </div>`;
 }
 
-/** 底部图表卡片区：456 主词条占比 / 副词条出现频率 / 词条组合 Top / 主词条×副词条协同 / 组合画像（玩家实况） */
+/** 底部图表卡片区：456 主词条占比 / 副词条出现频率 / 词条组合 Top / 主词条×副词条协同（玩家实况） */
 function chartCardsHtml(selectedDetail) {
   if (!selectedDetail) return '';
   const id = `disc-chart-${selectedDetail.name}`;
@@ -112,57 +112,46 @@ function chartCardsHtml(selectedDetail) {
   registerChart(`${id}-combo`, discComboOption(selectedDetail.subCombos));
   const crossOpt = mainSubCrossOption(selectedDetail);
   if (Object.keys(crossOpt).length) registerChart(`${id}-cross`, crossOpt);
-  // A5 组合画像：双暴 / 攻击+双暴 等标签组合占比（subCombos 盘数 / 总盘数）
-  const total = selectedDetail.equips || 0;
-  const sum = (pred) =>
-    total ? (selectedDetail.subCombos || []).filter((c) => pred(c.combo)).reduce((s, c) => s + c.count, 0) : 0;
-  const pct = (n) => (total ? ((n / total) * 100).toFixed(0) + '%' : '—');
-  const bothCrit = sum((combo) => combo.includes('暴击率') && combo.includes('暴击伤害'));
-  const atkBoth = sum((combo) => combo.includes('攻击力%') && combo.includes('暴击率') && combo.includes('暴击伤害'));
-  const portrait = `<span style="color:var(--acc);font-weight:800">双暴 ${pct(bothCrit)}</span>　<span style="color:var(--green)">攻击+双暴 ${pct(atkBoth)}</span>　<span class="ds-dim">其余 ${pct(total - bothCrit)}</span>`;
   const crossTip = `<b>主词条 × 副词条协同</b><br><span style="color:var(--dim)">每槽（4/5/6 号位）一图：行=该槽主词条、列=副词条，色 = 条件频率（该主词条盘中带此副词条的占比）——如「4 号位暴击率 → 暴伤 42%」式配装规律；悬浮格子看具体值</span>`;
-  const comboPortraitTip = `<b>组合画像</b><br><span style="color:var(--dim)">玩家词条组合标签：双暴 = 同时带 暴击率+暴击伤害 的盘占比；攻击+双暴 = 再含 攻击力% 的盘占比（subCombos 盘数 / 总盘数）</span>`;
   return `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(selectedDetail.name)} · 工坊真实穿戴（${selectedDetail.equips.toLocaleString()} 块盘）</h3>
     <div class="chart-grid">
       <div class="chart-card"><h4>456 主词条占比（玩家实况）</h4>${chartBox(`${id}-main`, 260)}</div>
       <div class="chart-card"><h4>副词条出现频率（带此词条的盘占比）</h4>${chartBox(`${id}-subs`, 300)}</div>
       <div class="chart-card"><h4>词条组合 Top</h4>${chartBox(`${id}-combo`, 300)}</div>
       ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(crossTip)}">主词条 × 副词条协同</h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
-      <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(comboPortraitTip)}">组合画像</h3>${portrait}</div>
     </div>
   </div>`;
 }
 
-/** ④ 槽位分布（D7 套装×槽位交叉，单盘视角）：该套装被戴在各号位的占比，与均匀 16.7% 对照。
- *  同一套装 6 个槽本应大致均分；某槽显著偏高 = 玩家主要拿这套凑 2 件套（挑最便宜的槽位）。 */
+/** ④ 槽位分布（D7 套装×槽位交叉，单盘视角）：柱状图 + 16.7% 均匀基准线。
+ *  柱子不从 0 起画（Y 轴按实际值域截断），放大幅值差，肉眼可辨槽位偏好；
+ *  基准线恒在范围内（范围 = [min(值,基准)−1, max(值,基准)+1]）。 */
 function slotRowHtml(detail) {
   const dist = detail?.slotDist;
   if (!dist) return '';
   const total = [1, 2, 3, 4, 5, 6].reduce((s, k) => s + (dist[k] || 0), 0);
   if (!total) return '';
-  const cells = [1, 2, 3, 4, 5, 6]
-    .map((k) => {
-      const p = ((dist[k] || 0) / total) * 100;
-      const dev = p - 100 / 6;
-      const color = dev >= 3 ? 'var(--acc)' : dev <= -3 ? 'var(--dim)' : 'var(--txt)';
-      return `<span style="color:${color};font-weight:${dev >= 3 ? 800 : 400}">${k}号 ${p.toFixed(1)}%</span>`;
+  const base = 100 / 6;
+  const vals = [1, 2, 3, 4, 5, 6].map((k) => ((dist[k] || 0) / total) * 100);
+  const lo = Math.min(base, ...vals) - 1;
+  const hi = Math.max(base, ...vals) + 1;
+  const span = hi - lo;
+  const y = (p) => ((p - lo) / span) * 100;
+  const baseY = y(base);
+  const bars = [1, 2, 3, 4, 5, 6]
+    .map((k, i) => {
+      const p = vals[i];
+      const dev = p - base;
+      const cls = dev >= 3 ? 'up' : dev <= -3 ? 'down' : 'flat';
+      return `<div class="slot-bar ${cls}" style="--h:${y(p).toFixed(1)}%" title="${k}号 占 ${p.toFixed(1)}%（均匀基准 16.7%，${
+        dev >= 0 ? '+' : '−'
+      }${Math.abs(dev).toFixed(1)} 个百分点）"><div class="slot-bar-fill"></div><span class="slot-bar-val">${p.toFixed(1)}%</span><span class="slot-bar-label">${k}号</span></div>`;
     })
-    .join('　');
+    .join('');
   return `<div class="ad-sec">
-    <h4>④ 槽位分布（均匀基准 16.7%；金色 = 玩家明显偏好戴在该号位）</h4>
-    <div class="ad-drops">${cells}</div>
+    <h4>④ 槽位分布（基准线 16.7%；柱子按实际值域起画，差异更直观）</h4>
+    <div class="slot-bars" style="--base:${baseY.toFixed(1)}%">${bars}</div>
   </div>`;
-}
-
-/** D7 全盘热力：套装 × 槽位交叉（行内归一为占比），一眼看出哪些套装被集中戴在特定号位 */
-function slotCrossCardHtml() {
-  const rows = (workshopStats.discDetails || [])
-    .filter((d) => d.slotDist && [1, 2, 3, 4, 5, 6].some((k) => d.slotDist[k]))
-    .sort((a, b) => (b.equips || 0) - (a.equips || 0));
-  if (!rows.length) return '';
-  registerChart('disc-slot-cross', discSlotHeatOption(rows));
-  const tip = `<b>套装 × 槽位交叉（D7）</b><br><span style="color:var(--dim)">行=套装（按玩家盘数降序）、列=1-6 号位，色 = 该号位占该套装总盘数的比例（每行合计 100%）。<br>六个槽位若被平等使用应各占 <b>16.7%</b>：某槽明显偏高说明玩家主要拿这套凑 <b>2 件套</b>（只挑成本最低的槽），偏低则说明该槽通常留给别的套装。悬浮格子看盘数与偏离幅度</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">套装 × 槽位交叉</h3>${chartBox('disc-slot-cross', Math.max(360, rows.length * 20 + 110))}</div>`;
 }
 
 /** 渲染驱动盘决策卡页面 */
@@ -197,6 +186,6 @@ export function renderDiscStats() {
       ${statGridHtml(card)}
       ${slotRowHtml(selectedDetail)}
     </div>
-    <div class="chart-grid">${chartCardsHtml(selectedDetail)}${slotCrossCardHtml()}</div>
+    <div class="chart-grid">${chartCardsHtml(selectedDetail)}</div>
   </div>`;
 }

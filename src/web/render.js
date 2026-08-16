@@ -125,8 +125,7 @@ function discTile(d, validSet) {
   const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
   const sub = subs.map((s) => `<div class="${s.hit ? 'hit' : ''}">${s.content}</div>`).join('');
   return `<div class="disc" data-detail="${escapeHtml(discTooltip(d))}">
-    <div class="disc-top">${icon ? `<img class="d-ico" src="${icon}" alt="">` : ''}<div class="disc-head"><div class="dset">${d.set}</div><div class="dslot">${d.slot}号${d.level ? ' · +' + d.level : ''}</div></div>${discHits != null ? `<span class="d-hit">命中 ${discHits}</span>` : ''}</div>
-    <div class="dmain">${main}</div>
+    <div class="disc-top">${icon ? `<img class="d-ico" src="${icon}" alt="">` : ''}<div class="disc-head"><div class="dset">${d.set}</div><div class="dslot">${d.slot}号${d.level ? ' · +' + d.level : ''}</div></div><div class="dmain">${main}</div>${discHits != null ? `<span class="d-hit">命中 ${discHits}</span>` : ''}</div>
     ${sub ? `<div class="dsubs">${sub}</div>` : ''}
   </div>`;
 }
@@ -196,11 +195,23 @@ function characterCard(character) {
     const theoFinal = R.theoretical?.final?.[name];
     const actFinal = R.actual?.[name]?.final;
     const mismatch = actFinal != null && theoFinal != null && Math.abs(actFinal - theoFinal) > 1e-6;
-    const split = theoFinal != null ? `理论${formatValue(name, theoFinal)}` : '';
+    // 理论值不再独占一行（display:block 会把每行撑成两行）：仅实测与推算不一致时同行小字标注（定位计算问题）；
+    // 其余情况（一致/无实测）行内显示理论值纯属冗余——对比信息移入数值格悬浮 data-detail
+    const split = mismatch ? `<span class="break">(理论${formatValue(name, theoFinal)})</span>` : '';
+    const valTip =
+      actFinal != null && theoFinal != null
+        ? `账号实测 ${formatValue(name, actFinal)} · 推算 ${formatValue(name, theoFinal)}${
+            mismatch ? '（两者不一致，已标红）' : '（一致）'
+          }`
+        : actFinal != null
+          ? `账号实测 ${formatValue(name, actFinal)}`
+          : theoFinal != null
+            ? `推算值（wiki 基础 + 装备）：${formatValue(name, theoFinal)}`
+            : '';
     // 面板数值金色突出由「配置的有效副词条」决定：有效副词条 → 对应面板属性（如配了攻击力% 则攻击力金色）
     const core = highlighted ? '1' : '';
     mergedRows.push(
-      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val" data-core="${core}"${mismatch ? ` style="color:var(--red)"` : ''}>${formatValue(name, displayFinal)}${split ? `<span class="break">(${split})</span>` : ''}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
+      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val" data-core="${core}"${mismatch ? ` style="color:var(--red)"` : ''}${valTip ? ` data-detail="${escapeHtml(valTip)}" title="悬浮查看实测/推算对比"` : ''}>${formatValue(name, displayFinal)}${split}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
     );
     displayed.add(name);
   };
@@ -227,6 +238,13 @@ function characterCard(character) {
     addRow(name, v, null, null, isHighlighted(name));
   }
   const totalProgress = rateCount ? Math.round((rateSum / rateCount) * 100) : null;
+  // 右上角达成率大字 + 图章（取代面板标题里的「总 X%」）
+  const stamp =
+    totalProgress != null
+      ? `<div class="stamp-wrap" title="总体达成率（各属性达成率均值）"><span class="rate">${totalProgress}<small>%</small></span><span class="stamp ${totalProgress >= 97 ? 'green' : totalProgress < 60 ? 'red' : ''}">${
+          totalProgress >= 97 ? '已毕业' : totalProgress >= 60 ? '达成' : '缺口'
+        }</span></div>`
+      : '';
 
   // 技能等级：类型图标 + 等级，悬浮图标显示完整详情（兼容旧数据：无 skills 时隐藏）。
   // 图标统一走 shared.skillIconForType（账号数字 type → 路径）
@@ -309,6 +327,7 @@ function characterCard(character) {
               ${faction ? `<span class="tag">${faction}</span>` : ''}
             </div>
           </div>
+          ${stamp}
         </div>
         ${skillsHtml ? `<div class="block"><div class="col-title"><b>技能等级</b></div><div class="skill-grid">${skillsHtml}</div></div>` : ''}
         ${
@@ -331,7 +350,7 @@ function characterCard(character) {
         </div>
       </div>
       <div class="upper-right">
-        <div class="col-title"><span>最终面板</span>${totalProgress != null ? `<span class="${rateClass(totalProgress / 100)}">总 ${totalProgress}%</span>` : ''}</div>
+        <div class="col-title"><span>最终面板</span></div>
         <table class="cs"><tr><th>属性</th><th>数值</th><th>达成率</th></tr>${mergedRows.join('')}</table>
       </div>
     </div>

@@ -44,12 +44,14 @@ const TABS = [
   { key: 'detail', label: '角色面板' },
   { key: 'discs', label: '驱动盘' },
   { key: 'overview', label: '全服总览' },
+  { key: 'pending', label: '待定' },
 ];
 /** 子面板 key → 渲染函数（renderRecommend 键控分发，驱动盘复用 discstats） */
 const PANEL_RENDERERS = {
   detail: renderRoleDetail,
   discs: renderDiscStats,
   overview: renderOverview,
+  pending: renderPending,
 };
 
 /** 统一空态：msg 为说明、hint 为操作提示/按钮（可选） */
@@ -311,21 +313,16 @@ function scatterCardsHtml(prefix, grid, subtitle) {
     })
     .join('');
 }
-function renderOverview() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
-  const wsPanel = wsPanelMap();
-  const tiers = recTierStats();
-  const myCalc = new Map(myCharacters.map((c) => [c.name, c.calculate()]));
-  const roleNames = Object.values(plans).map((v) => v.name);
+// ---------- 「待定」面板：提升清单 / 面板达标 / 驱动盘毕业度 / 两源一致性审计（2026-10 从全服总览移入） ----------
+/** 提升清单 + 面板达标共用的「我的角色 × 核心属性」百分位数据（行按平均落后度降序） */
+function upgradeAndHeat(wsPanel, tiers, myCalc, roleNames) {
   /** 平均落后度（50 − 百分位，仅有效格）：行排序依据 */
   const avgLag = (row) => {
     const vals = row.cells.filter((c) => c && c.pct != null).map((c) => 50 - c.pct);
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
   };
-
-  // 1. 达标热力图：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
-  //    行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
+  // 达标热力：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
+  // 行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
   const heatAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter((a) =>
     roleNames.some((n) => wsPanel.get(n)?.[a])
   );
@@ -346,8 +343,7 @@ function renderOverview() {
     })
     .filter((r) => r.cells.some((c) => c))
     .sort((a, b) => avgLag(b) - avgLag(a));
-
-  // 1b. 提升清单：我的角色 × 属性，缺口 = 推荐中档 − 我的值，按 缺口 × 落后度 排序取 Top
+  // 提升清单：缺口 = 推荐中档 − 我的值，按 缺口 × 落后度（50 − 百分位）排序取 Top
   const upgradeRows = [];
   for (const [name, my] of myCalc) {
     const st = wsPanel.get(name) || {};
@@ -381,6 +377,36 @@ function renderOverview() {
           new Set()
         )}</div>`
       : '';
+  const heatTip = `<b>面板达标</b><br><span style="color:var(--dim)">我的角色 × 核心属性：色 = 我的玩家百分位（相对全服样本），悬浮格子看是否达到推荐中档与缺口；行按平均落后度排序（越落后越靠上）</span>`;
+  return { heatAttrs, heatRows, upgradeCard, heatTip };
+}
+
+/** 「待定」面板渲染：提升清单 / 面板达标 / 驱动盘毕业度 / 两源一致性审计（四卡从全服总览移入，2026-10） */
+function renderPending() {
+  if (!Object.keys(plans || {}).length)
+    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
+  const wsPanel = wsPanelMap();
+  const tiers = recTierStats();
+  const myCalc = new Map(myCharacters.map((c) => [c.name, c.calculate()]));
+  const roleNames = Object.values(plans).map((v) => v.name);
+  const { heatAttrs, heatRows, upgradeCard, heatTip } = upgradeAndHeat(wsPanel, tiers, myCalc, roleNames);
+  registerChart('pending-heat', heatmapOption(heatRows, heatAttrs));
+  const { discMatrix, discTip } = discMatrixCard();
+  const { auditTable, auditSummary, auditTip } = auditCard();
+  return `<div class="chart-grid">
+    ${upgradeCard}
+    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(heatTip)}">面板达标</h3>${chartBox('pending-heat', 720)}</div>
+    ${discMatrix ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(discTip)}">驱动盘毕业度</h3>${discMatrix}</div>` : ''}
+    ${auditTable ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(auditTip)}">两源一致性审计</h3>${auditSummary}${auditTable}</div>` : ''}
+  </div>`;
+}
+
+function renderOverview() {
+  if (!Object.keys(plans || {}).length)
+    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
+  const wsPanel = wsPanelMap();
+  const tiers = recTierStats();
+  const roleNames = Object.values(plans).map((v) => v.name);
 
   // 2. 共识度散点：一张大图，每属性一个子图（X=玩家 sd、Y=推荐 high.cv）
   const consensusAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter(
@@ -400,14 +426,51 @@ function renderOverview() {
     .filter((g) => g.points.length);
   if (consensusGrid.length) registerChart('overview-consensus', consensusGridOption(consensusGrid));
   const consensusTip = `<b>玩家分化 vs 攻略分歧</b><br><span style="color:var(--dim)">每属性一个子图，每点一个角色：横轴=玩家分化（该属性全服玩家数值的标准差，越大玩家之间差距越大）；纵轴=攻略分歧（米游社推荐方案 high 档毕业值的变异系数 CV=标准差/均值，越大攻略之间分歧越大）。<br>左下=玩家与攻略均共识 · 左上=玩家共识但攻略分歧 · 右下=玩家分化大但攻略一致 · 右上=两方面均无共识（该属性参考价值低）</span>`;
-  const heatTip = `<b>面板达标</b><br><span style="color:var(--dim)">我的角色 × 核心属性：色 = 我的玩家百分位（相对全服样本），悬浮格子看是否达到推荐中档与缺口；行按平均落后度排序（越落后越靠上）</span>`;
 
-  registerChart('overview-heat', heatmapOption(heatRows, heatAttrs));
+  // 驱动盘毕业度矩阵已移至「待定」面板（discMatrixCard()，见模块底部 2026-10）
 
-  // 3. 我的盘毕业度矩阵 + 替换建议：有效强化次数 vs 该盘 effDist + 主词条是否该角色该槽主流（roleDiscStats）
-  // ⚠️ 这里必须遍历 myCharacters 而非 myCalc：calculateCharacter 的返回里**没有** discs 字段
-  //    （只有 base/bonus/final/actual/theoretical/sources），旧代码读 c[1].discs 恒为 undefined，
-  //    整张矩阵一行都渲染不出来。Disc 实例只在 Character 上，且自带 growth（强化次数）。
+  // 3. 影画 × 装配评分：每角色 6影 median − 0影 median（rankRelic）
+  const rankRelicMap = roleKeyedMap(workshopStats.rankRelic);
+  const rrRows = [];
+  for (const name of roleNames) {
+    const d = rankRelicMap.get(name);
+    if (!d?.[0] || !d?.[6]) continue;
+    rrRows.push({ name, gap: +(d[6].median - d[0].median).toFixed(1), r0: d[0].median, r6: d[6].median });
+  }
+  rrRows.sort((a, b) => a.gap - b.gap);
+  if (rrRows.length) registerChart('overview-rank-relic', rankRelicGapOption(rrRows));
+  const rrTip = `<b>影画 × 装配评分</b><br><span style="color:var(--dim)">每角色：6 影玩家池装配评分中位数 − 0 影玩家池评分中位数（rankRelic）——正=氪满影画的玩家配装评分整体更高（投入相关性）；悬浮看各档中位与差距</span>`;
+
+  // 4. D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关
+  //    r 高 = 工坊评分基本就是词条效率的另一种写法，可放心当毕业度代理；r 低 = 评分掺了别的东西
+  const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency); // 角色名 → {weights,...}
+  const srRows = [];
+  for (const [name, d] of rollEffMap) {
+    const sv = d?.scoreVsRelic;
+    if (!sv || sv.r == null) continue;
+    srRows.push({ name, r: sv.r, n: sv.n });
+  }
+  srRows.sort((a, b) => b.r - a.r); // r 降序传入：ECharts 类目轴首项画在底部，故最脱节（r 最低）的落在图顶最显眼处
+  if (srRows.length) registerChart('overview-score-relic', scoreRelicOption(srRows));
+  const srTip = `<b>评分 × 盘毕业度（D9）</b><br><span style="color:var(--dim)">每角色：工坊装配评分 <b>relic_point</b> 与本项目的<b>加权词条效率分</b>（Σ 强化次数 × 该角色流派权重）在同一玩家样本上的皮尔逊相关 r。<br>r≈1 说明工坊评分与词条效率几乎等价——看评分即可代表毕业度；r 偏低说明评分掺入了词条效率之外的成分，此时对该角色<b>不宜直接拿评分当毕业度</b>，应看有效强化次数。配对样本 &lt;30 的角色不参与（记 null）。<br>绿 ≥0.90 · 金 ≥0.80 · 橙 &lt;0.80</span>`;
+
+  // 两源一致性审计已移至「待定」面板（auditCard()，见模块底部 2026-10）
+
+  return `<div class="chart-grid">
+    ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(consensusTip)}">玩家分化 vs 攻略分歧</h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
+    ${rrRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(rrTip)}">影画 × 装配评分</h3>${chartBox('overview-rank-relic', Math.max(320, rrRows.length * 16))}</div>` : ''}
+    ${srRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(srTip)}">评分 × 盘毕业度</h3>${chartBox('overview-score-relic', Math.max(320, srRows.length * 16))}</div>` : ''}
+    ${progressCardsHtml()}
+  </div>`;
+}
+
+// ---------- 「待定」面板的卡片构建（2026-10 从全服总览移入，模块顶层） ----------
+
+/** 驱动盘毕业度矩阵 + 替换建议：有效强化次数 vs 该盘 effDist + 主词条是否该角色该槽主流（roleDiscStats）。
+ *  ⚠️ 这里必须遍历 myCharacters 而非 myCalc：calculateCharacter 的返回里**没有** discs 字段
+ *    （只有 base/bonus/final/actual/theoretical/sources），旧代码读 c[1].discs 恒为 undefined，
+ *    整张矩阵一行都渲染不出来。Disc 实例只在 Character 上，且自带 growth（强化次数）。 */
+function discMatrixCard() {
   const discDetailsMap = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
   const roleDiscMap = roleKeyedMap(workshopStats.roleDiscStats); // 角色名 → {main456}
   const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency); // 角色名 → {weights,...}
@@ -459,34 +522,13 @@ function renderOverview() {
         .join('')}</tbody></table></div>`
     : '';
   const discTip = `<b>驱动盘毕业度</b><br><span style="color:var(--dim)">我每块驱动盘的<b>有效强化次数</b>（落在该角色有效副词条上的强化次数之和，满级盘总强化 8-9 次）vs 该盘工坊玩家分布（优于玩家 %）。有效副词条取工坊角色默认流派权重，与聚合侧同一张表。<br>旧口径统计的是「有效词条个数」，上限只有 4 且实测 99.95% 的盘都等于 4，毫无区分度，故改为次数。<br>主词条列对比该角色该槽主流选择（roleDiscStats）；建议列 = 有效次数 ≤3 或主词条偏离主流时提示替换</span>`;
+  return { discMatrix, discTip };
+}
 
-  // 4. 影画 × 装配评分：每角色 6影 median − 0影 median（rankRelic）
-  const rankRelicMap = roleKeyedMap(workshopStats.rankRelic);
-  const rrRows = [];
-  for (const name of roleNames) {
-    const d = rankRelicMap.get(name);
-    if (!d?.[0] || !d?.[6]) continue;
-    rrRows.push({ name, gap: +(d[6].median - d[0].median).toFixed(1), r0: d[0].median, r6: d[6].median });
-  }
-  rrRows.sort((a, b) => a.gap - b.gap);
-  if (rrRows.length) registerChart('overview-rank-relic', rankRelicGapOption(rrRows));
-  const rrTip = `<b>影画 × 装配评分</b><br><span style="color:var(--dim)">每角色：6 影玩家池装配评分中位数 − 0 影玩家池评分中位数（rankRelic）——正=氪满影画的玩家配装评分整体更高（投入相关性）；悬浮看各档中位与差距</span>`;
-
-  // 5. D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关
-  //    r 高 = 工坊评分基本就是词条效率的另一种写法，可放心当毕业度代理；r 低 = 评分掺了别的东西
-  const srRows = [];
-  for (const [name, d] of rollEffMap) {
-    const sv = d?.scoreVsRelic;
-    if (!sv || sv.r == null) continue;
-    srRows.push({ name, r: sv.r, n: sv.n });
-  }
-  srRows.sort((a, b) => b.r - a.r); // r 降序传入：ECharts 类目轴首项画在底部，故最脱节（r 最低）的落在图顶最显眼处
-  if (srRows.length) registerChart('overview-score-relic', scoreRelicOption(srRows));
-  const srTip = `<b>评分 × 盘毕业度（D9）</b><br><span style="color:var(--dim)">每角色：工坊装配评分 <b>relic_point</b> 与本项目的<b>加权词条效率分</b>（Σ 强化次数 × 该角色流派权重）在同一玩家样本上的皮尔逊相关 r。<br>r≈1 说明工坊评分与词条效率几乎等价——看评分即可代表毕业度；r 偏低说明评分掺入了词条效率之外的成分，此时对该角色<b>不宜直接拿评分当毕业度</b>，应看有效强化次数。配对样本 &lt;30 的角色不参与（记 null）。<br>绿 ≥0.90 · 金 ≥0.80 · 橙 &lt;0.80</span>`;
-
-  // 6. D10 两源一致性审计：2025 源面板是按复现的 enka_attrs_mapping 公式算的，
-  //    公式随游戏版本失准会静默污染所有跨源聚合——这张表是唯一告警面。
-  //    diff = (2025均值 − mys均值) / mys均值（聚合侧已算好，为小数比例）。
+/** D10 两源一致性审计：2025 源面板是按复现的 enka_attrs_mapping 公式算的，
+ *  公式随游戏版本失准会静默污染所有跨源聚合——这张表是唯一告警面。
+ *  diff = (2025均值 − mys均值) / mys均值（聚合侧已算好，为小数比例）。 */
+function auditCard() {
   const AUDIT_ATTRS = ['攻击力', '生命值', '防御力', '暴击率', '暴击伤害', '异常精通'];
   const auditIdToName = wsRoleIdMap();
   const auditRows = [];
@@ -535,17 +577,7 @@ function renderOverview() {
     ? `<div class="ds-dim" style="margin-bottom:6px">判源样本 ${(audit2025 + auditMys).toLocaleString()}（mys ${auditMys.toLocaleString()} / 2025 ${audit2025.toLocaleString()}）· ${auditRows.length} 角色 × ${AUDIT_ATTRS.length} 属性 · |相对差| 中位 <b>${medDiff != null ? (medDiff * 100).toFixed(2) + '%' : '—'}</b></div>`
     : '';
   const auditTip = `<b>两源一致性审计（D10）</b><br><span style="color:var(--dim)">工坊 <code>user_role/v3</code> 返回两种玩家数据源：<b>mys</b>（工坊格式化，面板是游戏内实际值）与 <b>2025</b>（游戏内嵌原始数据，面板由本项目复现 <code>enka_attrs_mapping</code> 公式算出）。表中 <b>相对差 =（2025 均值 − mys 均值）/ mys 均值</b>，按每角色最大 |相对差| 降序排列。<br>公式随游戏版本失准会静默污染<b>所有</b>跨源聚合（面板分布/相关/散点），这张表是唯一的告警面：绿 &lt;5% 视为对齐良好，橙 ≥5% 留意，红 ≥10% 需要查。任一源样本 &lt;30 的属性不给相对差（显示 —）。<br><b>已知边界（非数据损坏）</b>：本·比格 攻击力约 −41%，因其核心被动把防御力转化为攻击力——mys 是含转化的实际面板，2025 复算公式<b>不含角色专属被动</b>。重跑后<b>新出现</b>的大偏差才是版本失准信号</span>`;
-
-  return `<div class="chart-grid">
-    ${upgradeCard}
-    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(heatTip)}">面板达标</h3>${chartBox('overview-heat', 720)}</div>
-    ${discMatrix ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(discTip)}">驱动盘毕业度</h3>${discMatrix}</div>` : ''}
-    ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(consensusTip)}">玩家分化 vs 攻略分歧</h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
-    ${rrRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(rrTip)}">影画 × 装配评分</h3>${chartBox('overview-rank-relic', Math.max(320, rrRows.length * 16))}</div>` : ''}
-    ${srRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(srTip)}">评分 × 盘毕业度</h3>${chartBox('overview-score-relic', Math.max(320, srRows.length * 16))}</div>` : ''}
-    ${auditTable ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(auditTip)}">两源一致性审计</h3>${auditSummary}${auditTable}</div>` : ''}
-    ${progressCardsHtml()}
-  </div>`;
+  return { auditTable, auditSummary, auditTip };
 }
 
 // ---------- 角色详情 / 角色面板（角色选择） ----------
