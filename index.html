@@ -9,18 +9,25 @@
   </head>
   <body>
     <header>
-      <img class="logo" src="src/img/logo.webp" alt="绝区零配装面板 logo" />
-      <h1>绝区零 · 配装面板</h1>
-      <div class="spacer"></div>
-      <nav class="view-switch" role="group" aria-label="视图切换">
-        <button class="view-tab on" data-view="mychars">我的角色</button>
-        <button class="view-tab" data-view="wiki">数据库</button>
-        <button class="view-tab" data-view="recommend">统计</button>
-      </nav>
-      <div class="sync-menu">
-        <button id="syncBtn">同步数据</button>
+      <div class="head-row">
+        <div class="head-brand">
+          <img class="logo" src="src/img/logo.webp" alt="绝区零配装面板 logo" />
+          <div class="titles">
+            <h1>ZZZ <em>配装面板</em></h1>
+            <span class="sub">New Eridu · Drive Disc Terminal</span>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <nav class="seg" role="group" aria-label="视图切换">
+          <button class="view-tab on" data-view="mychars"><span class="num">01</span>我的角色</button>
+          <button class="view-tab" data-view="wiki"><span class="num">02</span>数据库</button>
+          <button class="view-tab" data-view="recommend"><span class="num">03</span>统计</button>
+        </nav>
+        <div class="head-actions">
+          <button id="syncBtn" class="primary">同步数据</button>
+          <button id="helpBtn" class="ghost">使用说明</button>
+        </div>
       </div>
-      <button id="helpBtn">使用说明</button>
     </header>
 
     <div id="status"></div>
@@ -88,7 +95,7 @@
           <label><input type="checkbox" class="sync-chk" data-key="workshop" checked /> 更新工坊数据</label>
         </div>
         <div class="row">
-          <button id="syncRun">更新</button>
+          <button id="syncRun" class="primary">更新</button>
         </div>
         <div id="syncProgress" class="sync-progress"></div>
         <div id="syncErrors" class="sync-errors"></div>
@@ -100,11 +107,11 @@
         </p>
         <pre id="syncCookieSnippet" class="snippet"></pre>
         <div class="row">
-          <button id="syncCopy">复制脚本</button>
+          <button id="syncCopy" class="ghost">复制脚本</button>
         </div>
         <textarea id="syncCookieInput" rows="3" placeholder="粘贴 cookie（出于安全，已缓存的 cookie 不会回显）"></textarea>
         <div class="row">
-          <button id="syncCookieSave">保存 cookie</button>
+          <button id="syncCookieSave" class="primary">保存 cookie</button>
         </div>
         <p style="font-size: 13px; color: var(--dim)">
           cookie 只保存到本地服务器的 <code>data/.cookie.json</code>，不会发送给任何外部服务器。
@@ -155,8 +162,8 @@
           <div id="effGrid" class="tgrid"></div>
         </div>
         <div class="row">
-          <button id="targetSave">保存</button>
-          <button id="targetClear">清空</button>
+          <button id="targetSave" class="primary">保存</button>
+          <button id="targetClear" class="ghost">清空</button>
         </div>
         <div id="planTableWrap">
           <h3 style="margin-top: 18px">推荐方案（养成指南）· 属性列为推荐最大值</h3>
@@ -176,8 +183,8 @@
           placeholder="为这个角色添加备注…（留空可清除）"
         ></textarea>
         <div class="row">
-          <button id="noteSave">保存</button>
-          <button id="noteClear">清空</button>
+          <button id="noteSave" class="primary">保存</button>
+          <button id="noteClear" class="ghost">清空</button>
         </div>
       </div>
     </div>

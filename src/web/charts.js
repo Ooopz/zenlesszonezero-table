@@ -5,25 +5,25 @@ import { formatValue } from '../lib/util.js';
 
 /** 项目主题色（对应 style.css :root 变量；所有图表统一引用，禁止硬编码色值） */
 export const CHART_COLORS = {
-  acc: '#f7d41d',
-  acc2: '#ffb300',
-  green: '#7fd8a4',
-  orange: '#ff9b5c',
-  red: '#e5484d',
-  blue: '#59b7ff',
-  purple: '#b48cff',
-  dim: '#8b8a83',
-  line: '#2b2b2b',
-  bg: '#171717',
-  card: '#1e1e1e',
+  acc: '#ffd400',
+  acc2: '#ffe95c',
+  green: '#7ce7a8',
+  orange: '#ff9a4d',
+  red: '#ff5d5d',
+  blue: '#56b8ff',
+  purple: '#b28cff',
+  dim: '#918d80',
+  line: '#2a2a2a',
+  bg: '#101010',
+  card: '#141414',
 };
 
 /** 主题色半透明变体（图表大面积填充/条形用；值 = 主题色 + 透明度，保持风格一致） */
 const SOFT = {
-  blue: 'rgba(89,183,255,0.28)', // 小提琴密度
-  blueBar: 'rgba(89,183,255,0.45)',
-  blueBar70: 'rgba(89,183,255,0.7)', // 副词条/组合横向条
-  acc: 'rgba(247,212,29,0.12)', // 箱线盒体
+  blue: 'rgba(86,184,255,0.28)', // 小提琴密度
+  blueBar: 'rgba(86,184,255,0.45)',
+  blueBar70: 'rgba(86,184,255,0.7)', // 副词条/组合横向条
+  acc: 'rgba(255,212,0,0.12)', // 箱线盒体
 };
 
 /** 坐标轴/网格/标签（统一引用主题色） */
@@ -34,7 +34,7 @@ const SPLIT_LINE = { lineStyle: { color: CHART_COLORS.line } };
 /** 图例统一样式 */
 const CHART_LEGEND = { textStyle: { color: CHART_COLORS.dim }, top: 4 };
 /** 单图标题（整图居中标题） */
-const CHART_TITLE = { textStyle: { color: '#eee', fontSize: 15 } };
+const CHART_TITLE = { textStyle: { color: '#f0ede2', fontSize: 15 } };
 /** 多子图的小标题（每个子图上方） */
 const CHART_SUBTITLE = { textStyle: { color: CHART_COLORS.dim, fontSize: 13 } };
 
@@ -183,7 +183,7 @@ export function baseXAxis(cats) {
 export const DARK_TOOLTIP = {
   backgroundColor: CHART_COLORS.card,
   borderColor: CHART_COLORS.acc,
-  textStyle: { color: '#eee', fontSize: 14 },
+  textStyle: { color: '#f0ede2', fontSize: 14 },
 };
 
 // ---------- 各图表的 option 构建函数（数据由 recommend.js / discstats.js 各面板准备） ----------
@@ -215,7 +215,7 @@ export function heatmapOption(data, attrs, max = 100) {
     yAxis: { type: 'category', data: data.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
     visualMap: {
       min: 0, max, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
-      inRange: { color: ['#4a1a1a', '#8a4a1e', '#d4a81e', CHART_COLORS.green] }, // 深红→橙→金→绿，色阶鲜明
+      inRange: { color: ['#401515', '#a83a3a', '#d4a81e', CHART_COLORS.green] }, // 深红→橙→金→绿，色阶鲜明
       textStyle: { color: CHART_COLORS.dim },
     },
     series: [
@@ -473,7 +473,7 @@ export function violinBoxOption(items) {
         silent: true,
         z: 50,
         shape: { x1: 0, y1: 0, x2: 0, y2: 0 },
-        style: { stroke: '#8a8a8a', lineDash: [4, 3], lineWidth: 1 },
+        style: { stroke: '#918d80', lineDash: [4, 3], lineWidth: 1 },
       },
       {
         id: 'read-label',
@@ -481,7 +481,7 @@ export function violinBoxOption(items) {
         invisible: true,
         silent: true,
         z: 50,
-        style: { text: '', x: 0, y: 0, fill: '#ddd', fontSize: 12, backgroundColor: '#2b2b2b', borderRadius: 2, padding: [2, 4] },
+        style: { text: '', x: 0, y: 0, fill: '#f0ede2', fontSize: 12, backgroundColor: '#1a1a1a', borderRadius: 2, padding: [2, 4] },
       },
     ],
   };
@@ -543,7 +543,7 @@ export function densityScatterOption(grid, title = '') {
       orient: 'vertical',
       right: 4,
       top: 'middle',
-      inRange: { color: ['#333', CHART_COLORS.green, CHART_COLORS.acc] },
+      inRange: { color: ['#3a3a3a', CHART_COLORS.green, CHART_COLORS.acc] },
       textStyle: { color: CHART_COLORS.dim },
     },
   };
@@ -640,7 +640,7 @@ export function tierRichOption(items, height = 380) {
           label: {
             show: true,
             position: 'insideRight',
-            color: '#1c1c1e',
+            color: '#131313',
             fontSize: 11,
             formatter: `${lo.toFixed(1)} ~ ${hi.toFixed(1)}`,
           },
@@ -944,7 +944,7 @@ export function skillDistOption(items) {
         if (lv == null) return '';
         // 按系列名（子图名 = item.label）定位当前子图，避免多子图下悬停非首图时误取 items[0] 的我的等级
         const it = items.find((x) => x.label === p.seriesName) || items[0];
-        const mineMark = it?.mine != null && Number(lv) === it.mine ? '（<b style="color:#f7d41d">我的等级</b>）' : '';
+        const mineMark = it?.mine != null && Number(lv) === it.mine ? '（<b style="color:#ffd400">我的等级</b>）' : '';
         return `等级 <b>${lv}</b>${mineMark}<br>玩家数 <b>${c}</b>`;
       },
     },
@@ -959,8 +959,8 @@ export function discMain456Option(detail) {
   const slots = [4, 5, 6];
   const allMains = [...new Set(slots.flatMap((s) => (detail?.main456?.[s] || []).map((f) => f.name)))];
   const PALETTE = [
-    'rgba(247,212,29,0.8)', 'rgba(89,183,255,0.75)', 'rgba(127,216,164,0.75)', 'rgba(255,155,92,0.75)',
-    'rgba(180,140,255,0.75)', 'rgba(229,72,77,0.75)', 'rgba(255,179,0,0.75)', 'rgba(139,138,131,0.7)',
+    'rgba(255,212,0,0.8)', 'rgba(86,184,255,0.75)', 'rgba(124,231,168,0.75)', 'rgba(255,154,77,0.75)',
+    'rgba(178,140,255,0.75)', 'rgba(255,93,93,0.75)', 'rgba(255,233,92,0.75)', 'rgba(145,141,128,0.7)',
     'rgba(79,195,247,0.7)', 'rgba(174,213,129,0.7)',
   ];
   const series = allMains.map((m, mi) => ({
@@ -1096,62 +1096,6 @@ export function discComboOption(subCombos) {
         data: rows.map((r) => r.count).reverse(),
         itemStyle: { color: SOFT.blueBar70 },
         label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11 },
-      },
-    ],
-  };
-}
-
-/** D7 套装 × 槽位交叉热力图：行=套装、列=1-6 号位，色 = 该槽占该套装总盘数的比例（行内归一）。
- *  基准是均匀 16.7%（六槽等概率）：明显偏高的槽 = 玩家主要把这套盘用在那个位置，
- *  多见于「只吃 2 件套效果」的盘（玩家挑成本最低的两个槽凑）。
- *  rows: [{name, slotDist:{1..6}, equips}] —— 按 equips 降序传入 */
-export function discSlotHeatOption(rows) {
-  const SLOTS = [1, 2, 3, 4, 5, 6];
-  const cells = [];
-  rows.forEach((r, i) => {
-    const total = SLOTS.reduce((s, k) => s + (r.slotDist?.[k] || 0), 0);
-    SLOTS.forEach((k, j) => {
-      const c = r.slotDist?.[k] || 0;
-      cells.push([j, i, total ? +((c / total) * 100).toFixed(1) : null, c]);
-    });
-  });
-  return {
-    grid: { left: 110, right: 20, top: 20, bottom: 70 },
-    tooltip: {
-      ...DARK_TOOLTIP,
-      formatter: (p) => {
-        const [j, i, pctv, cnt] = p.value;
-        if (pctv == null) return '无数据';
-        const dev = pctv - 100 / 6;
-        const tag =
-          Math.abs(dev) < 2
-            ? `<span style="color:${CHART_COLORS.dim}">与均匀分布持平</span>`
-            : `<span style="color:${dev > 0 ? CHART_COLORS.acc : CHART_COLORS.dim}">${dev > 0 ? '高于' : '低于'}均匀分布 ${Math.abs(dev).toFixed(1)} 个百分点</span>`;
-        return `<b>${rows[i].name}</b> · ${SLOTS[j]} 号位<br>占该套装 <b>${pctv}%</b>（${cnt.toLocaleString()} 块）<br>${tag}`;
-      },
-    },
-    xAxis: { ...baseXAxis(SLOTS.map((s) => `${s} 号位`)), axisLabel: { ...AXIS_LABEL, interval: 0 } },
-    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
-    visualMap: {
-      // 色标以均匀分布 16.7% 为正中（9 与 24.4 对称分布在两侧，实测全部格子落在 9.5-23.8）：
-      // 冷=低于均匀（该槽通常留给别的套装）、金=高于均匀（玩家集中戴在这个槽）。
-      // 不要用 0-100 之类的宽区间——真实离散度只有 ±7 个百分点，铺宽了整张图会糊成一片。
-      min: 9,
-      max: 24.4,
-      calculable: true,
-      orient: 'horizontal',
-      left: 'center',
-      bottom: 0,
-      inRange: { color: ['#252525', '#3d3d3d', '#8a6a1e', CHART_COLORS.acc] }, // 灰阶→琥珀，与项目无蓝色调一致
-      textStyle: { color: CHART_COLORS.dim },
-      formatter: (v) => `${Math.round(v)}%`,
-    },
-    series: [
-      {
-        type: 'heatmap',
-        data: cells,
-        label: { show: false },
-        itemStyle: { borderColor: '#000', borderWidth: 1 },
       },
     ],
   };
