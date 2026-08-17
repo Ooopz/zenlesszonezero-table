@@ -298,9 +298,13 @@ function fetchWengineStats(page) {
       const seg = s.slice(i, i + 250);
       const baseAtk = parseFloat((seg.match(/基础攻击力\+([\d.]+)/) || [])[1]);
       const subMatch = [...seg.matchAll(/([一-鿿A-Za-z]+)[+-]([\d.]+%?)/g)].filter((x) => x[1] !== '基础攻击力')[0];
-      if (baseAtk != null || subMatch) {
+      // ⚠️ 必须用 Number.isFinite：正则不匹配时 parseFloat(undefined) === NaN，而 `NaN != null` 为 true，
+      // 会在这里提前 return 并写出 baseAtk: NaN（序列化成 null），下面的 attr 兜底分支永远走不到。
+      // schema 也拦不住（typeof NaN === 'number'）。
+      const hasAtk = Number.isFinite(baseAtk);
+      if (hasAtk || subMatch) {
         return {
-          baseAtk: baseAtk != null ? baseAtk : null,
+          baseAtk: hasAtk ? baseAtk : null,
           subStats: subMatch ? { [normalizeStatKey(subMatch[1])]: parseNum(subMatch[2]) } : null,
           subStatsText: seg.match(/([一-鿿A-Za-z]+[+-][\d.]+%?)/)?.[0] || null,
           specialEffect,
@@ -686,16 +690,57 @@ function fetchDiscExtended(page) {
   return out;
 }
 
-/** 邦布：技能（分类型）/属性成长/突破材料/推荐配队（英雄卡字段由调用方从顶层+fe_ext 取） */
-function fetchBangboo(page) {
+/** 邦布：技能（分类型）/初始与满级属性/突破材料/推荐配队 + 属性（wiki 无结构化字段，从技能描述提取）。
+ *  注意：wiki 邦布页无阵营字段（菜单筛选仅稀有度），阵营不做强行补全。 */
+export function fetchBangboo(page) {
   const out = {};
   // 技能内容在 children 里（title + 富文本 desc），按 tab_name 分类（主动技/被动技/连携技）
   const skills = fetchSkills(page, { requireChildren: true });
   if (skills.length) out.skills = skills;
-  out.baseStats = fetchCharacterBaseStats(page);
+  out.baseStats = fetchBangbooBaseStats(page);
   out.materials = fetchMaterials(page);
   out.recommend = fetchRecommend(page);
+  const element = fetchBangbooElement(skills);
+  if (element) out.element = element;
   return out;
+}
+
+/** 邦布：初始/满级基础属性（role_ascension 组件的 tab 列表，其余为突破档）。
+ *  页面用词不一：初始档「初始等级」/「初始数据」、满级档「满级属性」/「满级数据」；
+ *  部分键带前导空格（如罗宾满级 tab）、幽浮布把「生命值」写成「生命指」——统一 trim + normalizeStatKeys。
+ *  值与角色成长表同构（百分比带 % 归一成小数）。 */
+function fetchBangbooBaseStats(page) {
+  const out = {};
+  const comp = findModule(page, (d) => Array.isArray(d?.list) && d.list.some((t) => Array.isArray(t.attr)));
+  if (!comp) return out;
+  for (const tab of comp.list) {
+    const tabName = String(tab.tab_name || '');
+    if (!tabName.includes('初始') && !tabName.includes('满级')) continue;
+    const stats = {};
+    for (const a of tab.attr || []) {
+      const key = String(a.key || '').trim();
+      if (!key) continue;
+      const v = parseNum(stripHtml(a.value));
+      if (Number.isFinite(v)) stats[key] = v;
+    }
+    if (!Object.keys(stats).length) continue;
+    const normalized = normalizeStatKeys(stats);
+    if (tabName.includes('初始')) out.initial = normalized;
+    else out.maxLevel = normalized;
+  }
+  return out;
+}
+
+/** 邦布属性（元素）：取主动/连携技描述里的「造成X(属性)伤害」首个命中（如「火属性伤害」「以太伤害」），
+ *  雷归一到电；描述不提元素（支援型邦布）时返回空。被动技的「[X属性]角色」是配队条件、非自身属性，不取。 */
+function fetchBangbooElement(skills) {
+  const texts = [];
+  for (const s of skills || []) {
+    if (String(s.type || '').includes('被动')) continue;
+    for (const it of s.items || []) texts.push(stripHtml(it.desc));
+  }
+  const m = texts.join(' ').match(/(以太|物理|火|冰|雷|电)(?:属性)?伤害/);
+  return m ? (m[1] === '雷' ? '电' : m[1]) : '';
 }
 
 // ---------------- 主流程 ----------------

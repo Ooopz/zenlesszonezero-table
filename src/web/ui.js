@@ -4,7 +4,7 @@ import { createSort } from '../lib/sort.js';
 import { registerZZZ } from './shared.js';
 import { targetStats, targetUnits, validStatOptions } from '../lib/calc.js';
 import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET, mainStatName } from '../lib/constants.js';
-import { apiRequest, postJSON } from './util.js';
+import { apiRequest, postJSON, notify } from './util.js';
 import {
   readCharTarget,
   saveCharTarget,
@@ -21,16 +21,10 @@ import { render, setMyTab } from './render.js';
 import { setWikiTab } from './wiki.js';
 import { setRecommendTab, setSelectedRole } from './recommend.js';
 import { setSelectedDisc } from './discstats.js';
+import { setSimRerender, simSelect, simAxis, simAddChart, simRemoveChart } from './simulate.js';
 
 // ---------- 提示条 ----------
-const statusEl = document.getElementById('status');
-let statusTimer = null;
-function notify(msg, seconds = 4) {
-  statusEl.textContent = msg;
-  statusEl.classList.add('show');
-  clearTimeout(statusTimer);
-  statusTimer = setTimeout(() => statusEl.classList.remove('show'), seconds * 1000);
-}
+// notify 已上移到 util.js（data.js 也需要它，见那里的说明）
 
 // ---------- 服务器一键同步 ----------
 /** 同步进度轮询：同步期间定时查询 /api/sync-progress，更新提示条与同步中心弹窗内进度 */
@@ -227,7 +221,7 @@ function openTargetSettings(name) {
   renderPlanTable(name);
   document.getElementById('targetModal').classList.add('show');
 }
-function saveTargetSettings() {
+async function saveTargetSettings() {
   if (!currentTargetChar) return;
   const target = {};
   document.querySelectorAll('#targetGrid input').forEach((inp) => {
@@ -249,10 +243,11 @@ function saveTargetSettings() {
   target[TARGET_KEYS.VALID_STATS] = [...document.querySelectorAll('#effGrid input:checked')].map(
     (inp) => inp.dataset.type
   );
-  saveCharTarget(currentTargetChar, target);
+  // 保存失败时 saveCharTarget 已弹失败提示，这里不要再报「已保存」把它顶掉
+  const ok = await saveCharTarget(currentTargetChar, target);
   document.getElementById('targetModal').classList.remove('show');
   render();
-  notify(`${currentTargetChar} 目标已保存`);
+  if (ok) notify(`${currentTargetChar} 目标已保存`);
 }
 
 /** 推荐方案表格排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js） */
@@ -365,7 +360,7 @@ function renderPlanTable(name) {
 }
 
 /** 应用推荐方案：把方案推荐面板（high 档）+ 推荐音擎 + 4/5/6 号位主词条写入该角色目标 */
-function applyPlan(name, idx) {
+async function applyPlan(name, idx) {
   const entry = plansByName[name];
   const p = entry?.plans?.[idx];
   if (!p) return;
@@ -382,9 +377,9 @@ function applyPlan(name, idx) {
   if (p.mainProps?.[6]) target[TARGET_KEYS.MAIN6] = mainStatName(p.mainProps[6]);
   // 推荐副词条 → 有效副词条（过滤到合法副词条类型，如「攻击力%」「异常精通」）
   if (p.subStats?.length) target[TARGET_KEYS.VALID_STATS] = p.subStats.filter((s) => SUBSTAT_TYPE_SET.has(s));
-  saveCharTarget(name, target);
+  const ok = await saveCharTarget(name, target);
   openTargetSettings(name); // 重新渲染显示已应用的值
-  notify(`${name} 已应用「${p.name}」推荐值`);
+  if (ok) notify(`${name} 已应用「${p.name}」推荐值`);
 }
 registerZZZ({ applyPlan });
 
@@ -396,12 +391,12 @@ function openNote(name) {
   document.getElementById('noteInput').value = readNote(name);
   document.getElementById('noteModal').classList.add('show');
 }
-function saveNoteModal() {
+async function saveNoteModal() {
   if (!currentNoteChar) return;
-  saveNote(currentNoteChar, document.getElementById('noteInput').value.trim());
+  const ok = await saveNote(currentNoteChar, document.getElementById('noteInput').value.trim());
   document.getElementById('noteModal').classList.remove('show');
   render();
-  notify(`${currentNoteChar} 备注已保存`);
+  if (ok) notify(`${currentNoteChar} 备注已保存`);
 }
 
 // 被卡片/表格内联 onclick 引用的函数，需挂到全局
@@ -432,23 +427,23 @@ export function initUi() {
     .getElementById('targetClose')
     .addEventListener('click', () => document.getElementById('targetModal').classList.remove('show'));
   document.getElementById('targetSave').addEventListener('click', saveTargetSettings);
-  document.getElementById('targetClear').addEventListener('click', () => {
+  document.getElementById('targetClear').addEventListener('click', async () => {
     if (!currentTargetChar) return;
-    saveCharTarget(currentTargetChar, {});
+    const ok = await saveCharTarget(currentTargetChar, {});
     document.getElementById('targetModal').classList.remove('show');
     render();
-    notify('已清空该角色目标');
+    if (ok) notify('已清空该角色目标');
   });
   document
     .getElementById('noteClose')
     .addEventListener('click', () => document.getElementById('noteModal').classList.remove('show'));
   document.getElementById('noteSave').addEventListener('click', saveNoteModal);
-  document.getElementById('noteClear').addEventListener('click', () => {
+  document.getElementById('noteClear').addEventListener('click', async () => {
     if (!currentNoteChar) return;
-    saveNote(currentNoteChar, '');
+    const ok = await saveNote(currentNoteChar, '');
     document.getElementById('noteModal').classList.remove('show');
     render();
-    notify('已清空该角色备注');
+    if (ok) notify('已清空该角色备注');
   });
   // 技能每级数值弹窗（wiki 数据库视图技能图标点击打开）
   document
@@ -480,6 +475,9 @@ export function initUi() {
       render();
     })
   );
+  // 模拟视图重渲染回调（simulate.js 不反向依赖 render.js）
+  setSimRerender(render);
+
   // wiki 子面板切换（wiki.js 渲染的 tab 内联引用）
   registerZZZ({
     wikiTab: (key) => {
@@ -502,6 +500,10 @@ export function initUi() {
       setMyTab(key);
       render();
     },
+    simSelect,
+    simAxis,
+    simAddChart,
+    simRemoveChart,
     syncWorkshop: () =>
       syncWorkshopData().then((r) => {
         if (r.ok) {

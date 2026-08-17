@@ -22,6 +22,7 @@
           <button class="view-tab on" data-view="mychars"><span class="num">01</span>我的角色</button>
           <button class="view-tab" data-view="wiki"><span class="num">02</span>数据库</button>
           <button class="view-tab" data-view="recommend"><span class="num">03</span>统计</button>
+          <button class="view-tab" data-view="simulate"><span class="num">04</span>模拟</button>
         </nav>
         <div class="head-actions">
           <button id="syncBtn" class="primary">同步数据</button>
@@ -36,6 +37,7 @@
 
     <div class="modal" id="helpModal">
       <div class="modal-box">
+        <div class="modal-scroll">
         <button class="close" id="helpClose">✕</button>
         <h2>使用说明</h2>
         <p>
@@ -66,6 +68,11 @@
           「技能数值」弹窗，展示该技能每级的伤害倍率、失衡倍率等详细数值（悬浮仍显示说明）。
         </p>
         <p>
+          <b>模拟视图：</b>选择角色 / 音擎 / 二件套 / 四件套 / 456 号位主词条后，可生成任意两个面板属性之间的
+          <b>成长极限有效前沿</b>。每枚盘按 S 级满级、总强化次数 9 计算；副词条只在 X/Y 两轴上分配，其余槽位视为废词条。
+          可点「添加二维图 / 添加三维图」临时叠加多张不同属性对的前沿图；三维图可拖拽旋转视角。
+        </p>
+        <p>
           <b>副词条命中：</b>「目标」弹窗的「有效副词条」区勾选视为有效的副词条属性；驱动盘词条旁标注
           <b>×n</b>（该词条强化次数，按 B 站 wiki 成长规则由词条数值推算），副词条命中次数 =
           六个盘落在有效属性上的词条次数之和（每个词条本身算 1，每强化一次再 +1）。
@@ -79,11 +86,13 @@
           <code>npm run sync:plans</code>，效果与网页一键更新相同 （<code>sync:plans</code> 可加
           <code>-- --account</code> 只同步账号已练角色）。
         </p>
+        </div>
       </div>
     </div>
 
     <div class="modal" id="syncModal">
       <div class="modal-box modal-wide">
+        <div class="modal-scroll">
         <button class="close" id="syncClose">✕</button>
         <h2>数据同步</h2>
         <p style="color: var(--dim); font-size: 14px">勾选要更新的数据，点「更新」开始；可多选。</p>
@@ -116,11 +125,13 @@
         <p style="font-size: 13px; color: var(--dim)">
           cookie 只保存到本地服务器的 <code>data/.cookie.json</code>，不会发送给任何外部服务器。
         </p>
+        </div>
       </div>
     </div>
 
     <div class="modal" id="targetModal">
       <div class="modal-box modal-wide">
+        <div class="modal-scroll">
         <button class="close" id="targetClose">✕</button>
         <h2>目标设置 · <span id="targetChar" style="color: var(--acc)"></span></h2>
         <p style="color: var(--dim); font-size: 14px">
@@ -169,11 +180,13 @@
           <h3 style="margin-top: 18px">推荐方案（养成指南）· 属性列为推荐最大值</h3>
           <div id="planTable"></div>
         </div>
+        </div>
       </div>
     </div>
 
     <div class="modal" id="noteModal">
       <div class="modal-box">
+        <div class="modal-scroll">
         <button class="close" id="noteClose">✕</button>
         <h2>角色备注 · <span id="noteChar" style="color: var(--acc)"></span></h2>
         <textarea
@@ -186,20 +199,24 @@
           <button id="noteSave" class="primary">保存</button>
           <button id="noteClear" class="ghost">清空</button>
         </div>
+        </div>
       </div>
     </div>
 
     <div class="modal" id="skillModal">
       <div class="modal-box modal-wide">
+        <div class="modal-scroll">
         <button class="close" id="skillClose">✕</button>
         <h2>技能数值 · <span id="skillTitle" style="color: var(--acc)"></span></h2>
         <div id="skillBody"></div>
+        </div>
       </div>
     </div>
 
     <!-- 数据由 main.js 经 /api/data 注入 -->
 
     <script src="/src/vendor/echarts.min.js"></script>
+    <script src="/src/vendor/echarts-gl.min.js"></script>
     <script type="module" src="/src/web/main.js"></script>
   </body>
 </html>

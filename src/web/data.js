@@ -3,7 +3,7 @@ import { statEntries } from '../lib/util.js';
 import { buildNameIndex, CATEGORY } from '../lib/names.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
-import { apiRequest, postJSON } from './util.js';
+import { apiRequest, postJSON, notify } from './util.js';
 
 // ---------- 数据（由 setData 注入） ----------
 // 注：这些是 export let，ESM 的 import 是活绑定（live binding），
@@ -76,7 +76,7 @@ export function readCharTarget(name) {
 }
 export function saveCharTarget(name, target) {
   userConfig.charTargets[name] = target;
-  saveUserConfig();
+  return saveUserConfig();
 }
 export function readValidStats(name) {
   const target = readCharTarget(name);
@@ -102,7 +102,7 @@ export function readNote(name) {
 }
 export function saveNote(name, text) {
   userConfig.notes[name] = text;
-  saveUserConfig();
+  return saveUserConfig();
 }
 export function readRowOrder() {
   return userConfig.rowOrder || null;
@@ -118,8 +118,15 @@ export function saveColOrder(order) {
   userConfig.colOrder = order;
   saveUserConfig();
 }
+/** 保存用户配置到服务器。
+ *  必须 await + 查 ok：postJSON 在服务器不可达/超时/非 JSON 响应时**返回 null 而不抛**，
+ *  原先既不 await 也不看返回值 —— 目标值/有效词条/行列序保存失败时页面毫无提示，
+ *  用户以为存上了，刷新后全部丢失。 */
 export async function saveUserConfig() {
-  postJSON('/api/config', { config: userConfig });
+  const j = await postJSON('/api/config', { config: userConfig });
+  if (j && j.ok) return true;
+  notify('配置保存失败：' + ((j && j.error) || '无法连接本地服务器') + '（刷新后本次修改会丢失）', 10);
+  return false;
 }
 export async function loadUserConfig() {
   const j = await apiRequest('/api/config', { method: 'GET' });

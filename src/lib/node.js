@@ -55,6 +55,15 @@ export async function pool(items, limit, fn, onProgress) {
   return ret;
 }
 
+/** 原子写 JSON（tmp + rename）：直接覆盖时若进程在写入中途退出/磁盘写满，
+ *  会留下被截断的半个文件——这些文件是下游全部统计的输入，损坏后要重爬数小时才能恢复。
+ *  工坊三件产物（workshop.json / workshop-grad.json / workshop-stats.json）与权重共用。 */
+export function writeJsonAtomic(file, data) {
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, file);
+}
+
 /** 校验 + 写入 data/ 下的 JSON 文件（sync 脚本收尾共用）。
  *  validate 提供校验函数时先 warnIfInvalid（strict 为 true 则抛错中断）；
  *  pretty 为 false 时用紧凑格式——library.json 嵌套 5 层，pretty 会膨胀到 ~11MB，紧凑仅 ~3.5MB。 */
@@ -185,9 +194,17 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
           if (st.started) st.elem += ch;
           continue;
         }
-        if (ch === '"') { st.inStr = true; if (st.started) st.elem += ch; continue; }
+        if (ch === '"') {
+          st.inStr = true;
+          if (st.started) st.elem += ch;
+          continue;
+        }
         if (ch === '{') {
-          if (!st.started) { st.started = true; st.depth = 1; st.elem = ''; } else st.depth++;
+          if (!st.started) {
+            st.started = true;
+            st.depth = 1;
+            st.elem = '';
+          } else st.depth++;
           st.elem += ch;
           continue;
         }
@@ -201,7 +218,11 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
           }
           continue;
         }
-        if (ch === '[') { st.depth++; if (st.started) st.elem += ch; continue; }
+        if (ch === '[') {
+          st.depth++;
+          if (st.started) st.elem += ch;
+          continue;
+        }
         if (ch === ']') {
           if (!st.started && st.depth === 0) break;
           st.depth--;

@@ -20,6 +20,11 @@ import {
   sourceOf,
   computeRollEfficiency,
   computeSourceAudit,
+  computeRoleStyles,
+  computeAllWorkshopStats,
+  styleLabel,
+  styleAttrShort,
+  styleMatch,
 } from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { streamJsonArrayElements } from '../src/lib/node.js';
@@ -726,4 +731,264 @@ test('computeSourceAudit：两源分别计数取均值，任一源 <30 时 diff 
   // 非审计属性不进表；无法判源的条目整条跳过
   const skip = computeSourceAudit([{ role_id: '1011', equips: [], panel: [{ name: '攻击力', final: '3000' }] }]);
   assert.deepEqual(skip, {}, '判不出源的条目不参与审计');
+});
+
+// ---------- 角色流派分析（computeRoleStyles / styleLabel / styleMatch） ----------
+
+test('styleLabel：4 号位取向 + 6 号位取向组合命名，同段去重', () => {
+  assert.equal(styleLabel('暴击伤害', '攻击力%'), '暴伤·攻击');
+  assert.equal(styleLabel('暴击率', '能量自动回复'), '暴击率·回能');
+  assert.equal(styleLabel('异常精通', '异常掌控'), '精通·异常');
+  assert.equal(styleLabel('攻击力%', '攻击力'), '攻击', '4/6 号位同为攻击取向时只留一段');
+  assert.equal(styleLabel('冲击力', '冲击力'), '冲击');
+  assert.equal(styleLabel('暴击伤害', undefined), '暴伤', '无 6 号位信息不加后缀');
+  assert.equal(styleLabel('未知词条', '攻击力%'), '均衡·攻击', '未知名归「均衡」');
+});
+
+test('styleAttrShort：属性短名（伤害加成归元素短名）', () => {
+  assert.equal(styleAttrShort('攻击力'), '攻击');
+  assert.equal(styleAttrShort('暴击伤害'), '暴伤');
+  assert.equal(styleAttrShort('冰属性伤害加成'), '冰伤');
+  assert.equal(styleAttrShort('电属性伤害加成'), '电伤');
+  assert.equal(styleAttrShort('以太伤害加成'), '以太伤');
+  assert.equal(styleAttrShort('物理伤害加成'), '物伤');
+});
+
+test('styleMatch：我的面板 → 相对距离最小的流派', () => {
+  const roleStyle = {
+    attrs: ['攻击力', '暴击率', '暴击伤害'],
+    styles: [
+      { label: '暴伤·攻击', share: 0.5, panel: { 攻击力: { mean: 2800 }, 暴击率: { mean: 0.6 }, 暴击伤害: { mean: 1.8 } } },
+      { label: '暴击率·攻击', share: 0.5, panel: { 攻击力: { mean: 2800 }, 暴击率: { mean: 0.8 }, 暴击伤害: { mean: 1.3 } } },
+    ],
+  };
+  const m1 = styleMatch(roleStyle, { 攻击力: 2750, 暴击率: 0.62, 暴击伤害: 1.75 });
+  assert.equal(m1.best.label, '暴伤·攻击');
+  const m2 = styleMatch(roleStyle, { 攻击力: 2850, 暴击率: 0.81, 暴击伤害: 1.28 });
+  assert.equal(m2.best.label, '暴击率·攻击');
+  // 缺失属性跳过（不因缺属性判无穷远）；无数据返回 null
+  assert.ok(styleMatch(roleStyle, { 攻击力: 2800 }).best);
+  assert.equal(styleMatch(null, {}), null);
+  assert.equal(styleMatch({ styles: [] }, {}), null);
+});
+
+test('computeRoleStyles：面板 k-means 分出两流派（攻击高 vs 暴击高），输出结构完整', () => {
+  const mk = (atk, cr, cd, main4, main6, suit, wep) => ({
+    role_id: '1011',
+    panel: [
+      { name: '攻击力', final: String(atk) },
+      { name: '防御力', final: '800' },
+      { name: '生命值', final: '10000' },
+      { name: '暴击率', final: String(cr) },
+      { name: '暴击伤害', final: String(cd) },
+      { name: '冰属性伤害加成', final: '0.3' },
+    ],
+    equips: [
+      { id: '11114', name: `[4]`, suit, main: [{ name: main4, value: '24%' }] },
+      { id: '11115', name: `[5]`, suit, main: [{ name: '冰属性伤害加成', value: '30%' }] },
+      { id: '11116', name: `[6]`, suit, main: [{ name: main6, value: '30%' }] },
+    ],
+    weapon: { name: wep },
+  });
+  // 200 条：100 条高攻击低暴击（4号攻击盘）+ 100 条高暴击（4号暴击率盘）→ k-means 应分两簇
+  const entries = [];
+  for (let i = 0; i < 100; i++) entries.push(mk(3300 + (i % 20) * 10, 0.45, 1.1, '攻击力百分比', '攻击力百分比', '攻套', '攻擎'));
+  for (let i = 0; i < 100; i++) entries.push(mk(2400 + (i % 20) * 10, 0.85, 1.7, '暴击率百分比', '攻击力百分比', '暴套', '暴擎'));
+  const out = computeRoleStyles(entries);
+  assert.deepEqual(Object.keys(out), ['1011']);
+  const r = out['1011'];
+  // 去噪语义：恒定的属性（防御/生命/伤害加成在此构造中无分化）会被剔除，
+  // 攻击力/暴击率/暴伤有强分化必须保留
+  assert.ok(r.attrs.includes('攻击力') && r.attrs.includes('暴击率') && r.attrs.includes('暴击伤害'), '分化属性入 attrs');
+  assert.ok(r.styles.length >= 2, '可分两簇以上');
+  // share 归一（可能有极小簇被丢弃，容差放宽到 ≤1）
+  const shareSum = r.styles.reduce((s, st) => s + st.share, 0);
+  assert.ok(shareSum > 0.9 && shareSum <= 1.0001);
+  for (const st of r.styles) {
+    assert.ok(st.label && st.label.length > 0, 'label 非空');
+    assert.ok(st.share > 0 && st.share <= 1);
+    for (const a of r.attrs) {
+      assert.ok(Number.isFinite(st.panel[a].mean), `${a} mean 有限`);
+      assert.ok(Number.isFinite(st.panel[a].median), `${a} median 有限`);
+    }
+    assert.ok(st.main['4']?.length >= 1, '4号位主词条 Top 非空');
+    assert.ok(Array.isArray(st.suits) && st.suits.length >= 1, '套装 Top 非空');
+    assert.ok(Array.isArray(st.wengine) && st.wengine.length >= 1, '音擎 Top 非空');
+  }
+  // 面板不全的条目不入样
+  const incomplete = computeRoleStyles([{ role_id: '1011', panel: [{ name: '攻击力', final: '3000' }], equips: [] }]);
+  assert.deepEqual(incomplete, {}, '面板不全不聚类');
+  // 样本太少不聚类
+  const few = computeRoleStyles([mk(3000, 0.6, 1.5, '暴击率百分比', '攻击力百分比', '套', '擎')]);
+  assert.deepEqual(few, {}, '样本 <200 不聚类');
+});
+
+test('computeRoleStyles：聚类属性池按角色定位（trait）选——击破含冲击力、异常含精通/掌控', () => {
+  // 击破角色：玩家在 冲击力 vs 攻击 间分化（无双暴分化），trait=击破 → attrs 应含 冲击力
+  const stun = [];
+  for (let i = 0; i < 100; i++) {
+    stun.push({
+      role_id: '2011',
+      panel: [
+        { name: '攻击力', final: String(2400 + i * 3) },
+        { name: '防御力', final: '900' },
+        { name: '生命值', final: '11000' },
+        { name: '暴击率', final: '0.3' },
+        { name: '暴击伤害', final: '0.9' },
+        { name: '冲击力', final: String(140 + (i % 2) * 30) }, // 冲击力两极分化
+        { name: '电属性伤害加成', final: '0.2' },
+      ],
+      equips: [{ id: '11114', name: '[4]', suit: '套', main: [{ name: '冲击力', value: '18%' }] }],
+      weapon: { name: '擎' },
+    });
+  }
+  const outStun = computeRoleStyles([...stun, ...stun], { traits: { '2011': '击破' } });
+  assert.ok(outStun['2011'].attrs.includes('冲击力'), '击破角色 attrs 含冲击力');
+  assert.ok(!outStun['2011'].attrs.includes('暴击率'), '无分化的双暴不入 attrs（去噪）');
+  // 异常角色：玩家在 精通 vs 攻击 间分化 → attrs 应含 异常精通/异常掌控
+  const anomaly = [];
+  for (let i = 0; i < 100; i++) {
+    anomaly.push({
+      role_id: '3011',
+      panel: [
+        { name: '攻击力', final: String(2600 + i * 3) },
+        { name: '防御力', final: '800' },
+        { name: '生命值', final: '10500' },
+        { name: '暴击率', final: '0.25' },
+        { name: '暴击伤害', final: '0.8' },
+        { name: '异常精通', final: String(80 + (i % 2) * 100) }, // 精通两极分化
+        { name: '异常掌控', final: String(120 + (i % 2) * 40) },
+        { name: '电属性伤害加成', final: '0.25' },
+      ],
+      equips: [{ id: '11114', name: '[4]', suit: '套', main: [{ name: '异常精通', value: '72' }] }],
+      weapon: { name: '擎' },
+    });
+  }
+  const outAnom = computeRoleStyles([...anomaly, ...anomaly], { traits: { '3011': '异常' } });
+  assert.ok(outAnom['3011'].attrs.includes('异常精通'), '异常角色 attrs 含异常精通');
+  assert.ok(outAnom['3011'].attrs.includes('异常掌控'), '异常角色 attrs 含异常掌控');
+  // 无 trait → 回退通用池（攻击/防御/生命/暴击率/暴伤）
+  const outFallback = computeRoleStyles([...stun, ...stun], {});
+  assert.ok(!outFallback['2011'].attrs.includes('冲击力'), '无定位时回退通用池，不含冲击力');
+});
+
+test('computeRoleStyles：簇的 main/suits/wengine 必须与该簇面板同源（下标以 valid 为基准）', () => {
+  // 回归：曾用 o.samples[i] 索引（i 来自过滤后的 valid），只要有样本被过滤，
+  // 其后全部样本整体错位一格 → main/suits/wengine 张冠李戴，且 label 由 main4[0] 推出故簇名也错。
+  // 关键在于把「被过滤样本」**交错**插入：若全部追加在末尾，两种写法的下标恰好重合，测不出来。
+  const P = (o) => Object.entries(o).map(([name, final]) => ({ name, final }));
+  const mk = (atk, cr, cd, m4, suit, wep, drop) => ({
+    role_id: 'T1',
+    // drop=true 缺「暴击伤害」等候选属性 → 被 valid 过滤掉
+    panel: P(drop ? { 攻击力: atk, 暴击率: cr } : { 攻击力: atk, 暴击率: cr, 暴击伤害: cd, 生命值: 8000, 防御力: 700 }),
+    equips: [{ name: 'D[4]', suit, main: [{ name: m4 }] }],
+    weapon: { name: wep },
+  });
+  const es = [];
+  for (let i = 0; i < 600; i++) {
+    if (i === 50 || i === 120 || i === 300) es.push(mk(3000, 0.5, 1.5, '暴击伤害', 'SetBad', 'WepBad', true));
+    // 两个可分离子群：高暴伤低攻 / 高攻低暴伤，各自的主词条·套装·音擎一一对应
+    es.push(
+      i % 2 === 0
+        ? mk(2800 + (i % 17), 0.3, 2.4, '暴击伤害', 'SetHi', 'WepHi', false)
+        : mk(4200 + (i % 17), 0.62, 1.1, '攻击力%', 'SetAtk', 'WepAtk', false)
+    );
+  }
+  const out = computeRoleStyles(es);
+  assert.ok(out.T1, '应产出流派');
+  for (const st of out.T1.styles) {
+    // 锚点必须是 st.panel：它由 P/valid 算出，在「修复前」与「修复后」都是对的。
+    // 若改用 st.main['4'] 反推期望值，main/suits/wengine 会一起错、彼此仍自洽 → 测不出 bug。
+    const isCdHigh = st.panel['暴击伤害'].mean > 1.7; // 高暴伤子群（攻击 2800 / 暴伤 2.4）
+    const [wantMain, wantSuit, wantWep] = isCdHigh
+      ? ['暴击伤害', 'SetHi', 'WepHi']
+      : ['攻击力%', 'SetAtk', 'WepAtk'];
+    assert.equal(st.main['4'][0], wantMain, `簇「${st.label}」(暴伤均值 ${st.panel['暴击伤害'].mean}) 主词条应与其面板同源`);
+    assert.equal(st.suits[0], wantSuit, `簇「${st.label}」套装应与其面板同源`);
+    assert.equal(st.wengine[0], wantWep, `簇「${st.label}」音擎应与其面板同源`);
+    // 被过滤样本的套装/音擎绝不该出现（它们根本不在 valid 里）
+    assert.ok(!st.suits.includes('SetBad'), '被过滤样本不应泄漏进结果');
+    assert.ok(!st.wengine.includes('WepBad'), '被过滤样本不应泄漏进结果');
+  }
+});
+
+test('聚合入口：脏条目（null/空对象）不应中断整轮聚合', () => {
+  // computeAllWorkshopStats 把同一条喂给全部 15 个累加器，任一处抛异常 = 2.13GB 全量重算零产出
+  const ok = {
+    role_id: '1011',
+    uid: 'u1',
+    rank: 0,
+    relic_point: 100,
+    weapon: { name: '擎' },
+    equips: [{ id: '11114', name: '[4]', suit: '套', main: [{ name: '攻击力', value: '30%' }], subs: [] }],
+    panel: [{ name: '攻击力', final: '3000' }],
+    skills: [],
+  };
+  const dirty = [null, undefined, {}, ok];
+  assert.doesNotThrow(() => computeWorkshopStats(dirty), 'computeWorkshopStats 应容忍脏条目');
+  assert.doesNotThrow(() => computeRoleStyles(dirty), 'computeRoleStyles 应容忍脏条目');
+  assert.doesNotThrow(() => computeAllWorkshopStats(dirty, {}), 'computeAllWorkshopStats 应容忍脏条目');
+  // 且脏条目被跳过后，正常条目仍被统计
+  const s = computeWorkshopStats(dirty);
+  assert.ok(
+    s.wengines.some((w) => w.name === '擎'),
+    '脏条目之后的正常条目仍应入统计'
+  );
+});
+
+test('computeAllWorkshopStats：单遍历结果与逐个公开函数逐位相等', () => {
+  // 文件头断言两条路径「逐位相等」（累加顺序/Map 插入顺序一致），此前无测试守护。
+  // 生产走的是单遍历路径，一旦某个累加器被改得与公开函数不同步，只有这里能发现。
+  const mkEntry = (i) => ({
+    role_id: String(1011 + (i % 3)),
+    uid: `u${i % 7}`,
+    rank: i % 7,
+    level: 60,
+    relic_point: 100 + (i % 50),
+    source: i % 2 ? 'mys' : '2025',
+    weapon: { name: `擎${i % 4}`, level: 60 },
+    equips: [4, 5, 6, 1, 2, 3].map((slot) => ({
+      id: `1111${slot}`,
+      name: `[${slot}]`,
+      suit: `套${i % 5}`,
+      main: [{ name: slot === 4 ? '暴击率' : '攻击力', value: i % 2 ? '24%' : 2400 }],
+      subs: [
+        { name: '攻击力', value: i % 2 ? '9.6' : 960 },
+        { name: '暴击伤害', value: i % 2 ? '9.6' : 960 },
+      ],
+    })),
+    panel: [
+      { name: '攻击力', final: String(2400 + (i % 300)) },
+      { name: '暴击率', final: String(0.3 + (i % 20) / 100) },
+      { name: '暴击伤害', final: String(1.2 + (i % 30) / 100) },
+      { name: '生命值', final: String(9000 + (i % 500)) },
+      { name: '防御力', final: String(700 + (i % 90)) },
+      { name: '异常精通', final: String(100 + (i % 40)) },
+      { name: '异常掌控', final: String(100 + (i % 25)) },
+      { name: '冲击力', final: String(110 + (i % 20)) },
+    ],
+    skills: [
+      { type: 0, level: 10 + (i % 3) },
+      { type: 1, level: 9 + (i % 4) },
+      { type: 2, level: 8 + (i % 5) },
+    ],
+  });
+  const entries = Array.from({ length: 400 }, (_, i) => mkEntry(i));
+  const discIndex = {};
+  const all = computeAllWorkshopStats(entries, discIndex);
+  // 每项与对应公开函数逐位比对（JSON 序列化同时校验键序）
+  const eq = (a, b, name) => assert.equal(JSON.stringify(a), JSON.stringify(b), `${name} 单遍历结果应与公开函数逐位相等`);
+  eq(all.stats, computeWorkshopStats(entries), 'stats');
+  eq(all.discDetails, computeWorkshopDiscStats(entries, discIndex), 'discDetails');
+  eq(all.panelScatter, computePanelScatter(entries), 'panelScatter');
+  eq(all.relicStats, computeRelicStats(entries), 'relicStats');
+  eq(all.rankDist, computeRankDist(entries), 'rankDist');
+  eq(all.skillStats, computeSkillStats(entries), 'skillStats');
+  eq(all.roleDiscStats, computeRoleDiscStats(entries), 'roleDiscStats');
+  eq(all.roleCooccurrence, computeRoleCooccurrence(entries), 'roleCooccurrence');
+  eq(all.rankRelic, computeRankRelic(entries), 'rankRelic');
+  eq(all.skillCombos, computeSkillComboStats(entries), 'skillCombos');
+  eq(all.rollEfficiency, computeRollEfficiency(entries), 'rollEfficiency');
+  eq(all.sourceAudit, computeSourceAudit(entries), 'sourceAudit');
+  eq(all.roleStyles, computeRoleStyles(entries), 'roleStyles');
 });

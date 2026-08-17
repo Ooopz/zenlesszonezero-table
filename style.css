@@ -362,7 +362,7 @@ button.apply-btn {
   clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
 }
 /* 弹窗关闭钮：sticky + float 固定在右上（内容滚动时始终可见，不随内容滚走）。
-   sticky 相对 .modal-box（overflow:auto 的滚动容器）生效；float 负责靠右。 */
+   sticky 相对 .modal-scroll（overflow:auto 的滚动容器）生效；float 负责靠右。 */
 .modal-box .close {
   position: sticky;
   top: 12px;
@@ -1044,6 +1044,9 @@ main::-webkit-scrollbar {
   color: var(--hazard-lt);
   font-weight: 700;
 }
+.disc .dsubs .hit .rolls {
+  color: var(--hazard-lt);
+}
 .disc .dsubs .rolls {
   color: var(--dim2);
   letter-spacing: 1px;
@@ -1283,10 +1286,15 @@ main::-webkit-scrollbar {
   width: 16px;
   height: 16px;
   margin: 0 1px;
-  border: 1px solid var(--line2);
-  background: var(--card2);
+  border: 1px solid var(--hazard-dk);
+  background: var(--grad-hazard);
   font-size: 9px;
-  color: var(--dim2);
+  font-weight: 800;
+  color: #0a0a0a;
+  cursor: default;
+}
+.wiki-ms-dot:hover {
+  box-shadow: 0 0 8px rgba(var(--hazard-rgb), 0.35);
 }
 
 /* ---------- 统计视图表（.rec-table） ---------- */
@@ -1441,6 +1449,9 @@ main::-webkit-scrollbar {
 .tip .hit {
   color: var(--hazard-lt);
   font-weight: 700;
+}
+.tip .hit .rolls {
+  color: var(--hazard-lt);
 }
 .tip .rolls {
   color: var(--dim2);
@@ -1600,6 +1611,82 @@ main::-webkit-scrollbar {
   outline: none;
   border-color: var(--hazard);
   box-shadow: 0 0 0 1px rgba(var(--hazard-rgb), 0.35);
+}
+
+/* ============================================================
+   流派分析卡（统计 → 角色面板）
+   ============================================================ */
+.style-share-bar {
+  display: flex;
+  height: 10px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.style-share-bar span {
+  flex-basis: 0;
+}
+.style-mine-line {
+  font-size: var(--fs-sm);
+  color: var(--dim);
+  margin-bottom: var(--sp-1);
+}
+.style-mine-line .style-best {
+  color: var(--hazard-lt);
+  font-size: var(--fs-md);
+}
+.style-table-wrap {
+  overflow: auto;
+  max-height: 320px;
+  border: 1px solid var(--line);
+}
+.style-table-wrap .rec-table {
+  min-width: 560px;
+}
+.style-mine {
+  color: var(--hazard-lt);
+  font-weight: 800;
+}
+.style-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.style-block {
+  border: 1px solid var(--line);
+  background: var(--card2);
+  padding: var(--sp-3);
+  min-width: 0;
+}
+.style-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--sp-2);
+}
+.style-block-head b {
+  font-family: var(--font-disp);
+  font-size: var(--fs-lg);
+  letter-spacing: 1px;
+  color: var(--hazard-lt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-block-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 3px 0;
+  font-size: var(--fs-xs);
+  flex-wrap: wrap;
+}
+.style-block-row .style-k {
+  width: 42px;
+  flex-shrink: 0;
+  color: var(--dim2);
+  font-size: 11px;
 }
 
 /* ============================================================
@@ -1882,12 +1969,16 @@ main::-webkit-scrollbar {
 .modal-box {
   position: relative;
   width: min(720px, 92vw);
-  max-height: 86vh;
-  overflow: auto;
   background: #131313;
   border: 1px solid var(--line2);
   box-shadow: var(--shadow-lg);
   padding: var(--sp-6);
+}
+/* 内容滚动区：max-height 扣除 .modal-box 上下 padding，外层总高仍 ≤ 86vh。
+   滚动发生在内层，外层的 ::before/::after（警示带 + 四角括号）不再随内容滚走 */
+.modal-scroll {
+  max-height: calc(86vh - var(--sp-6) * 2);
+  overflow: auto;
 }
 .modal-box.modal-wide {
   width: min(980px, 94vw);
@@ -2157,6 +2248,9 @@ main::-webkit-scrollbar {
   .ad-slotgrid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .style-blocks {
+    grid-template-columns: 1fr;
+  }
   main {
     grid-template-columns: 1fr;
   }
@@ -2169,4 +2263,89 @@ main::-webkit-scrollbar {
   .stamp-wrap {
     display: none;
   }
+}
+
+
+/* ============================================================
+   模拟视图：成长极限 / 有效前沿
+   ============================================================ */
+.sim-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.sim-config h3 {
+  margin: 0 0 var(--sp-2);
+  font-family: var(--font-disp);
+  font-size: 20px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--txt);
+}
+.sim-desc {
+  margin: 0 0 var(--sp-3);
+  color: var(--dim);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.sim-grid {
+  margin-bottom: var(--sp-3);
+}
+.sim-fixed {
+  font-size: var(--fs-xs);
+  color: var(--dim);
+  letter-spacing: 1px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.sim-fixed-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.sim-fixed-item {
+  border: 1px solid var(--line);
+  background: var(--card2);
+  padding: 4px 10px;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+.sim-fixed-item b {
+  color: var(--txt);
+  margin-right: 6px;
+}
+.sim-chart-card {
+  min-width: 0;
+}
+.sim-chart-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.sim-axis-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sim-axis-row .titem {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+.sim-remove {
+  margin-left: auto;
+}
+.sim-range {
+  color: var(--dim);
+  font-size: var(--fs-xs);
+}
+.sim-add-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.sim-tip {
+  color: var(--dim);
+  font-size: var(--fs-sm);
 }

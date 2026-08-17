@@ -10,19 +10,28 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { openBrowser } from './src/lib/node.js';
 import { parseCookies } from './src/lib/util.js';
 import { SYNC_KINDS } from './src/lib/constants.js';
-import { fetchLibrary, localizeDataFiles } from './src/sync/library.js';
-import { fetchMyCharacters, cacheCookies, readCookieCache } from './src/sync/characters.js';
-import { fetchAllPlans } from './src/sync/plans.js';
-import { fetchWorkshopData } from './src/sync/workshop.js';
 
 const PORT = process.env.PORT || 8719;
 // 仅监听回环地址：data/ 下有明文 cookie 与个人配置，绝不能暴露到局域网。
-// 如确需局域网访问，显式设 HOST=0.0.0.0（自行承担凭证泄漏风险）。
+// 如确需局域网/公网访问，显式设 HOST=0.0.0.0 —— 此时必须同时设 AUTH_TOKEN（见下方 requireAuth），
+// 否则进程直接拒绝启动。「暴露」与「无鉴权」这两件事不允许同时发生。
 const HOST = process.env.HOST || '127.0.0.1';
+/** 绑定地址是否为回环（决定是否强制鉴权 / 是否自动开浏览器） */
+const IS_LOOPBACK = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
+/** 访问令牌：非回环绑定时必填。请求带 ?token= 或 X-Auth-Token 头或 zzz_token cookie 均可 */
+const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
+/** 额外放行的写请求来源（部署到域名后浏览器会带真实 Origin）。逗号分隔，如 https://zzz.example.com */
+const ALLOWED_ORIGINS = new Set(
+  (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
 // 项目根目录（server.js 位于根目录）
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // 请求体上限：/api/config 会把请求体原样落盘，不设限等于开放磁盘写入
@@ -42,8 +51,43 @@ const MIME = {
 
 /** 简易「正在同步」互斥锁，避免两个同步同时写数据文件 */
 let busy = null;
+/** 抢到锁的时刻（ms），用于残留锁自愈判定 */
+let busySince = 0;
+/** 锁最长持有时间：工坊全量爬取可达数小时，取 6h 作为「进程已异常」的判定线 */
+const BUSY_MAX_MS = 6 * 60 * 60 * 1000;
 /** 同步进度（供 /api/sync-progress 轮询），空闲时为 null */
 let syncState = null;
+
+// ---------------- 同步模块懒加载 ----------------
+// 这四个模块在**模块加载时**就读 library.json 建名称索引（characters.js / plans.js / workshop.js 顶层
+// loadNameIndexes()）。若在启动时静态 import，索引会被永久冻结在「服务器启动那一刻的 library.json」——
+// 网页点「更新数据库」写入新 library.json 后，同进程内后续的角色/方案/工坊同步仍用旧索引解析名称，
+// 新角色一律解析失败，必须重启进程才生效。改为每次同步时动态 import 并按 mtime 失效缓存。
+let syncModsCache = null;
+function libraryMtime() {
+  try {
+    return fs.statSync(path.join(ROOT, 'data', 'library.json')).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+async function loadSyncMods() {
+  const mtime = libraryMtime();
+  if (syncModsCache && syncModsCache.mtime === mtime) return syncModsCache.mods;
+  // library.json 变了就换一个 URL query 强制重新求值模块（ESM 模块缓存按 URL 去重）
+  const v = mtime ? `?v=${mtime}` : '';
+  const [library, characters, plans, workshop] = await Promise.all([
+    import(`./src/sync/library.js${v}`),
+    import(`./src/sync/characters.js${v}`),
+    import(`./src/sync/plans.js${v}`),
+    import(`./src/sync/workshop.js${v}`),
+  ]);
+  const mods = { library, characters, plans, workshop };
+  syncModsCache = { mtime, mods };
+  return mods;
+}
+/** cookie 缓存读写要在同步之外单独用（/api/cookie 等），走同一份懒加载 */
+const charactersMod = () => loadSyncMods().then((m) => m.characters);
 
 // ---------------- 静态文件 ----------------
 
@@ -106,6 +150,15 @@ function serveStatic(req, res) {
 
 // ---------------- API ----------------
 
+/** 客户端错误：带 status 标记，由顶层 catch 映射成 4xx 而非 500。
+ *  非法 JSON / 请求体过大是调用方的问题，回 500 会误导排查方向，
+ *  还会给每个畸形请求打一条带栈的 console.error（日志噪音，且可被外部触发）。 */
+function badRequest(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  return e;
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     // Buffer 收集后统一解码：逐块 toString('utf8') 会把跨 TCP 分片的中文切成乱码
@@ -114,8 +167,10 @@ function readBody(req) {
     req.on('data', (c) => {
       size += c.length;
       if (size > MAX_BODY) {
-        req.destroy();
-        return reject(new Error('请求体过大'));
+        // 只停止读取（pause）而不 destroy：destroy 会立刻拆掉 socket，413 响应根本发不出去，
+        // 客户端看到的是连接重置而非「体过大」。响应写完后由 respond 的 end 收尾。
+        req.pause();
+        return reject(badRequest(413, '请求体过大'));
       }
       chunks.push(c);
     });
@@ -124,7 +179,7 @@ function readBody(req) {
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch {
-        reject(new Error('请求体不是合法 JSON'));
+        reject(badRequest(400, '请求体不是合法 JSON'));
       }
     });
     req.on('error', reject);
@@ -137,12 +192,38 @@ function readBody(req) {
 function isCrossSite(req) {
   const origin = req.headers.origin;
   if (!origin) return false; // 非浏览器发起（curl / 同源导航）
+  if (ALLOWED_ORIGINS.has(origin)) return false; // 部署到域名后由 ALLOWED_ORIGINS 显式放行
   try {
-    const { hostname } = new URL(origin);
-    return hostname !== 'localhost' && hostname !== '127.0.0.1' && hostname !== '[::1]' && hostname !== '::1';
+    const { hostname, host } = new URL(origin);
+    // 本机开发：回环地址一律放行（端口任意）
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1') return false;
+    // 部署形态：Origin 与请求的 Host 头一致即为同源（此时浏览器带的是真实域名，
+    // 原实现把它一律判成跨站 → 部署后所有 POST 全部 403）
+    return host !== req.headers.host;
   } catch {
     return true;
   }
+}
+
+/** 访问令牌校验（仅在设了 AUTH_TOKEN 时生效）。令牌来源：Cookie > 请求头 > query。
+ *  用 timingSafeEqual 防逐字节比较的时序侧信道。 */
+function tokenOf(req) {
+  const c = req.headers.cookie || '';
+  const m = /(?:^|;\s*)zzz_token=([^;]+)/.exec(c);
+  if (m) return decodeURIComponent(m[1]);
+  if (req.headers['x-auth-token']) return String(req.headers['x-auth-token']);
+  const q = req.url.split('?')[1];
+  if (q) {
+    const t = new URLSearchParams(q).get('token');
+    if (t) return t;
+  }
+  return '';
+}
+function isAuthed(req) {
+  if (!AUTH_TOKEN) return true; // 未配置令牌（回环本机使用）= 不鉴权，行为与此前完全一致
+  const got = Buffer.from(tokenOf(req));
+  const want = Buffer.from(AUTH_TOKEN);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
 }
 function respond(res, code, obj) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -219,7 +300,11 @@ function buildDataPayload() {
   }
   obj.plans = slimPlans(obj.plans);
   const raw = Buffer.from(JSON.stringify(obj), 'utf-8');
-  return { raw, gzip: zlib.gzipSync(raw, { level: 6 }), etag: `W/"${dataSignature().length}-${raw.length}"` };
+  // ETag 必须由**内容**导出：原实现用 dataSignature().length —— 那是签名字符串的长度，
+  // 实测恒为 132（mtime/size 位数不变），等价于只靠 raw.length 区分版本。
+  // 若一次同步后总字节数恰好不变（改名、等长数值），浏览器会拿到 304 而永远看不到新数据。
+  const etag = `W/"${crypto.createHash('sha1').update(raw).digest('base64url')}"`;
+  return { raw, gzip: zlib.gzipSync(raw, { level: 6 }), etag };
 }
 
 /** /api/data：解析结果按 mtime 缓存，命中 ETag 直接 304。
@@ -265,10 +350,17 @@ async function runSync(
     emptyCookieError = '',
   }
 ) {
-  if (busy) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
+  if (busy) {
+    // 死锁自愈：busy 只在 finally 里清，进程若在同步中途被 uncaughtException 兜住（不退出进程），
+    // 锁会永远留着，此后所有同步都 409，只能重启。超过阈值视为上一轮已经死了，放行并夺锁。
+    const heldFor = Date.now() - busySince;
+    if (heldFor < BUSY_MAX_MS) return respond(res, 409, { ok: false, error: '已有同步进行中，请稍候' });
+    console.warn(`[同步锁] 「${busy}」已持有 ${(heldFor / 60000).toFixed(0)} 分钟，判定为残留锁，强制释放`);
+  }
   // 必须在任何 await 之前抢锁：readBody 是异步的，若在其之后置位，
   // 两个并发同步请求会双双通过上面的检查，同时写 data/*.json。
   busy = label;
+  busySince = Date.now();
   syncState = { kind, step: 'prepare', done: 0, total: 0 };
   let body = null;
   if (needBody) {
@@ -281,7 +373,7 @@ async function runSync(
     }
   }
   try {
-    const cookies = resolveCookies(body);
+    const cookies = await resolveCookies(body);
     if (cookies === null) return respond(res, 400, { ok: false, error: emptyCookieError });
     const onProgress =
       progressShape === 'count'
@@ -292,7 +384,7 @@ async function runSync(
             syncState = { kind, ...p };
           };
     const { stats } = await run(cookies, onProgress);
-    if (cacheOnBodyCookie && body?.cookie && body.cookie.trim()) cacheCookies(cookies);
+    if (cacheOnBodyCookie && body?.cookie && body.cookie.trim()) (await charactersMod()).cacheCookies(cookies);
     console.log(`[更新${label}] 完成`);
     respond(res, 200, { ok: true, type: kind, stats });
   } catch (e) {
@@ -305,17 +397,19 @@ async function runSync(
 }
 
 /** cookie 来源：请求体 > 本地缓存；两者都没有返回 null（调用方回 400）。 */
-const cookieFromBodyOrCache = (body) => {
+const cookieFromBodyOrCache = async (body) => {
   const c = body?.cookie && body.cookie.trim() ? parseCookies(body.cookie) : null;
-  return c || readCookieCache();
+  return c || (await charactersMod()).readCookieCache();
 };
 
 // 四个同步动作（同步耗时较长，请求期间页面显示「正在同步…」）。fetch* 内部已写入 data/*.json。
+// run 里统一走 loadSyncMods()：每次同步按 library.json 的 mtime 决定是否重新求值同步模块，
+// 保证「更新数据库」后同进程内的后续同步用的是新的名称索引（详见 loadSyncMods 注释）。
 const syncLibraryHandler = (req, res) =>
   runSync(req, res, {
     kind: SYNC_KINDS.LIBRARY,
     label: '数据库',
-    run: (_, onProgress) => fetchLibrary(onProgress), // fetchLibrary 内部已做图片本地化（与 wiki 更新绑定）
+    run: async (_, onProgress) => (await loadSyncMods()).library.fetchLibrary(onProgress), // 内部已做图片本地化（与 wiki 更新绑定）
   });
 
 const syncCharactersHandler = (req, res) =>
@@ -328,8 +422,9 @@ const syncCharactersHandler = (req, res) =>
     resolveCookies: cookieFromBodyOrCache,
     emptyCookieError: '没有可用的 cookie：请先在页面粘贴，或先运行 node sync-characters.js',
     run: async (cookies, onProgress) => {
-      const s = await fetchMyCharacters(cookies, onProgress);
-      await localizeDataFiles(); // 图片本地化，避免账号角色图片回到远程
+      const mods = await loadSyncMods();
+      const s = await mods.characters.fetchMyCharacters(cookies, onProgress);
+      await mods.library.localizeDataFiles(); // 图片本地化，避免账号角色图片回到远程
       return s;
     },
   });
@@ -338,7 +433,7 @@ const syncWorkshopHandler = (req, res) =>
   runSync(req, res, {
     kind: SYNC_KINDS.WORKSHOP,
     label: '工坊配装',
-    run: (_, onProgress) => fetchWorkshopData(onProgress),
+    run: async (_, onProgress) => (await loadSyncMods()).workshop.fetchWorkshopData(onProgress),
   });
 
 const syncPlansHandler = (req, res) =>
@@ -350,7 +445,7 @@ const syncPlansHandler = (req, res) =>
     cacheOnBodyCookie: true,
     resolveCookies: cookieFromBodyOrCache,
     emptyCookieError: '没有可用的 cookie：请先在「同步数据」弹窗里粘贴 cookie',
-    run: (cookies, onProgress) => fetchAllPlans(cookies, {}, onProgress),
+    run: async (cookies, onProgress) => (await loadSyncMods()).plans.fetchAllPlans(cookies, {}, onProgress),
   });
 
 // ---------------- 路由 ----------------
@@ -358,6 +453,24 @@ const syncPlansHandler = (req, res) =>
 const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
   try {
+    // /login：把 ?token= 写进 cookie 后跳首页（只需做一次，之后浏览器自动带 cookie）。
+    // 必须在鉴权判定**之前**处理：token 在 query 里时 isAuthed 已为真，若放在后面会走
+    // 「已鉴权」分支直接跳转而不种 cookie，用户下一个请求照样 401。
+    if (req.method === 'GET' && url === '/login') {
+      const t = new URLSearchParams(req.url.split('?')[1] || '').get('token') || '';
+      const headers = { Location: '/' };
+      // 只在令牌正确时种 cookie；错误令牌静默跳首页（由首页请求回 401），不做区分提示以免成为探测口
+      if (AUTH_TOKEN && t === AUTH_TOKEN) {
+        headers['Set-Cookie'] = `zzz_token=${encodeURIComponent(t)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
+      }
+      res.writeHead(302, headers);
+      return res.end();
+    }
+    // 鉴权（仅设了 AUTH_TOKEN 时生效）：未通过的请求连静态资源都拿不到
+    if (!isAuthed(req)) {
+      res.writeHead(401, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('需要访问令牌：请访问 /login?token=<AUTH_TOKEN>');
+    }
     // 所有写请求先挡跨站来源（CSRF）：读接口不含敏感数据，无需拦截
     if (req.method === 'POST' && isCrossSite(req)) return respond(res, 403, { ok: false, error: '跨站请求已拒绝' });
     // 路由统一用 ASCII，避免中文路径被浏览器百分号编码后匹配失败
@@ -367,7 +480,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url === '/api/sync-workshop') return await syncWorkshopHandler(req, res);
     if (req.method === 'GET' && url === '/api/data') return sendData(req, res);
     if (req.method === 'GET' && url === '/api/cookie-status')
-      return respond(res, 200, { ok: true, cached: !!readCookieCache() });
+      return respond(res, 200, { ok: true, cached: !!(await charactersMod()).readCookieCache() });
     if (req.method === 'GET' && url === '/api/sync-progress')
       return respond(res, 200, { ok: true, progress: syncState });
     if (req.method === 'GET' && url === '/api/sync-status') {
@@ -375,7 +488,7 @@ const server = http.createServer(async (req, res) => {
       // 前端只需要知道「是否已缓存」，需要更换时重新粘贴即可。
       return respond(res, 200, {
         ok: true,
-        cached: !!readCookieCache(),
+        cached: !!(await charactersMod()).readCookieCache(),
         files: {
           library: mtimeOf('library.json'),
           characters: mtimeOf('characters.json'),
@@ -406,12 +519,14 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const c = parseCookies(body.cookie || '');
       if (!c) return respond(res, 400, { ok: false, error: 'cookie 为空或格式不对' });
-      cacheCookies(c);
+      (await charactersMod()).cacheCookies(c);
       return respond(res, 200, { ok: true, cached: true });
     }
     if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(req, res);
     respond(res, 405, { ok: false, error: 'Method Not Allowed' });
   } catch (e) {
+    // 客户端错误（非法 JSON / 体过大）回 4xx 且不打栈：外部可随意触发，不该刷屏日志
+    if (e.status) return respond(res, e.status, { ok: false, error: e.message });
     console.error('处理请求出错:', e);
     respond(res, 500, { ok: false, error: e.message });
   }
@@ -421,10 +536,45 @@ const server = http.createServer(async (req, res) => {
 process.on('unhandledRejection', (e) => console.error('未处理的 Promise 拒绝:', e));
 process.on('uncaughtException', (e) => console.error('未捕获异常:', e));
 
+// 「对外暴露」与「无鉴权」不允许同时成立：data/ 下是明文米游社 cookie 与个人账号数据。
+// 拒绝启动而不是打印警告——警告在后台运行时没人会看到。
+if (!IS_LOOPBACK && !AUTH_TOKEN) {
+  console.error(
+    `\n  拒绝启动：HOST=${HOST} 会把服务暴露到本机之外，但未设置 AUTH_TOKEN。\n` +
+      `  data/ 下有明文米游社 cookie 与个人账号数据，必须加访问令牌：\n` +
+      `      AUTH_TOKEN=$(openssl rand -hex 16) HOST=${HOST} npm start\n` +
+      `  然后浏览器访问 http://<地址>:${PORT}/login?token=<令牌> 写入 cookie（只需一次）。\n` +
+      `  若部署在域名后，另设 ALLOWED_ORIGINS=https://你的域名 放行写请求。\n`
+  );
+  process.exit(1);
+}
+
 server.listen(PORT, HOST, () => {
-  console.log(`\n  绝区零配装面板 本地服务器已启动`);
-  console.log(`  浏览器打开: http://localhost:${PORT}`);
+  console.log(`\n  绝区零配装面板 服务器已启动`);
+  console.log(`  监听: http://${HOST}:${PORT}${IS_LOOPBACK ? '' : '（对外可访问）'}`);
+  if (AUTH_TOKEN) console.log(`  已启用访问令牌，首次访问: /login?token=<AUTH_TOKEN>`);
   console.log(`  网页上「更新数据库/我的角色/推荐方案/工坊配装」即为一键更新；cookie 会缓存在 data/.cookie.json`);
   console.log(`  按 Ctrl+C 停止\n`);
-  openBrowser(`http://localhost:${PORT}`);
+  // 服务器环境（非回环绑定 / 无桌面 / 显式 NO_OPEN）不弹浏览器：headless 下 openBrowser
+  // 会留下僵尸进程或直接报错
+  if (IS_LOOPBACK && !process.env.NO_OPEN) openBrowser(`http://localhost:${PORT}`);
 });
+
+// 优雅退出：systemd/docker stop 发的是 SIGTERM。原先没有任何处理 = 默认立即终止，
+// 若此时正在写 data/*.json（同步收尾）会留下半个文件。这里停止收新连接并给在途请求 10s 收尾。
+let shuttingDown = false;
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    if (shuttingDown) return; // 连按两次 Ctrl+C 直接走默认行为
+    shuttingDown = true;
+    console.log(`\n收到 ${sig}，停止接收新请求…${busy ? `（正在同步「${busy}」，等待收尾）` : ''}`);
+    server.close(() => {
+      console.log('已关闭');
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.warn('超时未收尾，强制退出');
+      process.exit(1);
+    }, 10_000).unref();
+  });
+}

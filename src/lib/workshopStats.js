@@ -6,7 +6,7 @@
 //   2026-10 新增（roleCooccurrence/rankRelic/skillCombos）、
 //   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度、sourceAudit 两源一致性 D10）、
 //   discStatName、substatRolls、buildRoleSubstatWeights、sourceOf、bin2D。
-import { computeDist, pearson, quantileSorted } from './distStats.js';
+import { computeDist, kmeans, pearson, quantileSorted } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
 import { mainStatName, SUBSTAT_TYPE_SET, MAIN_STAT_OPTIONS, OFFICIAL_SKILL_TYPE, WS2025_SKILL_TYPE } from './constants.js';
@@ -60,6 +60,9 @@ function makeWorkshopStatsAcc() {
   const pMap = new Map(); // 角色 id -> {name, stats:{属性:[数值]}}
   return {
     add(e) {
+      // 单条脏数据不应中断整轮聚合：computeAllWorkshopStats 把同一条喂给全部累加器，
+      // 这里抛异常 = 2.13GB 全量重算（约 4 分钟）零产出。与其余累加器的守卫保持一致。
+      if (!e) return;
       // 音擎：每配装计一次
       if (e.weapon?.name && e.weapon.name !== '其他') {
         if (!wMap.has(e.weapon.name)) wMap.set(e.weapon.name, { name: e.weapon.name, count: 0, chars: new Set() });
@@ -1088,6 +1091,245 @@ function makeSkillComboStatsAcc() {
  *            skillStats, roleDiscStats, roleCooccurrence, rankRelic, skillCombos,
  *            rollEfficiency, sourceAudit}}
  */
+// ---------- 角色流派分析（2026-10 新增） ----------
+// 流派 = 玩家在面板上的配置取向分化：同一角色的面板资源零和，玩家在「堆攻击 / 堆双暴 / 堆精通」等
+// 取向间分化，k-means 把这些取向聚成簇（每簇 = 一个流派）。
+// ⚠️ 聚类属性必须按角色定位（trait）选：输出看 攻击/双暴/属性伤害、击破核心是**冲击力**、
+//    异常核心是**精通/掌控**、命破/防护核心是**生命/防御**、支援只有 攻击/生命——固定 6 维会让
+//    击破/异常角色的核心维度缺失、支援角色把无关维度（双暴）当判别信号。
+//    故：候选池按 trait 选 → 样本过滤 → **数据驱动去噪**（归一化 sd 过低的列 = 玩家无分化 =
+//    无流派判别力，剔除；至少保留 3 维）。
+// 试验验证（排行榜全量 uid 池）：星见雅/艾莲 k=3 出「暴伤/暴击率/攻击」三流、苍角出「精通异常/双暴/
+// 攻击」三流，4 号位主词条是强判别信号（簇内 Top1 占比 >50%）；k=4 出现噪声簇，故固定 k=3。
+// 输出体积受控：每簇只存 share/label/面板 mean+median/456 主词条 Top2/套装 Top2/音擎 Top2。
+const STYLE_K = 3;
+const STYLE_MAX_SAMPLES = 20000; // 每角色样本上限（2 万 × ≤7 维已足够稳定；截断保序无随机性）
+/** 角色定位 → 聚类候选属性池（定位语义：只聚玩家真正会分化的属性） */
+const TRAIT_STYLE_ATTRS = {
+  强攻: ['攻击力', '暴击率', '暴击伤害', '生命值', '防御力'],
+  命破: ['生命值', '攻击力', '暴击率', '暴击伤害', '防御力'],
+  防护: ['生命值', '防御力', '攻击力', '暴击率', '暴击伤害'],
+  击破: ['冲击力', '攻击力', '暴击率', '暴击伤害', '生命值'],
+  异常: ['攻击力', '异常精通', '异常掌控', '暴击率', '暴击伤害'],
+  支援: ['攻击力', '生命值', '防御力', '暴击率', '暴击伤害'],
+};
+/** 无定位信息时回退通用池 */
+const STYLE_FALLBACK_ATTRS = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害'];
+/** 去噪阈值：归一化 sd（cv = sd/|mean|）低于此值 = 玩家无分化，剔除该维 */
+const STYLE_MIN_CV = 0.04;
+
+/** 归一主词条名 → 流派基名（4 号位取向） */
+export function styleBaseName(main4) {
+  switch (main4) {
+    case '暴击伤害': return '暴伤';
+    case '暴击率': return '暴击率';
+    case '异常精通': return '精通';
+    case '攻击力%':
+    case '攻击力': return '攻击';
+    case '冲击力': return '冲击';
+    default: return '均衡';
+  }
+}
+/** 归一主词条名 → 流派后缀（6 号位取向；空 = 不标注） */
+export function styleSuffix(main6) {
+  switch (main6) {
+    case '攻击力%':
+    case '攻击力': return '攻击';
+    case '异常掌控':
+    case '异常精通': return '异常';
+    case '能量自动回复': return '回能';
+    case '冲击力': return '冲击';
+    default: return '';
+  }
+}
+/** 流派标签 = 4 号位取向 + 6 号位取向（如「暴伤·攻击」「精通·异常」；两段相同时只留一段） */
+export function styleLabel(main4Top, main6Top) {
+  const base = styleBaseName(main4Top);
+  const suffix = styleSuffix(main6Top);
+  return suffix && suffix !== base ? `${base}·${suffix}` : base;
+}
+/** 属性短名（面板档位后缀用；伤害加成「冰属性伤害加成」→「冰伤」） */
+export function styleAttrShort(attr) {
+  const m = /^(.+?)(?:属性)?伤害加成$/.exec(attr);
+  if (m) return `${m[1].replace(/^物理$/, '物')}伤`;
+  return { 攻击力: '攻击', 暴击率: '暴击率', 暴击伤害: '暴伤', 异常精通: '精通', 异常掌控: '掌控', 冲击力: '冲击' }[attr] || attr;
+}
+
+/** 我的面板 → 各流派距离（按属性相对差平方和 ÷ 参与属性数，缺失属性跳过；dist 越小越贴近）。
+ *  供前端「我的角色联动」标注用户配置偏向哪个流派。 */
+export function styleMatch(roleStyle, myPanel) {
+  if (!roleStyle || !roleStyle.styles?.length) return null;
+  const scored = roleStyle.styles
+    .map((st) => {
+      let d = 0;
+      let cnt = 0;
+      for (const a of roleStyle.attrs) {
+        const my = myPanel[a];
+        const m = st.panel?.[a]?.mean;
+        if (my == null || m == null || m === 0) continue;
+        d += ((my - m) / m) ** 2;
+        cnt++;
+      }
+      return { label: st.label, share: st.share, dist: cnt ? d / cnt : Infinity };
+    })
+    .sort((a, b) => a.dist - b.dist);
+  return { best: scored[0] ?? null, scored };
+}
+
+/** 流派聚类累加器（挂进 computeAllWorkshopStats 单遍历；见文件头累加器约定）。
+ *  @param {Object<string,string>} [traits]  role_id → 定位（强攻/击破/异常/命破/防护/支援）；缺省回退通用属性池 */
+function makeRoleStylesAcc(traits) {
+  const perRole = new Map(); // role_id -> {dmg: Map<键,count>, samples: [{panel,mains,suit,wep,dmg}]}
+  return {
+    add(e) {
+      if (!e || e.role_id == null) return;
+      const pm = {};
+      for (const p of e.panel || []) {
+        const v = parsePanelFinal(p.final);
+        if (v != null) pm[p.name] = v;
+      }
+      // 攻击力是所有角色的面板基座：缺失视为面板不全，不入样（完整属性过滤在 finish 按候选集做）
+      if (pm['攻击力'] == null) return;
+      // 属性伤害键：含「伤害」且排除「暴击伤害」（角色级众数在 finish 定，先按样本收集）
+      const dmg = {};
+      for (const k of Object.keys(pm)) {
+        if (k.includes('伤害') && k !== '暴击伤害') dmg[k] = pm[k];
+      }
+      let o = perRole.get(e.role_id);
+      if (!o) perRole.set(e.role_id, (o = { dmg: new Map(), samples: [] }));
+      for (const k of Object.keys(dmg)) o.dmg.set(k, (o.dmg.get(k) || 0) + 1);
+      if (o.samples.length >= STYLE_MAX_SAMPLES) return;
+      const mains = {};
+      for (const eq of e.equips || []) {
+        const slot = slotOf(eq);
+        if (slot < 4 || slot > 6) continue;
+        const mn = eq.main?.[0]?.name ? normalizeStatKey(eq.main[0].name) : null;
+        if (mn) mains[slot] = mn;
+      }
+      o.samples.push({
+        panel: pm,
+        dmg: Object.keys(dmg).length ? dmg : null,
+        mains,
+        suit: (e.equips || []).find((x) => x.suit)?.suit || null,
+        wep: e.weapon?.name || null,
+      });
+    },
+    finish() {
+      const out = {};
+      for (const [rid, o] of perRole) {
+        if (o.samples.length < 200) continue; // 样本太少不聚类（流派无统计意义）
+        // 伤害加成键 = 该角色出现次数最多的「属性伤害」键（如 冰属性伤害加成）
+        let dmgKey = null;
+        let best = 0;
+        for (const [k, c] of o.dmg) if (c > best) { best = c; dmgKey = k; }
+        // 候选属性池：按角色定位（trait）选；无定位回退通用池；伤害加成键动态并入
+        const trait = traits?.[rid];
+        const cand = (trait && TRAIT_STYLE_ATTRS[trait]) || STYLE_FALLBACK_ATTRS;
+        let attrs = dmgKey ? [...cand, dmgKey] : [...cand];
+        // 样本过滤：缺任一候选属性 → 跳过（面板不全）
+        const valid = o.samples.filter((s) => attrs.every((a) => s.panel[a] != null));
+        if (valid.length < 200) continue;
+        // 数据驱动去噪：cv = sd/|mean| 过低的列 = 玩家无分化 = 无流派判别力，剔除（至少保留 3 维）
+        const dim0 = attrs.length;
+        const mu0 = new Array(dim0).fill(0);
+        const sd0 = new Array(dim0).fill(0);
+        for (const s of valid) for (let j = 0; j < dim0; j++) mu0[j] += s.panel[attrs[j]];
+        for (let j = 0; j < dim0; j++) mu0[j] /= valid.length;
+        for (const s of valid) for (let j = 0; j < dim0; j++) sd0[j] += (s.panel[attrs[j]] - mu0[j]) ** 2;
+        for (let j = 0; j < dim0; j++) sd0[j] = Math.sqrt(sd0[j] / valid.length);
+        let keep = attrs.map((_, j) => mu0[j] !== 0 && sd0[j] / Math.abs(mu0[j]) >= STYLE_MIN_CV);
+        if (keep.filter(Boolean).length < 3) {
+          const order = sd0.map((v, j) => (mu0[j] === 0 ? 0 : v / Math.abs(mu0[j]))).map((v, j) => [v, j]).sort((a, b) => b[0] - a[0]);
+          keep = attrs.map((_, j) => order.slice(0, 3).some(([, jj]) => jj === j));
+        }
+        attrs = attrs.filter((_, j) => keep[j]);
+        const dim = attrs.length;
+        const P = valid.map((s) => attrs.map((a) => s.panel[a]));
+        // 列标准化（z-score；sd=0 的列退化为 1 避免除零——退化列无区分度，不影响聚类）
+        const mu = new Array(dim).fill(0);
+        const sd = new Array(dim).fill(0);
+        for (const p of P) for (let j = 0; j < dim; j++) mu[j] += p[j];
+        for (let j = 0; j < dim; j++) mu[j] /= P.length;
+        for (const p of P) for (let j = 0; j < dim; j++) sd[j] += (p[j] - mu[j]) ** 2;
+        for (let j = 0; j < dim; j++) sd[j] = Math.sqrt(sd[j] / P.length) || 1;
+        const Z = P.map((p) => p.map((v, j) => (v - mu[j]) / sd[j]));
+        const assign = kmeans(Z, STYLE_K);
+        const clusters = Array.from({ length: STYLE_K }, () => ({ idx: [], sum: new Array(dim).fill(0) }));
+        assign.forEach((c, i) => {
+          clusters[c].idx.push(i);
+          for (let j = 0; j < dim; j++) clusters[c].sum[j] += P[i][j];
+        });
+        const topN = (items, get, n = 2) => {
+          const m = new Map();
+          for (const i of items) {
+            const x = get(i);
+            if (!x) continue;
+            m.set(x, (m.get(x) || 0) + 1);
+          }
+          return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+        };
+        const styles = [];
+        for (let c = 0; c < STYLE_K; c++) {
+          const { idx } = clusters[c];
+          if (!idx.length) continue; // 空簇防御（确定性初始化 + z-score 下基本不会出现）
+          const n = idx.length;
+          const center = clusters[c].sum.map((s) => s / n);
+          const panel = {};
+          attrs.forEach((a, j) => {
+            const sorted = idx.map((i) => P[i][j]).sort((x, y) => x - y);
+            panel[a] = {
+              mean: +center[j].toFixed(4),
+              median: +quantileSorted(sorted, 0.5).toFixed(4),
+            };
+          });
+          // ⚠️ 必须索引 valid 而非 o.samples：idx 来自 assign/P，二者都以过滤后的 valid 为基准。
+          // 索引 o.samples 会让「首个被过滤样本」之后的全部样本整体错位一格（实测 23/57 角色
+          // 有样本被过滤，最坏一例污染该角色 92.8% 的归属，且 label 由 main4[0] 推出 → 簇名也错）。
+          const main4 = topN(idx, (i) => valid[i].mains[4]);
+          const main6 = topN(idx, (i) => valid[i].mains[6]);
+          styles.push({
+            share: +(n / valid.length).toFixed(4),
+            label: styleLabel(main4[0], main6[0]),
+            panel,
+            main: { '4': main4, '5': topN(idx, (i) => valid[i].mains[5]), '6': main6 },
+            suits: topN(idx, (i) => valid[i].suit),
+            wengine: topN(idx, (i) => valid[i].wep),
+          });
+        }
+        styles.sort((a, b) => b.share - a.share);
+        // 同名流派消歧：同 label 的簇按面板判别属性（z 绝对值最大、排除低判别属性）追加档位后缀，
+        // 如「暴伤·攻击」两簇 → 「暴伤·攻击·冰伤高」「暴伤·攻击·攻击高」
+        const labelCount = new Map();
+        for (const st of styles) labelCount.set(st.label, (labelCount.get(st.label) || 0) + 1);
+        if (labelCount.size < styles.length) {
+          const LOW_DISC = new Set(['防御力']); // 防御对各定位都低判别；生命对命破/防护是核心，不排除
+          for (const st of styles) {
+            if (labelCount.get(st.label) < 2) continue;
+            let bestA = null;
+            let bestZ = 0;
+            attrs.forEach((a, j) => {
+              if (LOW_DISC.has(a)) return;
+              const z = (st.panel[a].mean - mu[j]) / sd[j];
+              if (Math.abs(z) > Math.abs(bestZ)) { bestZ = z; bestA = a; }
+            });
+            if (bestA && Math.abs(bestZ) > 0.4) st.label = `${st.label}·${styleAttrShort(bestA)}${bestZ > 0 ? '高' : '低'}`;
+          }
+        }
+        if (styles.length >= 2) out[rid] = { attrs, styles };
+      }
+      return out;
+    },
+  };
+}
+
+/** 角色流派分析（独立入口，测试用；buildWorkshopStats 走 computeAllWorkshopStats 单遍历）。
+ *  @param {Object} [opts]  {traits: {role_id → 定位}} */
+export function computeRoleStyles(entries, opts = {}) {
+  const acc = makeRoleStylesAcc(opts.traits);
+  for (const e of entries || []) acc.add(e);
+  return acc.finish();
+}
+
 export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   // 相关性与散点属性对不同（7 对 vs 2 对），各建一个采集器：合并成 9 对会改 key 插入顺序（见 makePanelPairsAcc 注释）
   const corrAcc = makePanelPairsAcc(CORR_PAIRS);
@@ -1106,6 +1348,7 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   const comboAcc = makeSkillComboStatsAcc();
   const rollEffAcc = makeRollEfficiencyAcc(accOpts);
   const auditAcc = makeSourceAuditAcc();
+  const styleAcc = makeRoleStylesAcc(opts.traits);
 
   // 唯一一次遍历：每条目喂给全部累加器。add 之间互不共享中间态，故顺序无副作用
   for (const e of entries || []) {
@@ -1123,6 +1366,7 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     comboAcc.add(e);
     rollEffAcc.add(e);
     auditAcc.add(e);
+    styleAcc.add(e);
   }
 
   const scatter = scatterAcc.finish();
@@ -1141,5 +1385,6 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     skillCombos: comboAcc.finish(),
     rollEfficiency: rollEffAcc.finish(),
     sourceAudit: auditAcc.finish(),
+    roleStyles: styleAcc.finish(),
   };
 }

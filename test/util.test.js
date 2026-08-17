@@ -184,6 +184,7 @@ test('normalizeStatKey workshop 词条变体 → 统一属性名（并入属性�
 test('normalizeStatKey 把属性别名映射到规范名', () => {
   assert.equal(normalizeStatKey('生命'), '生命值');
   assert.equal(normalizeStatKey('生命力'), '生命值');
+  assert.equal(normalizeStatKey('生命指'), '生命值', 'wiki 邦布页面笔误（幽浮布）');
   assert.equal(normalizeStatKey('攻击'), '攻击力');
   assert.equal(normalizeStatKey('防御'), '防御力');
   assert.equal(normalizeStatKey('暴击'), '暴击率', '短名 暴击 → 暴击率');
