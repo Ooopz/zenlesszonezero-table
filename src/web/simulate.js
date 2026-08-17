@@ -147,17 +147,18 @@ function frontierOption(frontiers, xName, yName, myPoint) {
     { level: 0.8, name: '大毕业', color: CHART_COLORS.green, type: 'dashed', width: 2 },
     { level: 0.7, name: '小毕业', color: CHART_COLORS.blue, type: 'dotted', width: 2 },
   ];
-  const series = frontiers.map((f) => {
+  const lookups = frontiers.map((f) => {
     const def = levelDefs.find((d) => d.level === f.level) || levelDefs[0];
-    return {
-      name: def.name,
-      type: 'line',
-      data: f.points.map((p) => [p.x, p.y]),
-      showSymbol: false,
-      lineStyle: { color: def.color, width: def.width, type: def.type },
-      itemStyle: { color: def.color },
-    };
+    return { name: def.name, color: def.color, points: f.points };
   });
+  const series = lookups.map((l) => ({
+    name: l.name,
+    type: 'line',
+    data: l.points.map((p) => [p.x, p.y]),
+    showSymbol: false,
+    lineStyle: { color: l.color, width: 2, type: levelDefs.find((d) => d.name === l.name)?.type || 'solid' },
+    itemStyle: { color: l.color },
+  }));
   if (myPoint) {
     series.push({
       name: '我的面板',
@@ -169,6 +170,22 @@ function frontierOption(frontiers, xName, yName, myPoint) {
       z: 4,
     });
   }
+
+  function interpY(points, x) {
+    if (!points || !points.length) return null;
+    if (x <= points[0].x) return points[0].y;
+    if (x >= points[points.length - 1].x) return points[points.length - 1].y;
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      if (x >= a.x && x <= b.x) {
+        const t = (x - a.x) / (b.x - a.x || 1);
+        return a.y + t * (b.y - a.y);
+      }
+    }
+    return points[points.length - 1].y;
+  }
+
   return {
     animation: false,
     grid: { left: 78, right: 32, top: 40, bottom: 58 },
@@ -179,15 +196,14 @@ function frontierOption(frontiers, xName, yName, myPoint) {
       textStyle: { color: '#f0ede2', fontSize: 12 },
       formatter: function (params) {
         const list = Array.isArray(params) ? params : [params];
-        const colors = { '完美毕业': CHART_COLORS.acc, '大毕业': CHART_COLORS.green, '小毕业': CHART_COLORS.blue };
-        const frontierLines = list.filter((p) => p.seriesName !== '我的面板' && p.value && p.value.length);
-        if (!frontierLines.length) return '';
-        let html = '';
-        for (const p of frontierLines) {
-          const v = p.value || [];
-          html += '<span style="color:' + (colors[p.seriesName] || CHART_COLORS.dim) + '">' + p.seriesName + '</span>　' + formatValue(yName, v[1]) + '<br>';
+        const first = list.find((p) => p.value && p.value.length);
+        if (!first) return '';
+        const x = first.value[0];
+        let html = xName + ' ' + formatValue(xName, x) + '<br>';
+        for (const l of lookups) {
+          const y = interpY(l.points, x);
+          html += '<span style="color:' + l.color + '">' + l.name + '</span>　' + formatValue(yName, y) + '<br>';
         }
-        html = xName + ' ' + formatValue(xName, frontierLines[0].value[0]) + '<br>' + html;
         if (myPoint && list.some((p) => p.seriesName === '我的面板')) {
           html += '<br><span style="color:' + CHART_COLORS.orange + '">我的面板 ' + formatValue(xName, myPoint.x) + ' / ' + formatValue(yName, myPoint.y) + '</span>';
         }
