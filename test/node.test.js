@@ -9,7 +9,10 @@ import { streamJsonArrayElements } from '../src/lib/node.js';
 /** 写一个带 meta 的条目数组文件并返回路径 */
 function writeFixture(entries) {
   const f = path.join(os.tmpdir(), `zzz-stream-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(f, `{"meta":{"n":${entries.length}},"entries":[${entries.map((e) => JSON.stringify(e)).join(',')}]}`);
+  fs.writeFileSync(
+    f,
+    `{"meta":{"n":${entries.length}},"entries":[${entries.map((e) => JSON.stringify(e)).join(',')}]}`
+  );
   return f;
 }
 

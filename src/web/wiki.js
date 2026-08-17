@@ -58,13 +58,7 @@ const CHAR_SORTABLE = new Set([
 ]);
 const WENGINE_SORTABLE = new Set(['名称', '稀有度', '特性', '基础攻击']);
 const DISC_SORTABLE = new Set(['名称']);
-const BANG_SORTABLE = new Set([
-  '名称',
-  '稀有度',
-  '属性',
-  ...BANG_INITIAL_STATS,
-  ...MAX_STATS.map((s) => `满级${s}`),
-]);
+const BANG_SORTABLE = new Set(['名称', '稀有度', '属性', ...BANG_INITIAL_STATS, ...MAX_STATS.map((s) => `满级${s}`)]);
 
 function fmt(v) {
   return isEmptyVal(v) ? '' : v;
@@ -182,7 +176,7 @@ function skillGrowthTable(item) {
 export function openSkillDetail(name, type, kind) {
   const c =
     kind === 'bangboo'
-      ? library.bangboos?.[name] ?? Object.values(library.bangboos || {}).find((b) => b.name === name)
+      ? (library.bangboos?.[name] ?? Object.values(library.bangboos || {}).find((b) => b.name === name))
       : library.characters?.[name];
   const s = (c?.skills || []).find((x) => x.type === type);
   const title = `${c?.name || name} · ${type}`;

@@ -133,8 +133,7 @@ export function validateLibrary(lib) {
       err.push(`角色 ${k} coreSkillBoost 应为数组（每档增量，A-F 顺序）`);
     if (c.corePassiveMax !== undefined && typeof c.corePassiveMax !== 'string')
       err.push(`角色 ${k} corePassiveMax 应为字符串（核心被动满级描述）`);
-    if (c.tachie !== undefined && typeof c.tachie !== 'string')
-      err.push(`角色 ${k} tachie 应为字符串（立绘大图 URL）`);
+    if (c.tachie !== undefined && typeof c.tachie !== 'string') err.push(`角色 ${k} tachie 应为字符串（立绘大图 URL）`);
     // 技能每级数值：skills[].items[].growth 若存在应为数组（null/缺省 = 无每级数值；结构漂移会被同步脚本静默写坏）
     if (Array.isArray(c.skills))
       for (const s of c.skills)

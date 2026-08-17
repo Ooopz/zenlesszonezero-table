@@ -17,7 +17,14 @@ function tierStat(vals) {
   if (clean.length < 3) return null;
   const mean = clean.reduce((a, v) => a + v, 0) / clean.length;
   const sdv = sd(clean, mean);
-  return { count: clean.length, mean, median: median(clean), sd: sdv, cv: cv(clean, mean), outliers: s.length - clean.length };
+  return {
+    count: clean.length,
+    mean,
+    median: median(clean),
+    sd: sdv,
+    cv: cv(clean, mean),
+    outliers: s.length - clean.length,
+  };
 }
 
 /**

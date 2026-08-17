@@ -9,7 +9,13 @@
 import { computeDist, kmeans, pearson, quantileSorted } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
-import { mainStatName, SUBSTAT_TYPE_SET, MAIN_STAT_OPTIONS, OFFICIAL_SKILL_TYPE, WS2025_SKILL_TYPE } from './constants.js';
+import {
+  mainStatName,
+  SUBSTAT_TYPE_SET,
+  MAIN_STAT_OPTIONS,
+  OFFICIAL_SKILL_TYPE,
+  WS2025_SKILL_TYPE,
+} from './constants.js';
 
 /** 面板 final 值归一化：百分比字符串（"31.4%" → 0.314）与数值字符串/数字统一为数字；空串/纯空白 → null（缺失，不污染 min/count） */
 function parsePanelFinal(v) {
@@ -470,7 +476,10 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
 export function bin2D(xv, yv, N) {
   const n = xv.length;
   if (!n) return null;
-  let minX = xv[0], maxX = xv[0], minY = yv[0], maxY = yv[0];
+  let minX = xv[0],
+    maxX = xv[0],
+    minY = yv[0],
+    maxY = yv[0];
   for (let i = 1; i < n; i++) {
     if (xv[i] < minX) minX = xv[i];
     if (xv[i] > maxX) maxX = xv[i];
@@ -1105,25 +1114,36 @@ const STYLE_MIN_CV = 0.04;
 /** 归一主词条名 → 流派基名（4 号位取向） */
 export function styleBaseName(main4) {
   switch (main4) {
-    case '暴击伤害': return '暴伤';
-    case '暴击率': return '暴击率';
-    case '异常精通': return '精通';
+    case '暴击伤害':
+      return '暴伤';
+    case '暴击率':
+      return '暴击率';
+    case '异常精通':
+      return '精通';
     case '攻击力%':
-    case '攻击力': return '攻击';
-    case '冲击力': return '冲击';
-    default: return '均衡';
+    case '攻击力':
+      return '攻击';
+    case '冲击力':
+      return '冲击';
+    default:
+      return '均衡';
   }
 }
 /** 归一主词条名 → 流派后缀（6 号位取向；空 = 不标注） */
 export function styleSuffix(main6) {
   switch (main6) {
     case '攻击力%':
-    case '攻击力': return '攻击';
+    case '攻击力':
+      return '攻击';
     case '异常掌控':
-    case '异常精通': return '异常';
-    case '能量自动回复': return '回能';
-    case '冲击力': return '冲击';
-    default: return '';
+    case '异常精通':
+      return '异常';
+    case '能量自动回复':
+      return '回能';
+    case '冲击力':
+      return '冲击';
+    default:
+      return '';
   }
 }
 /** 流派标签 = 4 号位取向 + 6 号位取向（如「暴伤·攻击」「精通·异常」；两段相同时只留一段） */
@@ -1136,7 +1156,10 @@ export function styleLabel(main4Top, main6Top) {
 export function styleAttrShort(attr) {
   const m = /^(.+?)(?:属性)?伤害加成$/.exec(attr);
   if (m) return `${m[1].replace(/^物理$/, '物')}伤`;
-  return { 攻击力: '攻击', 暴击率: '暴击率', 暴击伤害: '暴伤', 异常精通: '精通', 异常掌控: '掌控', 冲击力: '冲击' }[attr] || attr;
+  return (
+    { 攻击力: '攻击', 暴击率: '暴击率', 暴击伤害: '暴伤', 异常精通: '精通', 异常掌控: '掌控', 冲击力: '冲击' }[attr] ||
+    attr
+  );
 }
 
 /** 我的面板 → 各流派距离（按属性相对差平方和 ÷ 参与属性数，缺失属性跳过；dist 越小越贴近）。
@@ -1205,7 +1228,11 @@ function makeRoleStylesAcc(traits) {
         // 伤害加成键 = 该角色出现次数最多的「属性伤害」键（如 冰属性伤害加成）
         let dmgKey = null;
         let best = 0;
-        for (const [k, c] of o.dmg) if (c > best) { best = c; dmgKey = k; }
+        for (const [k, c] of o.dmg)
+          if (c > best) {
+            best = c;
+            dmgKey = k;
+          }
         // 候选属性池：按角色定位（trait）选；无定位回退通用池；伤害加成键动态并入
         const trait = traits?.[rid];
         const cand = (trait && TRAIT_STYLE_ATTRS[trait]) || STYLE_FALLBACK_ATTRS;
@@ -1223,7 +1250,10 @@ function makeRoleStylesAcc(traits) {
         for (let j = 0; j < dim0; j++) sd0[j] = Math.sqrt(sd0[j] / valid.length);
         let keep = attrs.map((_, j) => mu0[j] !== 0 && sd0[j] / Math.abs(mu0[j]) >= STYLE_MIN_CV);
         if (keep.filter(Boolean).length < 3) {
-          const order = sd0.map((v, j) => (mu0[j] === 0 ? 0 : v / Math.abs(mu0[j]))).map((v, j) => [v, j]).sort((a, b) => b[0] - a[0]);
+          const order = sd0
+            .map((v, j) => (mu0[j] === 0 ? 0 : v / Math.abs(mu0[j])))
+            .map((v, j) => [v, j])
+            .sort((a, b) => b[0] - a[0]);
           keep = attrs.map((_, j) => order.slice(0, 3).some(([, jj]) => jj === j));
         }
         attrs = attrs.filter((_, j) => keep[j]);
@@ -1250,7 +1280,10 @@ function makeRoleStylesAcc(traits) {
             if (!x) continue;
             m.set(x, (m.get(x) || 0) + 1);
           }
-          return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+          return [...m.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, n)
+            .map(([k]) => k);
         };
         const styles = [];
         for (let c = 0; c < STYLE_K; c++) {
@@ -1275,7 +1308,7 @@ function makeRoleStylesAcc(traits) {
             share: +(n / valid.length).toFixed(4),
             label: styleLabel(main4[0], main6[0]),
             panel,
-            main: { '4': main4, '5': topN(idx, (i) => valid[i].mains[5]), '6': main6 },
+            main: { 4: main4, 5: topN(idx, (i) => valid[i].mains[5]), 6: main6 },
             suits: topN(idx, (i) => valid[i].suit),
             wengine: topN(idx, (i) => valid[i].wep),
           });
@@ -1294,9 +1327,13 @@ function makeRoleStylesAcc(traits) {
             attrs.forEach((a, j) => {
               if (LOW_DISC.has(a)) return;
               const z = (st.panel[a].mean - mu[j]) / sd[j];
-              if (Math.abs(z) > Math.abs(bestZ)) { bestZ = z; bestA = a; }
+              if (Math.abs(z) > Math.abs(bestZ)) {
+                bestZ = z;
+                bestA = a;
+              }
             });
-            if (bestA && Math.abs(bestZ) > 0.4) st.label = `${st.label}·${styleAttrShort(bestA)}${bestZ > 0 ? '高' : '低'}`;
+            if (bestA && Math.abs(bestZ) > 0.4)
+              st.label = `${st.label}·${styleAttrShort(bestA)}${bestZ > 0 ? '高' : '低'}`;
           }
         }
         if (styles.length >= 2) out[rid] = { attrs, styles };

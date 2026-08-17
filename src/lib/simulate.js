@@ -254,9 +254,7 @@ function discOptions(relevant, bannedType) {
 
 /** 二维最大化帕累托过滤：按 x 升序、y 降序，保留 y 严格递增的点。 */
 function paretoPoints(points) {
-  const arr = points
-    .map((p) => ({ dx: p.dx, dy: p.dy, detail: p.detail }))
-    .sort((a, b) => b.dx - a.dx || b.dy - a.dy);
+  const arr = points.map((p) => ({ dx: p.dx, dy: p.dy, detail: p.detail })).sort((a, b) => b.dx - a.dx || b.dy - a.dy);
   const out = [];
   let maxY = -Infinity;
   for (const p of arr) {
@@ -282,7 +280,6 @@ function combineDiscOptions(optionsBySlot) {
   }
   return states;
 }
-
 
 /** 槽位主词条 -> 对应副词条类型（用于「副词条不与主词条重复」约束）。 */
 function mainTypeForSlot(slot, mains) {
@@ -481,7 +478,9 @@ export function simulateFrontier3D(ctx, opts) {
   const { withSets, mains } = resolveBuild(ctx, opts);
   const axes = [opts.xAxis, opts.yAxis, opts.zAxis];
   const sourceDefs = buildSourceDefs(axes, withSets.base);
-  const optionsBySlot = [1, 2, 3, 4, 5, 6].map((slot) => discOptionsND(sourceDefs, mainTypeForSlot(slot, mains), axes.length));
+  const optionsBySlot = [1, 2, 3, 4, 5, 6].map((slot) =>
+    discOptionsND(sourceDefs, mainTypeForSlot(slot, mains), axes.length)
+  );
   const combined = combineND(optionsBySlot, axes.length);
   const points = combined
     .map((s) => ({

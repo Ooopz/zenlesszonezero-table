@@ -169,7 +169,8 @@ export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03
       const or = oMap.get(n) || 0;
       const lr = lMap.get(n) || 0;
       const verdict = or >= t || lr >= t ? 'keep' : 'drop';
-      if (verdict === 'keep' || (mainOptions?.[slot] || []).includes(n)) items.push({ name: n, official: or, live: lr, verdict });
+      if (verdict === 'keep' || (mainOptions?.[slot] || []).includes(n))
+        items.push({ name: n, official: or, live: lr, verdict });
     }
     items.sort((a, b) => (a.verdict === b.verdict ? b.live - a.live : a.verdict === 'keep' ? -1 : 1));
     mains[slot] = items;

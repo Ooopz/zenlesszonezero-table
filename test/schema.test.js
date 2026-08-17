@@ -25,15 +25,24 @@ test('validateLibrary 对现有属性库通过', () => {
 
 test('validateLibrary 发现各类条目缺 name / 非对象', () => {
   const bad = {
-    characters: { '角色X': { id: '1' } }, // 缺 name
-    wengines: { '音擎X': null }, // 非对象
+    characters: { 角色X: { id: '1' } }, // 缺 name
+    wengines: { 音擎X: null }, // 非对象
     discs: {},
-    bangboos: { '邦布X': { name: '' } }, // name 为空
+    bangboos: { 邦布X: { name: '' } }, // name 为空
   };
   const errors = validateLibrary(bad);
-  assert.ok(errors.some((e) => e.includes('角色X') && e.includes('缺 name')), `角色缺 name：${errors}`);
-  assert.ok(errors.some((e) => e.includes('音擎X') && e.includes('非对象')), `音擎非对象：${errors}`);
-  assert.ok(errors.some((e) => e.includes('邦布X') && e.includes('缺 name')), `邦布缺 name：${errors}`);
+  assert.ok(
+    errors.some((e) => e.includes('角色X') && e.includes('缺 name')),
+    `角色缺 name：${errors}`
+  );
+  assert.ok(
+    errors.some((e) => e.includes('音擎X') && e.includes('非对象')),
+    `音擎非对象：${errors}`
+  );
+  assert.ok(
+    errors.some((e) => e.includes('邦布X') && e.includes('缺 name')),
+    `邦布缺 name：${errors}`
+  );
 });
 
 test('validateCharacters 对现有角色数据通过', () => {
@@ -55,8 +64,8 @@ test('validatePlans 校验推荐方案数据（plans.json：{ id: { name, plans:
   assert.deepEqual(validatePlans(loadDataFile('plans.json', hint)), []);
   assert.deepEqual(validatePlans(null), ['推荐方案数据应为对象']);
   assert.deepEqual(validatePlans({}), []);
-  assert.deepEqual(validatePlans({ '1581': { name: '蕾米埃尔' } }), ['角色 1581 缺 plans 数组']);
-  assert.deepEqual(validatePlans({ '1581': null }), ['角色 1581 应为对象']);
+  assert.deepEqual(validatePlans({ 1581: { name: '蕾米埃尔' } }), ['角色 1581 缺 plans 数组']);
+  assert.deepEqual(validatePlans({ 1581: null }), ['角色 1581 应为对象']);
 });
 
 test('柏妮思·怀特 满级数据完整（wiki 满级行名为「满级数据」，解析需容错）', () => {

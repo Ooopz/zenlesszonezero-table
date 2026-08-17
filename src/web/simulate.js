@@ -90,9 +90,10 @@ function applyRoleDefaults(roleName) {
   const set4 = (plan?.sets || []).find((s) => s.cnt === 4)?.name || discNames[0] || '';
   const set2 = (plan?.sets || []).find((s) => s.cnt === 2)?.name || discNames[1] || discNames[0] || '';
   state.set4 = set4;
-  state.set2 = set2 === set4 ? (discNames.find((n) => n !== set4) || '') : set2;
+  state.set2 = set2 === set4 ? discNames.find((n) => n !== set4) || '' : set2;
   for (const slot of [4, 5, 6]) {
-    state['main' + slot] = target[TARGET_KEYS['MAIN' + slot]] || plan?.mainProps?.[slot] || MAIN_STAT_OPTIONS[slot][0] || '';
+    state['main' + slot] =
+      target[TARGET_KEYS['MAIN' + slot]] || plan?.mainProps?.[slot] || MAIN_STAT_OPTIONS[slot][0] || '';
   }
 
   state.charts = [{ id: nextChartId++, ...defaultAxes(roleName) }];
@@ -106,13 +107,29 @@ function ensureState() {
 }
 
 function optionHtml(value, label, current) {
-  return '<option value="' + escapeHtml(value) + '"' + (value === current ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+  return (
+    '<option value="' +
+    escapeHtml(value) +
+    '"' +
+    (value === current ? ' selected' : '') +
+    '>' +
+    escapeHtml(label) +
+    '</option>'
+  );
 }
 
 function selectHtml(id, label, current, options) {
   return (
-    '<div class="titem"><label>' + escapeHtml(label) + '</label>' +
-    '<select data-sim="' + id + '" onchange="ZZZ.simSelect(' + "'" + id + "'" + ', this.value)">' +
+    '<div class="titem"><label>' +
+    escapeHtml(label) +
+    '</label>' +
+    '<select data-sim="' +
+    id +
+    '" onchange="ZZZ.simSelect(' +
+    "'" +
+    id +
+    "'" +
+    ', this.value)">' +
     '<option value="">—</option>' +
     options.map((n) => optionHtml(n, n, current)).join('') +
     '</select></div>'
@@ -124,8 +141,16 @@ function mainSelectHtml(slot) {
   const options = MAIN_STAT_OPTIONS[slot] || [];
   const current = state[id] || '';
   return (
-    '<div class="titem"><label>' + slot + '号位主词条</label>' +
-    '<select data-sim="' + id + '" onchange="ZZZ.simSelect(' + "'" + id + "'" + ', this.value)">' +
+    '<div class="titem"><label>' +
+    slot +
+    '号位主词条</label>' +
+    '<select data-sim="' +
+    id +
+    '" onchange="ZZZ.simSelect(' +
+    "'" +
+    id +
+    "'" +
+    ', this.value)">' +
     '<option value="">—</option>' +
     options.map((n) => optionHtml(n, n, current)).join('') +
     '</select></div>'
@@ -144,7 +169,11 @@ function fixedSummary() {
   } catch (e) {
     out = '<span style="color:var(--red)">固定面板计算失败：' + escapeHtml(e.message) + '</span>';
   }
-  return '<div class="sim-fixed">固定面板（满级 + 音擎 + 456 主词条 + 2件套，不含副词条）<div class="sim-fixed-row">' + out + '</div></div>';
+  return (
+    '<div class="sim-fixed">固定面板（满级 + 音擎 + 456 主词条 + 2件套，不含副词条）<div class="sim-fixed-row">' +
+    out +
+    '</div></div>'
+  );
 }
 
 function frontierOption(points, xName, yName, myPoint) {
@@ -188,7 +217,14 @@ function frontierOption(points, xName, yName, myPoint) {
         const v = line.value || [];
         let html = xName + ' ' + formatValue(xName, v[0]) + '<br>' + yName + ' ' + formatValue(yName, v[1]);
         if (myPoint && list.some((p) => p.seriesName === '我的面板')) {
-          html += '<br><span style="color:' + CHART_COLORS.orange + '">我的面板 ' + formatValue(xName, myPoint.x) + ' / ' + formatValue(yName, myPoint.y) + '</span>';
+          html +=
+            '<br><span style="color:' +
+            CHART_COLORS.orange +
+            '">我的面板 ' +
+            formatValue(xName, myPoint.x) +
+            ' / ' +
+            formatValue(yName, myPoint.y) +
+            '</span>';
         }
         return html;
       },
@@ -216,15 +252,26 @@ function frontierOption(points, xName, yName, myPoint) {
 }
 
 function axisOptionsFor(chart, axis) {
-  const others = ['x', 'y', 'z'].filter((k) => k !== axis).map((k) => chart[k]).filter(Boolean);
+  const others = ['x', 'y', 'z']
+    .filter((k) => k !== axis)
+    .map((k) => chart[k])
+    .filter(Boolean);
   return PANEL_ORDER.filter((s) => axisAvailable(s) && !others.includes(s));
 }
 
 function axisSelectHtml(chart, axis, label) {
   return (
-    '<div class="titem"><label>' + escapeHtml(label) + '</label>' +
-    '<select onchange="ZZZ.simAxis(' + chart.id + ',\'' + axis + '\', this.value)">' +
-    axisOptionsFor(chart, axis).map((n) => optionHtml(n, n, chart[axis])).join('') +
+    '<div class="titem"><label>' +
+    escapeHtml(label) +
+    '</label>' +
+    '<select onchange="ZZZ.simAxis(' +
+    chart.id +
+    ",'" +
+    axis +
+    '\', this.value)">' +
+    axisOptionsFor(chart, axis)
+      .map((n) => optionHtml(n, n, chart[axis]))
+      .join('') +
     '</select></div>'
   );
 }
@@ -268,8 +315,22 @@ function frontier3DOption(points, xName, yName, zName, myPoint) {
         const p = Array.isArray(params) ? params[0] : params;
         const v = p && p.value ? p.value : [];
         if (!v || v.length < 3) return '';
-        const head = p.seriesName === '我的面板' ? '<span style="color:' + CHART_COLORS.orange + '">我的面板</span><br>' : '';
-        return head + xName + ' ' + formatValue(xName, v[0]) + '<br>' + yName + ' ' + formatValue(yName, v[1]) + '<br>' + zName + ' ' + formatValue(zName, v[2]);
+        const head =
+          p.seriesName === '我的面板' ? '<span style="color:' + CHART_COLORS.orange + '">我的面板</span><br>' : '';
+        return (
+          head +
+          xName +
+          ' ' +
+          formatValue(xName, v[0]) +
+          '<br>' +
+          yName +
+          ' ' +
+          formatValue(yName, v[1]) +
+          '<br>' +
+          zName +
+          ' ' +
+          formatValue(zName, v[2])
+        );
       },
     },
     grid3D: {
@@ -291,7 +352,10 @@ function chartCard(chart, canRemove) {
   let note = '';
   try {
     if (is3d) {
-      const result = simulateFrontier3D({ charIndex, wengineIndex, discIndex }, { ...state, xAxis: chart.x, yAxis: chart.y, zAxis: chart.z });
+      const result = simulateFrontier3D(
+        { charIndex, wengineIndex, discIndex },
+        { ...state, xAxis: chart.x, yAxis: chart.y, zAxis: chart.z }
+      );
       if (!result.points.length) {
         body = '<div class="empty">该属性组合暂无有效前沿（可能所选属性无法通过副词条成长）。</div>';
       } else {
@@ -307,11 +371,17 @@ function chartCard(chart, canRemove) {
         registerChart('sim-' + chart.id, frontier3DOption(result.points, chart.x, chart.y, chart.z, myPoint));
         body = chartBox('sim-' + chart.id, 540);
         note =
-          '<div class="sim-range">' + result.points.length + ' 个前沿点' +
-          (myPoint ? '　·　<span style="color:var(--orange)">我的面板已标注</span>' : '') + '</div>';
+          '<div class="sim-range">' +
+          result.points.length +
+          ' 个前沿点' +
+          (myPoint ? '　·　<span style="color:var(--orange)">我的面板已标注</span>' : '') +
+          '</div>';
       }
     } else {
-      const result = simulateFrontier({ charIndex, wengineIndex, discIndex }, { ...state, xAxis: chart.x, yAxis: chart.y });
+      const result = simulateFrontier(
+        { charIndex, wengineIndex, discIndex },
+        { ...state, xAxis: chart.x, yAxis: chart.y }
+      );
       if (!result.points.length) {
         body = '<div class="empty">该属性组合暂无有效前沿（可能所选属性无法通过副词条成长）。</div>';
       } else {
@@ -329,9 +399,20 @@ function chartCard(chart, canRemove) {
         const p1 = result.points[result.points.length - 1];
         note =
           '<div class="sim-range">' +
-          formatValue(chart.x, p0.x) + ' ~ ' + formatValue(chart.x, p1.x) +
-          '　·　' + formatValue(chart.y, p1.y) + ' ~ ' + formatValue(chart.y, p0.y) +
-          (myPoint ? '　·　<span style="color:var(--orange)">我的 ' + formatValue(chart.x, myPoint.x) + ' / ' + formatValue(chart.y, myPoint.y) + '</span>' : '') +
+          formatValue(chart.x, p0.x) +
+          ' ~ ' +
+          formatValue(chart.x, p1.x) +
+          '　·　' +
+          formatValue(chart.y, p1.y) +
+          ' ~ ' +
+          formatValue(chart.y, p0.y) +
+          (myPoint
+            ? '　·　<span style="color:var(--orange)">我的 ' +
+              formatValue(chart.x, myPoint.x) +
+              ' / ' +
+              formatValue(chart.y, myPoint.y) +
+              '</span>'
+            : '') +
           '</div>';
       }
     }
@@ -433,10 +514,16 @@ export function renderSimulate() {
     fixedSummary() +
     '</div>';
 
-  const cards = state.charts
-    .map((c) => chartCard(c, state.charts.length > 1))
-    .join('');
+  const cards = state.charts.map((c) => chartCard(c, state.charts.length > 1)).join('');
   const addBtn =
     '<div class="sim-add-row"><button class="primary" onclick="ZZZ.simAddChart(\'2d\')">＋ 添加二维图</button><button class="primary" onclick="ZZZ.simAddChart(\'3d\')">＋ 添加三维图</button><span class="sim-tip">二维图选择 X/Y 轴；三维图选择 X/Y/Z 轴，可拖拽旋转视角。</span></div>';
-  return '<div class="wiki"><div class="sim-wrap">' + config + '<div class="chart-grid">' + cards + '</div>' + addBtn + '</div></div>';
+  return (
+    '<div class="wiki"><div class="sim-wrap">' +
+    config +
+    '<div class="chart-grid">' +
+    cards +
+    '</div>' +
+    addBtn +
+    '</div></div>'
+  );
 }

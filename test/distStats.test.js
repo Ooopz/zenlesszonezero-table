@@ -53,9 +53,27 @@ test('pearson：完全正/负相关、零方差返回 null', () => {
 
 test('computePanelCorrelations：同条目配对 + 按角色分组', () => {
   const entries = [
-    { role_id: '1011', panel: [{ name: '攻击力', final: '100' }, { name: '防御力', final: '50' }] },
-    { role_id: '1011', panel: [{ name: '攻击力', final: '200' }, { name: '防御力', final: '100' }] },
-    { role_id: '1011', panel: [{ name: '攻击力', final: '300' }, { name: '防御力', final: '150' }] },
+    {
+      role_id: '1011',
+      panel: [
+        { name: '攻击力', final: '100' },
+        { name: '防御力', final: '50' },
+      ],
+    },
+    {
+      role_id: '1011',
+      panel: [
+        { name: '攻击力', final: '200' },
+        { name: '防御力', final: '100' },
+      ],
+    },
+    {
+      role_id: '1011',
+      panel: [
+        { name: '攻击力', final: '300' },
+        { name: '防御力', final: '150' },
+      ],
+    },
   ];
   const corr = computePanelCorrelations(entries);
   assert.ok(Math.abs(corr['1011']['攻击力_防御力'] - 1) < 1e-9);
@@ -63,8 +81,12 @@ test('computePanelCorrelations：同条目配对 + 按角色分组', () => {
 
 test('kmeans：确定性聚类返回簇编号', () => {
   const pts = [
-    [1, 1], [2, 1], [1, 2],
-    [100, 100], [101, 100], [100, 101],
+    [1, 1],
+    [2, 1],
+    [1, 2],
+    [100, 100],
+    [101, 100],
+    [100, 101],
   ];
   const a = kmeans(pts, 2);
   assert.equal(a.length, 6);
