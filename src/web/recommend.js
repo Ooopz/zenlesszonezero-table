@@ -9,7 +9,14 @@ import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
 import { styleMatch } from '../lib/workshopStats.js';
 import { renderDiscStats } from './discstats.js';
-import { escapeHtml, escapeJsAttr, renderRichText, formatValue, statEntries, romanNumeralUnicode } from '../lib/util.js';
+import {
+  escapeHtml,
+  escapeJsAttr,
+  renderRichText,
+  formatValue,
+  statEntries,
+  romanNumeralUnicode,
+} from '../lib/util.js';
 import { resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
 import { createSort } from '../lib/sort.js';
 import { STAT, SUBSTAT_TYPE_SET, SKILL_TYPES, OFFICIAL_SKILL_TYPE } from '../lib/constants.js';
@@ -286,7 +293,13 @@ function gradBenchHtml(name) {
 function approxPercentile(v, dist) {
   if (v == null || !dist || dist.p10 == null || dist.p99 == null) return null;
   const pts = [
-    [dist.p10, 10], [dist.p25, 25], [dist.p50, 50], [dist.p75, 75], [dist.p90, 90], [dist.p95, 95], [dist.p99, 99],
+    [dist.p10, 10],
+    [dist.p25, 25],
+    [dist.p50, 50],
+    [dist.p75, 75],
+    [dist.p90, 90],
+    [dist.p95, 95],
+    [dist.p99, 99],
   ];
   if (v <= dist.p10) return dist.p10 === 0 ? (v === 0 ? 0 : 1) : Math.max(0, (v / dist.p10) * 10);
   if (v >= dist.p99) {
@@ -325,8 +338,8 @@ function upgradeAndHeat(wsPanel, tiers, myCalc, roleNames) {
   };
   // 达标热力：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
   // 行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
-  const heatAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter((a) =>
-    roleNames.some((n) => wsPanel.get(n)?.[a])
+  const heatAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter(
+    (a) => roleNames.some((n) => wsPanel.get(n)?.[a])
   );
   const heatRows = [...myCalc]
     .map(([name, my]) => {
@@ -411,8 +424,18 @@ function renderOverview() {
   const roleNames = Object.values(plans).map((v) => v.name);
 
   // 2. 共识度散点：一张大图，每属性一个子图（X=玩家 sd、Y=推荐 high.cv）
-  const consensusAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter(
-    (a) => roleNames.some((n) => wsPanel.get(n)?.[a]?.sd != null) && roleNames.some((n) => tiers[n]?.[a]?.high?.cv != null)
+  const consensusAttrs = [
+    '攻击力',
+    '防御力',
+    '生命值',
+    '暴击率',
+    '暴击伤害',
+    '异常精通',
+    '冲击力',
+    '能量自动回复',
+  ].filter(
+    (a) =>
+      roleNames.some((n) => wsPanel.get(n)?.[a]?.sd != null) && roleNames.some((n) => tiers[n]?.[a]?.high?.cv != null)
   );
   const consensusGrid = consensusAttrs
     .map((a) => ({
@@ -458,7 +481,6 @@ function renderOverview() {
 
   // 两源一致性审计已移至「待定」面板（auditCard()，见模块底部 2026-10）
 
-  
   // 5. 角色拥有率：样本池（全部上榜去重 uid）中拥有该角色的占比，降序排列
   const ownMap = roleKeyedMap(workshopStats.roleOwnership);
   const poolUids = workshopStats.meta?.poolUids || 0;
@@ -520,7 +542,15 @@ function discMatrixCard() {
       // 阈值按次数口径重定（旧口径是「词条个数 <2/<3」）：满级盘总强化 8-9 次，
       // 有效 ≤3 次 = 四条副词条基本没吃到该角色关心的属性，≤5 次 = 中等偏下
       const advice =
-        eff <= 3 && !mainOk ? '优先替换' : eff <= 3 ? '可替换' : eff <= 5 && !mainOk ? '词条/主词条待优化' : mainOk ? '' : '主词条待优化';
+        eff <= 3 && !mainOk
+          ? '优先替换'
+          : eff <= 3
+            ? '可替换'
+            : eff <= 5 && !mainOk
+              ? '词条/主词条待优化'
+              : mainOk
+                ? ''
+                : '主词条待优化';
       myDiscRows.push({ char: ch.name, disc: suit || '?', eff, pct, mainStat, mainstream, mainOk, advice });
     }
   }
@@ -696,9 +726,7 @@ function renderRoleDetail() {
   const violinItems = violinAttrs.map((a) => ({
     attr: a,
     dist: st[a],
-    rec: rec[a]
-      ? { low: rec[a].low?.median, mid: rec[a].mid?.median, high: rec[a].high?.median }
-      : null,
+    rec: rec[a] ? { low: rec[a].low?.median, mid: rec[a].mid?.median, high: rec[a].high?.median } : null,
     mine: myFinal?.[a] ?? null,
   }));
   registerChart('detail-violin', violinBoxOption(violinItems));
@@ -735,7 +763,12 @@ function renderRoleDetail() {
   const skillComboCard = skillComboCardsHtml(name);
 
   // 面板属性对 trade-off：该角色玩家真实配比（暴击率×暴伤、攻击×暴伤）密度散点
-  const scatterCards = scatterCardsHtml('detail-scatter', workshopStats.panelScatter?.perRole?.[roleIdFor(name)] || {}, '玩家真实配比', true);
+  const scatterCards = scatterCardsHtml(
+    'detail-scatter',
+    workshopStats.panelScatter?.perRole?.[roleIdFor(name)] || {},
+    '玩家真实配比',
+    true
+  );
 
   // 图表卡标题悬浮说明（标题本身只留短名，详情放悬浮）
   const violinTip = `<b>${escapeHtml(name)} · 玩家分布箱线</b><br><span style="color:var(--dim)">对每个有玩家样本的属性（样本≥30）展示玩家真实分布：小提琴密度 + 箱线（中位/四分位/离群点），叠加推荐方案三档点位（低/中/高）与我的数值（金色）</span>`;
@@ -773,8 +806,7 @@ function matesCardsHtml(name) {
   }
   const planMates = [...planCnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   if (!partners.length && !planMates.length) return '';
-  const cell = (items, fmt) =>
-    items.length ? items.map(fmt).join('<br>') : '<span class="ds-dim">无数据</span>';
+  const cell = (items, fmt) => (items.length ? items.map(fmt).join('<br>') : '<span class="ds-dim">无数据</span>');
   const tip = `<b>配队亲和</b><br><span style="color:var(--dim)">该角色的队友两口径对比：左=玩家实配（同 uid 玩家同练角色共现，roleCooccurrence，真实组队行为）；右=攻略配队（米游社方案 team 里同队成员次数）</span>`;
   return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">配队亲和</h3>${table(
     ['玩家实配队友(同练)', '攻略配队(方案)'],
@@ -806,7 +838,10 @@ function skillComboCardsHtml(name) {
     }
     const keys = Object.keys(levels);
     if (keys.length) {
-      const names = keys.filter((t) => levels[t] >= FULL[t]).map((t) => LABEL[t]).join('+');
+      const names = keys
+        .filter((t) => levels[t] >= FULL[t])
+        .map((t) => LABEL[t])
+        .join('+');
       mine = keys.every((t) => levels[t] >= FULL[t]) ? '全拉满' : names || '无满级';
     }
   }
@@ -815,7 +850,10 @@ function skillComboCardsHtml(name) {
     (t) =>
       `<tr><td>${escapeHtml(t.pattern)}</td><td>${t.count.toLocaleString()} 人</td><td>${((t.count / sc.count) * 100).toFixed(0)}%</td></tr>`
   );
-  if (mine) rows.push(`<tr><td style="color:var(--acc);font-weight:800">我的：${escapeHtml(mine)}</td><td>—</td><td>—</td></tr>`);
+  if (mine)
+    rows.push(
+      `<tr><td style="color:var(--acc);font-weight:800">我的：${escapeHtml(mine)}</td><td>—</td><td>—</td></tr>`
+    );
   return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">技能组合</h3>${table(['玩家组合模式', '人数', '占比'], rows, new Set())}</div>`;
 }
 
@@ -893,7 +931,9 @@ function progressCardsHtml() {
   if (relicRows.length) {
     registerChart('prog-relic', relicBarOption(relicRows));
     const tip = `<b>装配评分分布</b><br><span style="color:var(--dim)">每角色一条箱线（工坊装配评分 relic_point）：盒 = P25-P75、线 = 中位、须 = IQR 1.5 规则（塌缩时退化为 P10/P90），悬浮看分位明细与离群数</span>`;
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">装配评分分布</h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`);
+    cards.push(
+      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">装配评分分布</h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`
+    );
   }
 
   // 2. 影画金字塔（每角色 0-6 影占比）
@@ -911,13 +951,17 @@ function progressCardsHtml() {
     pyramidRows.sort((a, b) => a.ranks[0] - b.ranks[0]);
     registerChart('prog-pyramid', rankPyramidOption(pyramidRows));
     const tip = `<b>影画档位金字塔</b><br><span style="color:var(--dim)">每角色一条堆叠横条：玩家池 0-6 影画占比（青→蓝→绿→金→橙→红，影画越高越醒目）；按 0 影占比升序排列</span>`;
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">影画档位金字塔</h3>${chartBox('prog-pyramid', Math.max(380, pyramidRows.length * 20))}</div>`);
+    cards.push(
+      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">影画档位金字塔</h3>${chartBox('prog-pyramid', Math.max(380, pyramidRows.length * 20))}</div>`
+    );
   }
 
   // 4. 属性 trade-off 表
   if (Object.keys(R.panelCorr || {}).length) {
     const tip = `<b>面板属性相关</b><br><span style="color:var(--dim)">全服玩家面板属性对的皮尔逊相关：绿=正相关（同涨同跌）· 红=负相关（此消彼长）· 灰=无明显关系；悬浮看具体相关系数</span>`;
-    cards.push(`<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">面板属性相关</h3>${panelCorrTableHtml()}</div>`);
+    cards.push(
+      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">面板属性相关</h3>${panelCorrTableHtml()}</div>`
+    );
   }
 
   return cards.join('');

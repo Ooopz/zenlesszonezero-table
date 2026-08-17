@@ -16,7 +16,10 @@ export function quantileSorted(arr, q) {
 /** 分位数（线性插值）：对数组排序后取 q 分位（q∈[0,1]）。内部排序，调用方无需预排序 */
 export function quantile(arr, q) {
   if (!arr || !arr.length) return null;
-  return quantileSorted([...arr].sort((a, b) => a - b), q);
+  return quantileSorted(
+    [...arr].sort((a, b) => a - b),
+    q
+  );
 }
 /** 中位数（内部排序，入参可乱序） */
 export function median(sorted) {

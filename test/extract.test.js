@@ -130,13 +130,18 @@ test('全量提取结果能通过 schema 校验', () => {
 // ---------- isMaxedRole：爬取过滤（角色/音擎≥60、驱动盘恰 6 块全 15 级且全 R5，兼容 mys/2025 两源） ----------
 const mysRole = (level, wpnLevel, discLevels, rarities) => ({
   level,
-  item_json: { weapon: { level: wpnLevel }, equip: discLevels.map((lv, i) => ({ level: lv, rarity: rarities?.[i] ?? 5 })) },
+  item_json: {
+    weapon: { level: wpnLevel },
+    equip: discLevels.map((lv, i) => ({ level: lv, rarity: rarities?.[i] ?? 5 })),
+  },
 });
 const role2025 = (level, wpnLevel, discLevels, rarities) => ({
   level,
   item_json: {
     Weapon: { Level: wpnLevel },
-    EquippedList: discLevels.map((lv, i) => (lv == null ? { Equipment: null } : { Equipment: { Level: lv, Rarity: rarities?.[i] ?? 5 } })),
+    EquippedList: discLevels.map((lv, i) =>
+      lv == null ? { Equipment: null } : { Equipment: { Level: lv, Rarity: rarities?.[i] ?? 5 } }
+    ),
   },
 });
 

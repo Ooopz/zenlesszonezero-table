@@ -238,7 +238,8 @@ function isCrossSite(req) {
   try {
     const { hostname, host } = new URL(origin);
     // 本机开发：回环地址一律放行（端口任意）
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1') return false;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1')
+      return false;
     // 部署形态：Origin 与请求的 Host 头一致即为同源（此时浏览器带的是真实域名，
     // 原实现把它一律判成跨站 → 部署后所有 POST 全部 403）
     return host !== req.headers.host;
@@ -503,7 +504,8 @@ const server = http.createServer(async (req, res) => {
       const headers = { Location: '/' };
       // 只在令牌正确时种 cookie；错误令牌静默跳首页（由首页请求回 401），不做区分提示以免成为探测口
       if (AUTH_TOKEN && t === AUTH_TOKEN) {
-        headers['Set-Cookie'] = `zzz_token=${encodeURIComponent(t)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
+        headers['Set-Cookie'] =
+          `zzz_token=${encodeURIComponent(t)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
       }
       res.writeHead(302, headers);
       return res.end();

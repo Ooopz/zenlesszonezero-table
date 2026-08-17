@@ -103,7 +103,12 @@ function attachReadLine(chart, opt) {
   const binsList = opt.readLine.bins || [];
   const dom = chart.getDom();
   const hide = () => {
-    chart.setOption({ graphic: [{ id: 'read-line', invisible: true }, { id: 'read-label', invisible: true }] });
+    chart.setOption({
+      graphic: [
+        { id: 'read-line', invisible: true },
+        { id: 'read-label', invisible: true },
+      ],
+    });
     chart.dispatchAction({ type: 'hideTip' });
   };
   // zrender 层标记：鼠标是否悬在数据元素上（数据元素由原生 item tooltip 处理，空白处由 showTip 接管）
@@ -128,7 +133,11 @@ function attachReadLine(chart, opt) {
       const rect = comp.coordinateSystem.getRect();
       if (px < rect.x || px > rect.x + rect.width || py < rect.y || py > rect.y + rect.height) continue;
       // 子图内：灰线横跨该子图宽度，标签 = 鼠标 y 对应的 y 轴数值
-      const line = { id: 'read-line', invisible: false, shape: { x1: rect.x, y1: py, x2: rect.x + rect.width, y2: py } };
+      const line = {
+        id: 'read-line',
+        invisible: false,
+        shape: { x1: rect.x, y1: py, x2: rect.x + rect.width, y2: py },
+      };
       let label = { id: 'read-label', invisible: true };
       const v = chart.convertFromPixel({ gridIndex: i }, [px, py]);
       if (v && Number.isFinite(v[1])) {
@@ -209,7 +218,12 @@ export function heatmapOption(data, attrs, max = 100) {
       formatter: (p) => {
         const c = data[p.value[1]]?.cells[p.value[0]];
         if (!c || c.pct == null || !Number.isFinite(c.pct)) return '无数据';
-        const hit = c.reached == null ? '' : c.reached ? `<span style="color:${CHART_COLORS.green}">✓ 达到推荐中档</span>` : `<span style="color:${CHART_COLORS.orange}">未达推荐中档</span>`;
+        const hit =
+          c.reached == null
+            ? ''
+            : c.reached
+              ? `<span style="color:${CHART_COLORS.green}">✓ 达到推荐中档</span>`
+              : `<span style="color:${CHART_COLORS.orange}">未达推荐中档</span>`;
         const gap = c.gap != null && Number.isFinite(c.gap) ? `<br>缺口 ${formatValue(attrs[p.value[0]], c.gap)}` : '';
         return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}玩家百分位 <b>${Math.round(c.pct)}%</b>${hit ? '<br>' + hit : ''}${gap}`;
       },
@@ -217,13 +231,19 @@ export function heatmapOption(data, attrs, max = 100) {
     xAxis: { ...baseXAxis(attrs), axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 35 } },
     yAxis: { type: 'category', data: data.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
     visualMap: {
-      min: 0, max, calculable: true, orient: 'horizontal', left: 'center', bottom: 0,
+      min: 0,
+      max,
+      calculable: true,
+      orient: 'horizontal',
+      left: 'center',
+      bottom: 0,
       inRange: { color: ['#401515', '#a83a3a', '#d4a81e', CHART_COLORS.green] }, // 深红→橙→金→绿，色阶鲜明
       textStyle: { color: CHART_COLORS.dim },
     },
     series: [
       {
-        type: 'heatmap', data: rows,
+        type: 'heatmap',
+        data: rows,
         label: { show: false }, // 不显示格子内数字，格子颜色传达百分位（悬浮看具体值），避免窄格子渲染异常
         itemStyle: { borderColor: '#000', borderWidth: 1 }, // 清晰分隔
       },
@@ -387,13 +407,15 @@ export function violinBoxOption(items) {
       xAxisIndex: i,
       yAxisIndex: i,
       boxWidth: ['18%', '38%'],
-      data: [[
-        item.dist.whiskerLow ?? item.dist.p10,
-        item.dist.p25,
-        item.dist.median,
-        item.dist.p75,
-        item.dist.whiskerHigh ?? item.dist.p90,
-      ]],
+      data: [
+        [
+          item.dist.whiskerLow ?? item.dist.p10,
+          item.dist.p25,
+          item.dist.median,
+          item.dist.p75,
+          item.dist.whiskerHigh ?? item.dist.p90,
+        ],
+      ],
       itemStyle: { color: SOFT.acc, borderColor: CHART_COLORS.acc },
       lineStyle: { color: CHART_COLORS.acc },
     });
@@ -458,7 +480,9 @@ export function violinBoxOption(items) {
         if (d.median != null) lines.push(`中位 <b>${fmt(d.median)}</b>（Q1 ${fmt(d.p25)} ~ Q3 ${fmt(d.p75)}）`);
         if (d.p10 != null && d.p90 != null) lines.push(`P10-P90 <b>${fmt(d.p10)}</b> ~ <b>${fmt(d.p90)}</b>`);
         if (item.rec && item.rec.low != null) {
-          lines.push(`推荐三档 <b>${fmt(item.rec.low)}</b> / <b>${fmt(item.rec.mid)}</b> / <b>${fmt(item.rec.high)}</b>`);
+          lines.push(
+            `推荐三档 <b>${fmt(item.rec.low)}</b> / <b>${fmt(item.rec.mid)}</b> / <b>${fmt(item.rec.high)}</b>`
+          );
         }
         if (item.mine != null) lines.push(`<span style="color:var(--orange)">我的 <b>${fmt(item.mine)}</b></span>`);
         return lines.join('<br>');
@@ -484,7 +508,16 @@ export function violinBoxOption(items) {
         invisible: true,
         silent: true,
         z: 50,
-        style: { text: '', x: 0, y: 0, fill: '#f0ede2', fontSize: 12, backgroundColor: '#1a1a1a', borderRadius: 2, padding: [2, 4] },
+        style: {
+          text: '',
+          x: 0,
+          y: 0,
+          fill: '#f0ede2',
+          fontSize: 12,
+          backgroundColor: '#1a1a1a',
+          borderRadius: 2,
+          padding: [2, 4],
+        },
       },
     ],
   };
@@ -504,7 +537,8 @@ export function densityScatterOption(grid, title = '') {
     title: { text: title, left: 'center', top: 4, ...CHART_TITLE },
     tooltip: {
       ...DARK_TOOLTIP,
-      formatter: (p) => `<b>${grid.xName}</b> ${p.value[0]}<br><b>${grid.yName}</b> ${p.value[1]}<br>样本 ${p.value[2]}`,
+      formatter: (p) =>
+        `<b>${grid.xName}</b> ${p.value[0]}<br><b>${grid.yName}</b> ${p.value[1]}<br>样本 ${p.value[2]}`,
     },
     grid: { left: 52, right: 18, top: 34, bottom: 36 },
     xAxis: {
@@ -567,7 +601,13 @@ export function tierRichOption(items, height = 380) {
   const gw = (100 - padX * (COLS + 1)) / COLS;
   const gh = (100 - padY * (rows + 1)) / rows;
   const pos = (i) => ({ left: padX + (i % COLS) * (gw + padX), top: padY + Math.floor(i / COLS) * (gh + padY) });
-  const grids = items.map((_, i) => ({ left: `${pos(i).left}%`, top: `${pos(i).top}%`, width: `${gw}%`, height: `${gh}%`, containLabel: true }));
+  const grids = items.map((_, i) => ({
+    left: `${pos(i).left}%`,
+    top: `${pos(i).top}%`,
+    width: `${gw}%`,
+    height: `${gh}%`,
+    containLabel: true,
+  }));
   // 标题底边 = grid 顶 - 8px 间隙（标题高约 18px，故顶边再上移 26px）——任何容器高度下都保持图外
   const titles = items.map((item, i) => ({
     text: item.attr,
@@ -598,7 +638,9 @@ export function tierRichOption(items, height = 380) {
   items.forEach((item, i) => {
     // x 轴范围：玩家区间、三档 median±sd、我的 全部有效值（含 0，供「我的」bar 从 0 起）
     const vals = [0];
-    const push = (v) => { if (v != null && Number.isFinite(v)) vals.push(v); };
+    const push = (v) => {
+      if (v != null && Number.isFinite(v)) vals.push(v);
+    };
     push(item.player?.p10);
     push(item.player?.p90);
     for (const k of ['low', 'mid', 'high']) {
@@ -647,7 +689,12 @@ export function tierRichOption(items, height = 380) {
             fontSize: 11,
             formatter: `${lo.toFixed(1)} ~ ${hi.toFixed(1)}`,
           },
-          data: [[{ yAxis: cat, xAxis: lo }, { yAxis: cat, xAxis: hi }]],
+          data: [
+            [
+              { yAxis: cat, xAxis: lo },
+              { yAxis: cat, xAxis: hi },
+            ],
+          ],
         },
       });
     };
@@ -680,7 +727,11 @@ export function tierRichOption(items, height = 380) {
         areaRow('玩家', item.player.p10, item.player.p90, COLORS.player);
       }
     }
-    for (const [k, cat, color] of [['low', '低配', COLORS.low], ['mid', '毕业', COLORS.mid], ['high', '高配', COLORS.high]]) {
+    for (const [k, cat, color] of [
+      ['low', '低配', COLORS.low],
+      ['mid', '毕业', COLORS.mid],
+      ['high', '高配', COLORS.high],
+    ]) {
       const v = item[k];
       if (v?.median == null) continue;
       const sd = v.sd != null ? v.sd : 0;
@@ -792,9 +843,20 @@ export function rankPyramidOption(rows) {
       },
     },
     legend: CHART_LEGEND,
-    xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE },
+    xAxis: {
+      type: 'value',
+      max: 100,
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: '{value}%' },
+      splitLine: SPLIT_LINE,
+    },
     // interval: 0 —— 角色名全部显示（默认自动间隔会隔一个显示一个）
-    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, interval: 0 } },
+    yAxis: {
+      type: 'category',
+      data: rows.map((r) => r.name),
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, interval: 0 },
+    },
     series,
   };
 }
@@ -817,7 +879,10 @@ export function relicBarOption(rows) {
     series: [
       {
         type: 'boxplot',
-        data: rows.map((r) => ({ value: [r.whiskerLow ?? r.p10, r.p25, r.median, r.p75, r.whiskerHigh ?? r.p90], d: r })),
+        data: rows.map((r) => ({
+          value: [r.whiskerLow ?? r.p10, r.p25, r.median, r.p75, r.whiskerHigh ?? r.p90],
+          d: r,
+        })),
         boxWidth: ['40%', '55%'],
         itemStyle: { color: SOFT.acc, borderColor: CHART_COLORS.acc },
         lineStyle: { color: CHART_COLORS.acc },
@@ -866,8 +931,8 @@ export function skillDistOption(items) {
   // 每技能独立等级范围：item.min/max 优先（如核心技 1-7），否则 dist 实际范围
   const levelOf = (it) => {
     const keys = Object.keys(it.dist || {}).map(Number);
-    let lo = it.min != null ? it.min : (keys.length ? Math.min(...keys) : 1);
-    let hi = it.max != null ? it.max : (keys.length ? Math.max(...keys) : 12);
+    let lo = it.min != null ? it.min : keys.length ? Math.min(...keys) : 1;
+    let hi = it.max != null ? it.max : keys.length ? Math.max(...keys) : 12;
     if (lo > hi) [lo, hi] = [hi, lo];
     const out = [];
     for (let l = lo; l <= hi; l++) out.push(l);
@@ -962,9 +1027,16 @@ export function discMain456Option(detail) {
   const slots = [4, 5, 6];
   const allMains = [...new Set(slots.flatMap((s) => (detail?.main456?.[s] || []).map((f) => f.name)))];
   const PALETTE = [
-    'rgba(255,212,0,0.8)', 'rgba(86,184,255,0.75)', 'rgba(124,231,168,0.75)', 'rgba(255,154,77,0.75)',
-    'rgba(178,140,255,0.75)', 'rgba(255,93,93,0.75)', 'rgba(255,233,92,0.75)', 'rgba(145,141,128,0.7)',
-    'rgba(79,195,247,0.7)', 'rgba(174,213,129,0.7)',
+    'rgba(255,212,0,0.8)',
+    'rgba(86,184,255,0.75)',
+    'rgba(124,231,168,0.75)',
+    'rgba(255,154,77,0.75)',
+    'rgba(178,140,255,0.75)',
+    'rgba(255,93,93,0.75)',
+    'rgba(255,233,92,0.75)',
+    'rgba(145,141,128,0.7)',
+    'rgba(79,195,247,0.7)',
+    'rgba(174,213,129,0.7)',
   ];
   const series = allMains.map((m, mi) => ({
     name: m,
@@ -985,7 +1057,13 @@ export function discMain456Option(detail) {
       trigger: 'item',
       formatter: (p) => `${p.seriesName}<br>${p.name}：<b>${p.value}%</b>`,
     },
-    xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE },
+    xAxis: {
+      type: 'value',
+      max: 100,
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: '{value}%' },
+      splitLine: SPLIT_LINE,
+    },
     yAxis: { type: 'category', data: slots.map((s) => `${s} 号位`), axisLine: { show: false }, axisLabel: AXIS_LABEL },
     series,
   };
@@ -1001,8 +1079,19 @@ export function discSubsOption(subs, total) {
   return {
     grid: { left: 90, right: 50, top: 10, bottom: 24, containLabel: true },
     tooltip: { ...DARK_TOOLTIP, formatter: (p) => `${p.name}<br>占比 <b>${p.value}%</b>（${p.data.count} 盘）` },
-    xAxis: { type: 'value', max: 100, axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE },
-    yAxis: { type: 'category', data: rows.map((r) => r.name).reverse(), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    xAxis: {
+      type: 'value',
+      max: 100,
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: '{value}%' },
+      splitLine: SPLIT_LINE,
+    },
+    yAxis: {
+      type: 'category',
+      data: rows.map((r) => r.name).reverse(),
+      axisLine: { show: false },
+      axisLabel: AXIS_LABEL_SMALL,
+    },
     series: [
       {
         type: 'bar',
@@ -1038,7 +1127,13 @@ export function mainSubCrossOption(detail) {
     });
     const left = `${(i % 3) * 32 + 2}%`;
     grids.push({ left, top: '16%', width: '30%', height: '72%', containLabel: true });
-    titles.push({ text: `${slot} 号位`, left: `${(i % 3) * 32 + 17}%`, top: '1%', textAlign: 'center', ...CHART_SUBTITLE });
+    titles.push({
+      text: `${slot} 号位`,
+      left: `${(i % 3) * 32 + 17}%`,
+      top: '1%',
+      textAlign: 'center',
+      ...CHART_SUBTITLE,
+    });
     xAxes.push({
       gridIndex: i,
       type: 'category',
@@ -1067,7 +1162,8 @@ export function mainSubCrossOption(detail) {
     yAxis: yAxes,
     tooltip: {
       ...DARK_TOOLTIP,
-      formatter: (p) => `<b>${p.seriesName}</b><br>主词条 ${p.data.m}<br>副词条 ${p.data.s}<br>条件频率 <b>${(p.value[2] * 100).toFixed(1)}%</b>`,
+      formatter: (p) =>
+        `<b>${p.seriesName}</b><br>主词条 ${p.data.m}<br>副词条 ${p.data.s}<br>条件频率 <b>${(p.value[2] * 100).toFixed(1)}%</b>`,
     },
     visualMap: {
       min: 0,
@@ -1091,7 +1187,12 @@ export function discComboOption(subCombos) {
     grid: { left: 90, right: 40, top: 10, bottom: 24, containLabel: true },
     tooltip: { ...DARK_TOOLTIP, formatter: (p) => `${p.name}<br>盘数 <b>${p.value}</b>` },
     xAxis: { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
-    yAxis: { type: 'category', data: rows.map((r) => r.name).reverse(), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    yAxis: {
+      type: 'category',
+      data: rows.map((r) => r.name).reverse(),
+      axisLine: { show: false },
+      axisLabel: AXIS_LABEL_SMALL,
+    },
     series: [
       {
         type: 'bar',
@@ -1119,8 +1220,12 @@ export function scoreRelicOption(rows) {
       },
     },
     xAxis: {
-      type: 'value', min: 0, max: 1,
-      axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE,
+      type: 'value',
+      min: 0,
+      max: 1,
+      axisLine: { show: false },
+      axisLabel: AXIS_LABEL,
+      splitLine: SPLIT_LINE,
     },
     yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
     series: [
@@ -1128,7 +1233,9 @@ export function scoreRelicOption(rows) {
         type: 'bar',
         barWidth: 10,
         data: rows.map((r) => ({ value: +r.r.toFixed(3), d: r })),
-        itemStyle: { color: (p) => (p.value >= 0.9 ? CHART_COLORS.green : p.value >= 0.8 ? CHART_COLORS.acc : CHART_COLORS.orange) },
+        itemStyle: {
+          color: (p) => (p.value >= 0.9 ? CHART_COLORS.green : p.value >= 0.8 ? CHART_COLORS.acc : CHART_COLORS.orange),
+        },
         label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11 },
       },
     ],
@@ -1148,8 +1255,12 @@ export function roleOwnershipOption(rows) {
       },
     },
     xAxis: {
-      type: 'value', min: 0, max: 100,
-      axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE,
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: '{value}%' },
+      splitLine: SPLIT_LINE,
     },
     yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
     series: [

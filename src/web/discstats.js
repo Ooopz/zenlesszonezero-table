@@ -10,7 +10,14 @@ import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
 import { discSetEffectsHtml } from './shared.js';
-import { registerChart, chartBox, discMain456Option, discSubsOption, discComboOption, mainSubCrossOption } from './charts.js';
+import {
+  registerChart,
+  chartBox,
+  discMain456Option,
+  discSubsOption,
+  discComboOption,
+  mainSubCrossOption,
+} from './charts.js';
 
 let selectedDisc = '';
 export function setSelectedDisc(name) {
@@ -22,9 +29,7 @@ const pct = (v) => Math.round((v || 0) * 100);
 /** 两口径对齐后的全盘决策卡（每次渲染重算：~65 盘 × 判定，开销可忽略） */
 function allCards() {
   const discSet2 = Object.fromEntries(Object.values(library.discs || {}).map((d) => [d.name, d.set2]));
-  const official = new Map(
-    computeDiscStats(plans, Object.keys(library.discs || {}), discSet2).map((r) => [r.name, r])
-  );
+  const official = new Map(computeDiscStats(plans, Object.keys(library.discs || {}), discSet2).map((r) => [r.name, r]));
   const live = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
   const cards = new Map();
   for (const name of Object.keys(library.discs || {})) {
@@ -48,9 +53,7 @@ function discSelectHtml(current, cards) {
 /** 对比条：词条名 + 判定标签 + 双条（金=官方、蓝=实况）+ 右侧数值（官方% / 实况%） */
 function barHtml(name, official, live, verdict) {
   const tag =
-    verdict === 'keep'
-      ? '<span class="ad-tag ad-keep">保留</span>'
-      : '<span class="ad-tag ad-drop">可抛弃</span>';
+    verdict === 'keep' ? '<span class="ad-tag ad-keep">保留</span>' : '<span class="ad-tag ad-drop">可抛弃</span>';
   const w = (v) => (v > 0 ? Math.max(3, pct(v)) : 0);
   const bar = (v, cls) =>
     `<div class="ad-bar-track">${v > 0 ? `<div class="ad-bar-fill ${cls}" style="width:${w(v)}%"></div>` : ''}</div>`;
@@ -68,8 +71,18 @@ function rolesHtml(card) {
   const chip = (n) => `<span class="ad-chip${both.includes(n) ? ' both' : ''}">${escapeHtml(n)}</span>`;
   return `<div class="ad-sec">
     <h4>① 适配角色（金色 ★=两口径一致，最适配）</h4>
-    <div class="ad-row"><span class="ad-row-label">官方推荐</span><span class="ad-chips">${[...official].sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh')).map(chip).join('') || '—'}</span></div>
-    <div class="ad-row"><span class="ad-row-label">玩家实况</span><span class="ad-chips">${[...live].sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh')).map(chip).join('') || '—'}</span></div>
+    <div class="ad-row"><span class="ad-row-label">官方推荐</span><span class="ad-chips">${
+      [...official]
+        .sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh'))
+        .map(chip)
+        .join('') || '—'
+    }</span></div>
+    <div class="ad-row"><span class="ad-row-label">玩家实况</span><span class="ad-chips">${
+      [...live]
+        .sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'zh'))
+        .map(chip)
+        .join('') || '—'
+    }</span></div>
   </div>`;
 }
 
@@ -89,14 +102,15 @@ function dropsHtml(card) {
 function statGridHtml(card) {
   const cols = [4, 5, 6]
     .map(
-      (slot) => `<div class="ad-slot"><h4>${slot} 号位</h4>${card.mains[slot]
-        .map((m) => barHtml(m.name, m.official, m.live, m.verdict))
-        .join('')}</div>`
+      (slot) =>
+        `<div class="ad-slot"><h4>${slot} 号位</h4>${card.mains[slot]
+          .map((m) => barHtml(m.name, m.official, m.live, m.verdict))
+          .join('')}</div>`
     )
     .join('');
-  const subCol = `<div class="ad-slot"><h4>副词条</h4>${card.subs
-    .map((s) => barHtml(s.name, s.official, s.live, s.verdict))
-    .join('') || '—'}</div>`;
+  const subCol = `<div class="ad-slot"><h4>副词条</h4>${
+    card.subs.map((s) => barHtml(s.name, s.official, s.live, s.verdict)).join('') || '—'
+  }</div>`;
   return `<div class="ad-sec">
     <h4>③ 456 号位主词条 / 副词条保留清单（金=官方推荐 · 蓝=玩家实况 · 保留=任一口径≥3% · 可抛弃=两口径都<3%）</h4>
     <div class="ad-slotgrid">${cols}${subCol}</div>

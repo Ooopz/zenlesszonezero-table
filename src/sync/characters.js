@@ -30,7 +30,10 @@ function normalizeCharacterOutput(c) {
   if (!libNameIndex || !c) return c;
   const wengine =
     c.wengine && c.wengine.name !== '未佩戴音擎'
-      ? { ...c.wengine, name: canonicalize(CATEGORY.WENGINE, libNameIndex.wengine, c.wengine.name, { fuzzy: false }).name }
+      ? {
+          ...c.wengine,
+          name: canonicalize(CATEGORY.WENGINE, libNameIndex.wengine, c.wengine.name, { fuzzy: false }).name,
+        }
       : c.wengine;
   const discs = (c.discs || []).map((d) =>
     d.set === '未佩戴驱动盘' || d.set === '未知'

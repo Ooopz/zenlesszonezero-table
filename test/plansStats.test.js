@@ -8,8 +8,20 @@ const PLANS = {
   1011: {
     name: '安比',
     plans: [
-      { weapon: { main: '硫磺石', backup: '德玛拉电池Ⅱ型' }, sets: [{ name: '震星迪斯科', cnt: 4 }, { name: '摇摆爵士', cnt: 2 }] },
-      { weapon: { main: '硫磺石', backup: '德玛拉电池Ⅱ型' }, sets: [{ name: '震星迪斯科', cnt: 4 }, { name: '摇摆爵士', cnt: 2 }] },
+      {
+        weapon: { main: '硫磺石', backup: '德玛拉电池Ⅱ型' },
+        sets: [
+          { name: '震星迪斯科', cnt: 4 },
+          { name: '摇摆爵士', cnt: 2 },
+        ],
+      },
+      {
+        weapon: { main: '硫磺石', backup: '德玛拉电池Ⅱ型' },
+        sets: [
+          { name: '震星迪斯科', cnt: 4 },
+          { name: '摇摆爵士', cnt: 2 },
+        ],
+      },
       { weapon: { main: '硫磺石' }, sets: [{ name: '啄木鸟电音', cnt: 4 }] },
     ],
   },
@@ -47,14 +59,20 @@ test('orderComboSets4First：4 件套在前、2 件套在后，num/cnt 两字段
     { name: '如影相随', num: 4 },
   ]);
   assert.equal(ws.name, '如影相随4+啄木鸟电音2');
-  assert.deepEqual(ws.sets.map((s) => s.num), [4, 2]);
+  assert.deepEqual(
+    ws.sets.map((s) => s.num),
+    [4, 2]
+  );
   // 方案侧（cnt 字段）与工坊侧归一后同名组合文本一致
   const pl = orderComboSets4First([
     { name: '如影相随', cnt: 4 },
     { name: '啄木鸟电音', cnt: 2 },
   ]);
   assert.equal(pl.name, ws.name);
-  assert.deepEqual(pl.sets.map((s) => s.num), [4, 2]);
+  assert.deepEqual(
+    pl.sets.map((s) => s.num),
+    [4, 2]
+  );
   // 空组合
   assert.deepEqual(orderComboSets4First([]), { name: '', sets: [] });
 });
