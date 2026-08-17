@@ -7,6 +7,7 @@ import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, w
 import { computeRecTierStats } from '../lib/panelBench.js';
 import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
+import { styleMatch } from '../lib/workshopStats.js';
 import { renderDiscStats } from './discstats.js';
 import { escapeHtml, escapeJsAttr, renderRichText, formatValue, statEntries, romanNumeralUnicode } from '../lib/util.js';
 import { resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
@@ -596,7 +597,71 @@ function roleSelectHtml(current) {
   return `<div class="chart-select"><label>角色</label><select onchange="ZZZ.selectRole(this.value)">${opts}</select></div>`;
 }
 
-// ---------- 角色面板（单角色详情层：小提琴+箱线 / 推荐三档增强图 / 技能对标与组合 / 配装对标 / 配队亲和 / 密度散点） ----------
+// ---------- 角色面板（单角色详情层：流派分析 / 小提琴+箱线 / 推荐三档增强图 / 技能对标与组合 / 配装对标 / 配队亲和 / 密度散点） ----------
+/** 流派分析卡：该角色玩家池的配置取向聚类（k-means，高练度标杆池）+ 我的联动。
+ *  流派 = 面板（攻击/暴击率/暴伤/属性伤害）聚类簇，4 号位主词条是强判别信号；
+ *  典型面板 = 簇内 mean/median；456 主词条/套装/音擎 = 簇内 Top2 偏好。
+ *  我的角色：面板对各流派典型面板（mean）算相对距离（styleMatch），标注最贴近流派。
+ *  ⚠️ 暴伤等百分比属性聚合侧已归一小数（mys "165.2%"→1.652），这里按值 ≤3 判百分比显示（1.65→165%）。 */
+function styleCardHtml(name) {
+  const style = workshopStats.roleStyles?.[roleIdFor(name)];
+  if (!style || !style.styles?.length) return '';
+  const my = myCharacters.find((c) => c.name === name);
+  const myFinal = my?.calculate().final || null;
+  const match = myFinal ? styleMatch(style, myFinal) : null;
+  const fmt = (v) => (v == null ? '—' : v <= 3 ? (v * 100).toFixed(0) + '%' : Math.round(v).toString());
+  const SHARE_COLORS = ['var(--hazard)', 'var(--blue)', 'var(--green)'];
+  const shareBar = `<div class="style-share-bar">${style.styles
+    .map(
+      (st, i) =>
+        `<span style="flex:${(st.share * 100).toFixed(2)};background:${SHARE_COLORS[i % SHARE_COLORS.length]}" title="${escapeHtml(st.label)} · 占 ${(st.share * 100).toFixed(0)}%"></span>`
+    )
+    .join('')}</div>`;
+  const head = `<tr><th>属性</th>${style.styles
+    .map(
+      (st) =>
+        `<th>${escapeHtml(st.label)}<br><span class="ds-dim" style="font-weight:400">${(st.share * 100).toFixed(0)}% · mean/中位</span></th>`
+    )
+    .join('')}${myFinal ? '<th>我的</th>' : ''}</tr>`;
+  const rows = style.attrs
+    .map((a) => {
+      const mine = myFinal?.[a];
+      const mineCell = mine == null ? '<td class="ds-dim">—</td>' : `<td class="style-mine">${fmt(mine)}</td>`;
+      return `<tr><td class="tname">${escapeHtml(a)}</td>${style.styles
+        .map((st) => {
+          const p = st.panel[a];
+          return `<td>${fmt(p?.mean)}<span class="ds-dim">/${fmt(p?.median)}</span></td>`;
+        })
+        .join('')}${mineCell}</tr>`;
+    })
+    .join('');
+  const chip = (items) =>
+    items && items.length
+      ? items.map((x) => `<span class="tag">${escapeHtml(x)}</span>`).join('')
+      : '<span class="ds-dim">—</span>';
+  const styleBlocks = style.styles
+    .map(
+      (st) => `<div class="style-block">
+        <div class="style-block-head"><b>${escapeHtml(st.label)}</b><span class="ds-dim">${(st.share * 100).toFixed(0)}%</span></div>
+        <div class="style-block-row"><span class="style-k">4号位</span>${chip(st.main['4'])}</div>
+        <div class="style-block-row"><span class="style-k">5号位</span>${chip(st.main['5'])}</div>
+        <div class="style-block-row"><span class="style-k">6号位</span>${chip(st.main['6'])}</div>
+        <div class="style-block-row"><span class="style-k">套装</span>${chip(st.suits)}</div>
+        <div class="style-block-row"><span class="style-k">音擎</span>${chip(st.wengine)}</div>
+      </div>`
+    )
+    .join('');
+  const myLine = match
+    ? `<div class="style-mine-line">你的面板最贴近 <b class="style-best">${escapeHtml(match.best.label)}</b>（相对距离 ${match.best.dist.toFixed(3)}，越小越像）</div>`
+    : '';
+  const tip = `<b>流派分析</b><br><span style="color:var(--dim)">该角色玩家池（高练度标杆池）按面板（攻击/暴击率/暴伤/属性伤害）k-means 聚类出的配置取向流派——同一角色的面板资源零和，玩家在「堆攻击 / 堆双暴 / 堆精通」等取向间分化（4 号位主词条是强判别信号）。<br>典型面板 = 流派内玩家 mean/中位；456 主词条/套装/音擎 = 流派内 Top2 偏好。<br>「我的」列（有账号数据时）：按属性相对差平方和判定你的面板最贴近哪个流派。暴伤等百分比属性按 % 显示（如 1.65 = 165%）</span>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">流派分析</h3>
+    ${myLine}
+    ${shareBar}
+    <div class="style-table-wrap"><table class="rec-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
+    <div class="style-blocks">${styleBlocks}</div>
+  </div>`;
+}
 function renderRoleDetail() {
   if (!Object.keys(plans || {}).length)
     return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
@@ -664,6 +729,7 @@ function renderRoleDetail() {
 
   return `<div class="chart-grid">
     ${roleSelectHtml(name)}
+    ${styleCardHtml(name)}
     <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(violinTip)}">玩家分布箱线</h3>${chartBox('detail-violin', violinH)}</div>
     <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tiersTip)}">推荐三档 × 玩家区间</h3>${chartBox('detail-tiers', tiersH)}</div>
     <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(skillTip)}">技能等级分布</h3>${skillBenchHtml(name)}</div>

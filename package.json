@@ -12,7 +12,7 @@
     "sync:workshop": "node src/sync/workshop.js",
     "rebuild:stats": "node scripts/rebuild-stats.mjs",
     "clean:workshop": "node scripts/clean-workshop.mjs",
-    "test": "node --test test/calc.test.js test/discstats.test.js test/distStats.test.js test/extract.test.js test/gradStats.test.js test/models.test.js test/names.test.js test/node.test.js test/panelBench.test.js test/panelRange.test.js test/plansStats.test.js test/proxy.test.js test/schema.test.js test/skill-growth.test.js test/sort.test.js test/teamStats.test.js test/util.test.js test/wengineStats.test.js test/workshop-extract.test.js test/workshop-merge.test.js test/workshopStats.test.js",
+    "test": "node --test test/calc.test.js test/discstats.test.js test/distStats.test.js test/extract.test.js test/gradStats.test.js test/models.test.js test/names.test.js test/node.test.js test/panelBench.test.js test/panelRange.test.js test/plansStats.test.js test/proxy.test.js test/schema.test.js test/skill-growth.test.js test/simulate.test.js test/sort.test.js test/teamStats.test.js test/util.test.js test/wengineStats.test.js test/workshop-extract.test.js test/workshop-merge.test.js test/workshopStats.test.js",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{js,md,json}\""
   },
@@ -25,5 +25,8 @@
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.9.0",
     "prettier": "^3.9.6"
+  },
+  "dependencies": {
+    "echarts-gl": "^2.1.0"
   }
 }

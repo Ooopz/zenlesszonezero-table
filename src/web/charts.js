@@ -68,15 +68,18 @@ export function mountCharts() {
     // 读数参考线（option 带 readLine 标记时启用：小提琴图等需要按鼠标位置读数的场景）
     if (opt.readLine) attachReadLine(chart, opt);
   });
-  pruneDetached();
+  pruneDetachedCharts();
 }
 
 /** 回收已从文档移除的图表实例。
  *  切子面板/切角色时 render 会整块替换 innerHTML，旧容器连同 canvas 脱离文档，但实例仍留在
  *  instances 里：既不会被 GC（每张图一块 canvas + option 数据），resizeCharts 也会对着
  *  已脱离的 DOM 反复 resize。mountCharts 只 dispose「同 key 重新挂载」的那些，覆盖不到
- *  本次没再出现的图，故在挂载后统一清理。 */
-function pruneDetached() {
+ *  本次没再出现的图。
+ *  ⚠️ 必须由 render() 在清空 grid 后无条件调用，不能只靠 mountCharts 末尾那次：
+ *  从「统计」切到「数据库」或「我的角色」时 render 提前 return，根本不会走到 mountCharts，
+ *  统计视图那十几张图会永久驻留（来回切视图 = 每次泄漏一整套 canvas）。 */
+export function pruneDetachedCharts() {
   for (const [key, chart] of instances) {
     const dom = chart.getDom();
     if (!dom || !dom.isConnected) {

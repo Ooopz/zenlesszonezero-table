@@ -33,6 +33,8 @@ import { STAT, VIEWS } from '../lib/constants.js';
 import { discSetEffectsHtml, richItemHtml, skillIconForType } from './shared.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
 import { renderRecommend, toggleRecommendSort, mountRecommendCharts } from './recommend.js';
+import { renderSimulate } from './simulate.js';
+import { pruneDetachedCharts, mountCharts } from './charts.js';
 
 // ---------- 悬浮提示 ----------
 const tipEl = document.createElement('div');
@@ -99,7 +101,7 @@ function discDetail(d, validSet) {
   const subs = (d.growth || []).map((g) => {
     const rolls = 1 + g.growthCount;
     return {
-      content: `${g.name} ${formatValue(g.name, g.value)}<span class="rolls">${'>'.repeat(rolls)}</span>`,
+      content: `${g.name} ${formatValue(g.name, g.value)} <span class="rolls">${'>'.repeat(rolls)}</span>`,
       hit: validSet.has(g.type),
     };
   });
@@ -129,9 +131,6 @@ function discTile(d, validSet) {
     ${sub ? `<div class="dsubs">${sub}</div>` : ''}
   </div>`;
 }
-
-/** 三行两列盘序：第一列 1/2/3 号、第二列 4/5/6 号 */
-const discOrder = [0, 3, 1, 4, 2, 5];
 
 /** 目标副词条缺口悬浮提示（卡片/表格「副词条命中」共用）。
  *  未配置目标时返回空串（不加悬浮）；已全部达成时提示无需额外副词条。 */
@@ -298,8 +297,11 @@ function characterCard(character) {
         }).join('')
       : '';
 
-  // 驱动盘：按槽位顺序排列（第一行 1/2/3 号、第二行 4/5/6 号）
-  const discs = (character.discs || []).slice(0, 6);
+  // 驱动盘：按槽位 1-6 顺序排列（卡片/汇总展示统一；不依赖接口数组原序，空槽位排最后）
+  const discs = (character.discs || [])
+    .filter(Boolean)
+    .sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99))
+    .slice(0, 6);
   const hits = character.hitCount();
   const hitTip = gapAdviceHtml(character, R);
   const discsHtml = discs
@@ -479,10 +481,11 @@ function renderTable(list, container) {
     cell['音擎'] =
       `<td class="twe">${wengineIcon ? `<img class="t-ico" src="${wengineIcon}" data-detail="${escapeHtml(wengineDetail)}">` : wengine.name || '未佩戴'}</td>`;
 
-    // 驱动盘：紧凑图标（两列，第一列 1/2/3 号、第二列 4/5/6 号），悬浮显示完整详情
-    const discIcons = discOrder
-      .map((i) => (character.discs || [])[i])
+    // 驱动盘：按槽位 1-6 顺序的紧凑圆形图标（横向排列，悬浮显示完整详情）
+    const discIcons = (character.discs || [])
       .filter(Boolean)
+      .sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99))
+      .slice(0, 6)
       .map((d) => {
         const discLib = resolveEntry(CATEGORY.DISC, discIndex, d.set);
         const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
@@ -613,6 +616,9 @@ export function render() {
   // 高亮当前视图切换按钮
   document.querySelectorAll('.view-tab').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
   grid.innerHTML = '';
+  // 清空后旧图表容器全部脱离文档：此处统一回收，覆盖下面所有提前 return 的分支
+  // （切到数据库/我的角色时不会走 mountCharts，只靠它清理会漏掉整套统计视图的图）
+  pruneDetachedCharts();
   if (view === VIEWS.WIKI) {
     grid.innerHTML = renderWiki();
     return;
@@ -621,6 +627,11 @@ export function render() {
     // discstats 兼容旧 user-config 存留的视图值
     grid.innerHTML = renderRecommend();
     mountRecommendCharts();
+    return;
+  }
+  if (view === VIEWS.SIMULATE) {
+    grid.innerHTML = renderSimulate();
+    mountCharts();
     return;
   }
   // 我的角色：卡片 / 汇总 二级子页面

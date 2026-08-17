@@ -44,6 +44,8 @@ const INITIAL_STATS = [
   ...panelOrder.filter((s) => !maxLevelStats.includes(s) && s !== STAT.PEN_VALUE && s !== STAT.PIERCE),
 ];
 const MAX_STATS = maxLevelStats;
+// 邦布面板初始属性列：去掉邦布没有的 异常精通/能量自动回复（邦布数据恒为 —，无信息量）
+const BANG_INITIAL_STATS = INITIAL_STATS.filter((s) => s !== STAT.ANOMALY_PROF && s !== STAT.ENERGY);
 // 各子面板可点击排序的表头
 const CHAR_SORTABLE = new Set([
   '名称',
@@ -56,7 +58,13 @@ const CHAR_SORTABLE = new Set([
 ]);
 const WENGINE_SORTABLE = new Set(['名称', '稀有度', '特性', '基础攻击']);
 const DISC_SORTABLE = new Set(['名称']);
-const BANG_SORTABLE = new Set(['名称', '稀有度']);
+const BANG_SORTABLE = new Set([
+  '名称',
+  '稀有度',
+  '属性',
+  ...BANG_INITIAL_STATS,
+  ...MAX_STATS.map((s) => `满级${s}`),
+]);
 
 function fmt(v) {
   return isEmptyVal(v) ? '' : v;
@@ -108,12 +116,17 @@ function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } 
     : '';
 }
 
-/** 行标签：与列名相同 → 只显数值；以列名结尾 → 去掉该前缀（一段伤害倍率 + 伤害倍率 → 一段）；否则原样 */
+/** 行标签：与列名相同 → 只显数值；以列名结尾 → 去掉该前缀（一段伤害倍率 + 伤害倍率 → 一段）；否则原样。
+ *  组名是通用量词时（邦布「倍率」列，行键是完整属性名「伤害倍率」）截断会变成「伤害」——保留完整行键。 */
 function lineLabel(k, groupName) {
   if (k == null) return k;
   if (!groupName) return k;
   if (k === groupName) return '';
-  return k.endsWith(groupName) ? k.slice(0, k.length - groupName.length) : k;
+  if (k.endsWith(groupName)) {
+    const rest = k.slice(0, k.length - groupName.length);
+    return /伤害|失衡/.test(rest) ? k : rest;
+  }
+  return k;
 }
 
 /** 技能条目每级数值表格：等级为行、详细数据分组（伤害倍率/失衡倍率/基础提升/核心被动…）为列。
@@ -164,11 +177,15 @@ function skillGrowthTable(item) {
   return `<div class="skill-growth"><table class="skill-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-/** 打开技能每级数值弹窗：列出该技能类型下所有条目（名称 + 说明 + 每级数值表格）。 */
-export function openSkillDetail(charKey, type) {
-  const c = library.characters?.[charKey];
+/** 打开技能每级数值弹窗：列出该技能类型下所有条目（名称 + 说明 + 每级数值表格）。
+ *  kind='bangboo' 时查邦布技能（角色/邦布 growth 结构一致，表格共用）。 */
+export function openSkillDetail(name, type, kind) {
+  const c =
+    kind === 'bangboo'
+      ? library.bangboos?.[name] ?? Object.values(library.bangboos || {}).find((b) => b.name === name)
+      : library.characters?.[name];
   const s = (c?.skills || []).find((x) => x.type === type);
-  const title = `${c?.name || charKey} · ${type}`;
+  const title = `${c?.name || name} · ${type}`;
   const body = s?.items?.length
     ? s.items
         .map(
@@ -327,29 +344,46 @@ function renderDiscs() {
 }
 
 function renderBangboos() {
-  const headers = ['图标', '名称', '稀有度', '主动技', '连携技', '被动技'];
+  const headers = [
+    '图标',
+    '名称',
+    '稀有度',
+    '属性',
+    '技能',
+    ...BANG_INITIAL_STATS,
+    ...MAX_STATS.map((s) => `满级${s}`),
+  ];
   const bangVal = (b, key) => {
     if (key === '名称') return b.name;
     if (key === '稀有度') return RARITY_RANK[b.rarity] ?? 0;
+    if (key === '属性') return b.element ?? null;
+    if (key.startsWith('满级')) return b.maxLevel?.[key.slice(2)] ?? null;
     return b[key] ?? null;
   };
   const rows = sortRows(Object.values(library.bangboos), bangVal).map((b) => {
-    // 技能按类型分为 主动/连携/被动 三列
-    const byType = {};
-    for (const s of b.skills || []) {
-      const t = s.type || '';
-      if (t.includes('主动')) byType.active = s;
-      else if (t.includes('连携')) byType.chain = s;
-      else byType.passive = s;
-    }
-    const itemCell = (s) => skillItemsHtml(s, { wrap: true, sep: '' });
+    // 技能：主动/连携/被动 三个图标（wiki 邦布页自带的通用技能图标，src/img/bangboo-*.png），
+    // 悬浮看说明、点击打开每级数值弹窗
+    const skillDefs = [
+      { type: '主动技', icon: '/src/img/bangboo-active.png', label: '主动' },
+      { type: '被动技', icon: '/src/img/bangboo-passive.png', label: '被动' },
+      { type: '连携技', icon: '/src/img/bangboo-chain.png', label: '连携' },
+    ];
+    const skillsHtml = skillDefs
+      .map(({ type, icon, label }) => {
+        const s = (b.skills || []).find((x) => x.type === type);
+        const clickable = s?.items?.some((it) => it.growth?.length);
+        const tip = skillItemsHtml(s) || `<b>${label}</b>（无数据）`;
+        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(b.name)}','${escapeJsAttr(type)}','bangboo')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${type}"><span class="s-lbl">${label}</span></span>`;
+      })
+      .join('');
     return `<tr>
       <td class="wiki-tight">${b.icon ? `<img class="wiki-ico" src="${b.icon}" alt="">` : ''}</td>
       <td class="wiki-name" title="${escapeHtml(b.name)}">${escapeHtml(b.name)}</td>
       <td class="wiki-tight">${escapeHtml(b.rarity)}</td>
-      <td class="wiki-long">${itemCell(byType.active)}</td>
-      <td class="wiki-long">${itemCell(byType.chain)}</td>
-      <td class="wiki-long">${itemCell(byType.passive)}</td>
+      <td class="wiki-tight">${escapeHtml(b.element || '—')}</td>
+      <td class="wiki-icons">${skillsHtml}</td>
+      ${statCells(b, BANG_INITIAL_STATS)}
+      ${statCells(b.maxLevel, MAX_STATS)}
     </tr>`;
   });
   return table(headers, rows, BANG_SORTABLE);

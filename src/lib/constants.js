@@ -161,6 +161,7 @@ export const VIEWS = {
   WIKI: 'wiki',
   RECOMMEND: 'recommend',
   MY_CHARS: 'mychars',
+  SIMULATE: 'simulate',
 };
 
 // ---------- 技能类型（统一 canonical 编号，双源映射后消费） ----------

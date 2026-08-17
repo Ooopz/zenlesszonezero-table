@@ -1,4 +1,4 @@
-// src/sync/workshop.js —— 爬取「绝区零工坊」全角色驱动排名 + 玩家完整配装
+// src/sync/workshop.js —— 爬取「绝区零工坊」全角色驱动排名 + 玩家完整配装（下载/提取侧）
 // 数据源：api.zzzmap.com（逆向自 wxapkg，签名=MD5(key+参数排序)，无需 token）
 // 用法：
 //   node src/sync/workshop.js                    # 全量 57 角色 × 7 影画 × 每影画 300 条（榜单全量）
@@ -13,130 +13,37 @@
 //       data/workshop-stats.json（汇总）、data/workshop-weights.json（角色默认流派权重）
 // 断点续爬：以 workshop.json 实际内容为准（文件里没有的 uid 自动重爬），写文件原子化（tmp+rename）；
 // 不再使用进度文件（旧 data/.workshop-progress.json 已废弃，可删除）
-// 注：本文件整合了面板计算（原 workshop-panel.js）、汇总生成（原 workshop-stats.js）、
-//     全服统计（原 workshop-grad.js，fetchWorkshopGrad 一并并入）。提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算）。
+// 职责划分（2026-10 拆分，本文件只负责下载/提取 + 主流程编排）：
+//   · workshop-api.js —— zzzmap API 客户端（签名/重试/代理），本文件只 import 不实现
+//   · workshop-stats.js —— 聚合（buildWorkshopStats / fetchWorkshopGrad），本文件 re-export
+//   · workshop-static.js —— 逆向静态数据表（2025 源面板公式用），本文件 import
+// 提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算，原 workshop-panel.js 的面板计算保留在本文件）。
 import fs from 'node:fs';
-import crypto from 'node:crypto';
 import path from 'node:path';
-import { computeAllWorkshopStats } from '../lib/workshopStats.js';
-import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
-import { streamJsonArrayElements, ROOT, DATA_DIR, isMain, pool } from '../lib/node.js';
-import { installProxyFetch, resolveProxyUrl, maskProxyUrl } from './proxy.js';
+import { streamJsonArrayElements, DATA_DIR, isMain, pool, writeJsonAtomic } from '../lib/node.js';
+import { apiGet, apiPost } from './workshop-api.js';
+import { buildWorkshopStats, fetchWorkshopGrad, OUT_FILE } from './workshop-stats.js';
+import { items, rolebase, suits, weapons } from './workshop-static.js';
+import { loadNameIndexes } from './name-index.js';
 
-const OUT_FILE = path.join(DATA_DIR, 'workshop.json');
-const STATS_FILE = path.join(DATA_DIR, 'workshop-stats.json');
 const WEIGHTS_FILE = path.join(DATA_DIR, 'workshop-weights.json'); // 角色默认流派权重（工坊有效词条口径）
-// 逆向提取的静态数据表（合并文件）：装备 / 角色基础 / 套装 / 武器
-const S = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/sync', 'workshop-static.json'), 'utf8'));
-const items = S.items; // 装备 Id → {Rarity, SuitId}
-const rolebase = S.rolebase; // 角色 Id → {BaseProps, GrowthProps, PromotionProps, CoreEnhancementProps}
-const suits = S.suits; // 套装 Id → {SetBonusProps}
-const weapons = S.weapons; // 武器 Id → {MainStat, SecondaryStat}
-const GRAD_FILE = path.join(DATA_DIR, 'workshop-grad.json');
 // 名称索引（统一 resolver，library.json 为权威源）：工坊 nick_name 的 ASCII 罗马数字/括号差异、角色简称
 // （维琳娜/星徽·比利）等一律在写时解析回 wiki 标准名，保证三个工坊数据文件与 library/plans 一致。
 // library.json 缺失/损坏时降级为空索引（名称归一退化为原样，不崩——与 plans/characters 一致，测试可直接 import 本模块）
-let libChars = buildNameIndex({}, CATEGORY.CHAR);
-let libWengines = buildNameIndex({}, CATEGORY.WENGINE);
-let libDiscs = buildNameIndex({}, CATEGORY.DISC);
-try {
-  const libraryJson = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'library.json'), 'utf8'));
-  libChars = buildNameIndex(libraryJson.characters || {}, CATEGORY.CHAR);
-  libWengines = buildNameIndex(libraryJson.wengines || {}, CATEGORY.WENGINE);
-  libDiscs = buildNameIndex(libraryJson.discs || {}, CATEGORY.DISC);
-} catch {
-  console.warn('⚠️ library.json 缺失/损坏，工坊名称归一降级（建议先 npm run sync:library）');
-}
+const {
+  char: libChars,
+  wengine: libWengines,
+  disc: libDiscs,
+} = loadNameIndexes('工坊') ?? {
+  char: buildNameIndex({}, CATEGORY.CHAR),
+  wengine: buildNameIndex({}, CATEGORY.WENGINE),
+  disc: buildNameIndex({}, CATEGORY.DISC),
+};
 /** 工坊音擎 nick_name → wiki 规范音擎条目（统一 resolver；找不到返回 null） */
 function resolveWengine(rawName) {
   return resolveEntry(CATEGORY.WENGINE, libWengines, rawName);
-}
-
-// ---------- 签名协议（逆向自工坊 wxapkg） ----------
-const KEY = 'VW^)(^*^$$#*%(#)!@VIAI%';
-const BASE = 'https://api.zzzmap.com';
-const md5 = (s) => crypto.createHash('md5').update(s).digest('hex');
-
-function makeSign(data) {
-  const params = { key: KEY, ...data };
-  const str = Object.entries(params)
-    .map(([k, v]) => `${k}=${v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v}`)
-    .join('&')
-    .split('&')
-    .sort()
-    .join('&');
-  return md5(str);
-}
-function filterParams(data) {
-  const o = {};
-  for (const [k, v] of Object.entries(data || {})) if (v != null) o[k] = v;
-  return o;
-}
-/** 带重试的工坊请求：非 2xx / 非 JSON（风控返回 HTML 页）/ 网络错误 → 指数退避重试。
- *  实测工坊 API 风控/限流时返回 HTML（`<html>...`，res.json() 解析抛 "Unexpected token '<'"），
- *  且会持续数分钟——重试退避 2s→6s→18s→54s 后仍失败才抛错（调用方记 fail，续爬自愈重爬）。 */
-const RETRY_MAX = 4; // 重试次数（不含首次）
-const RETRY_BASE = 2000; // 初始退避 2s，指数 ×3
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function fetchJson(url, opts, attempt = 0) {
-  let res;
-  try {
-    res = await fetch(url, opts);
-  } catch (e) {
-    if (attempt < RETRY_MAX) {
-      await sleep(RETRY_BASE * 3 ** attempt);
-      return fetchJson(url, opts, attempt + 1);
-    }
-    throw new Error(`网络错误: ${e.message}`, { cause: e });
-  }
-  const text = await res.text(); // 先取全文：HTML 风控页与 JSON 分开处理
-  if (!res.ok) {
-    if (attempt < RETRY_MAX) {
-      await sleep(RETRY_BASE * 3 ** attempt);
-      return fetchJson(url, opts, attempt + 1);
-    }
-    throw new Error(`HTTP ${res.status}: ${text.slice(0, 60)}`);
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    if (attempt < RETRY_MAX) {
-      await sleep(RETRY_BASE * 3 ** attempt);
-      return fetchJson(url, opts, attempt + 1);
-    }
-    throw new Error(`非 JSON 响应（疑似风控）: ${text.slice(0, 60)}`);
-  }
-}
-async function apiGet(path, data) {
-  const d = filterParams(data);
-  const time = Date.now();
-  const qs = new URLSearchParams(d).toString();
-  return fetchJson(`${BASE}${path}${qs ? '?' + qs : ''}`, {
-    headers: {
-      'content-type': 'application/json',
-      version: '100',
-      platform: 'weixin',
-      sign: makeSign(d),
-      time: String(time),
-    },
-  });
-}
-async function apiPost(path, data) {
-  const d = filterParams(data);
-  const time = Date.now();
-  return fetchJson(`${BASE}${path}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      version: '100',
-      platform: 'weixin',
-      sign: makeSign(d),
-      time: String(time),
-    },
-    body: JSON.stringify(d),
-  });
 }
 
 // ---------- 参数 ----------
@@ -150,16 +57,7 @@ const PER_RANK = Number(process.argv[3] || 300); // 每影画拉多少条（默�
 // v3 配装请求并发（默认 6）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
 // 调高可加速配装爬取（响应大、吃带宽，注意工坊 API 限流）
 const CONCURRENCY = Number(process.argv[4] || 6);
-
-// ---------- 代理（可选）：第 5 参 > HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量 ----------
-// IP 被工坊风控/封禁时用代理换 IP（工坊按 IP 限流，签名/接口不受 IP 影响）。
-// 模块加载时启用，server.js 复用 fetchWorkshopData 的「更新工坊配装」按钮同样生效；
-// 只对 api.zzzmap.com 生效（见 proxy.js 的 applyHosts），米游社等其他请求不受影响。
-const proxyUrl = resolveProxyUrl(process.argv[5]);
-if (proxyUrl) {
-  installProxyFetch(proxyUrl);
-  console.log(`🌐 工坊请求走代理: ${maskProxyUrl(proxyUrl)}（仅 api.zzzmap.com，其余请求不受影响）`);
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // 暂停用（代理/风控暂停 60s 等）
 
 // ---------- 断点续爬（以文件内容为准，不再依赖进度文件） ----------
 // 曾用 data/.workshop-progress.json 缓存「已爬 uid」做跳过判断，但进度保存在写文件之前，
@@ -247,11 +145,6 @@ export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile 
     fs.closeSync(fd);
   }
   fs.renameSync(tmp, outFile);
-}
-
-/** 流式遍历 workshop.json 的 entries（generator）：聚合函数 for...of 天然兼容，不把大数组放内存 */
-function* iterWorkshopEntries() {
-  for (const raw of streamJsonArrayElements(OUT_FILE)) yield JSON.parse(raw);
 }
 
 // ---------- 属性映射（get_prop_desc：PropertyId → 属性名，逆向自工坊） ----------
@@ -490,152 +383,8 @@ function computeEnkaPanel(ij) {
   return panel.filter((p) => p.final !== '0' && p.final !== '');
 }
 
-// ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------
-export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
-  if (!fs.existsSync(OUT_FILE)) return null;
-  // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：generator 逐条产出，峰值内存只留聚合 Map。
-  // 14 项聚合合并为**一次**遍历（computeAllWorkshopStats）：此前每项各调一次 iterWorkshopEntries，
-  // 等于把 2.13GB 文件流式解析 13 遍（每遍 ~27s，白白多花 ~6 分钟）。合并后输出逐位不变（见 workshopStats.js 累加器说明）
-  const {
-    stats,
-    panelCorr, // 属性相关（按角色，同条目配对）
-    discDetails, // 驱动盘单盘真实统计（含 D7 套装×槽位 slotDist、有效强化次数 effDist）
-    panelScatter, // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-    // 练度指标：评分分布 / 影画分层 / 影画占比 / 技能练度 / 角色盘画像
-    relicStats,
-    rankLayers,
-    rankDist,
-    skillStats,
-    roleDiscStats,
-    // 2026-10 新增：配队亲和 / 影画×评分 / 技能组合
-    roleCooccurrence,
-    rankRelic,
-    skillCombos,
-    // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）/ 两源一致性审计（D10）
-    rollEfficiency,
-    sourceAudit,
-    // weightJson 同时供 effDist 的「按角色区分有效副词条」与 rollEfficiency 使用，必须在聚合前传入
-  } = computeAllWorkshopStats(iterWorkshopEntries(), libDiscs, { roleNameMap, weightJson });
-  const data = {
-    meta: { scrapedAt: new Date().toISOString(), entries: totalEntries ?? -1 },
-    ...stats,
-    discDetails,
-    panelCorr,
-    panelScatter,
-    relicStats,
-    rankLayers,
-    rankDist,
-    skillStats,
-    roleDiscStats,
-    roleCooccurrence,
-    rankRelic,
-    skillCombos,
-    rollEfficiency,
-    sourceAudit,
-  };
-  // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
-  if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;
-  fs.writeFileSync(STATS_FILE, JSON.stringify(data));
-  return data;
-}
-
-// ---------- 全服配装统计（原 workshop-grad.js）：每角色最常用音擎 + 驱动盘套装 ----------
-/** 解析驱动盘 set_info（"32800_4__33100_2" → 组合名），返回 {name, sets:[{set_id,num,name}]} 或 null */
-function parseSetInfo(setInfo, artifacts) {
-  if (setInfo === 'other') return { name: '其他', sets: [] };
-  const parts = String(setInfo).split('__');
-  const sets = [];
-  for (const p of parts) {
-    const [setId, num] = p.split('_');
-    const a = artifacts.find((x) => x.set_id === setId);
-    // 套装名解析为 wiki 标准盘名（工坊 artifacts 名可能带尾随空格/用词差异）
-    const setName = a ? canonicalName(CATEGORY.DISC, libDiscs, a.name) || a.name : `套装${setId}`;
-    sets.push({ set_id: setId, num: Number(num), name: setName });
-  }
-  // 文本顺序统一：4 件套在前、2 件套在后（与方案侧一致），避免同名组合因顺序不同造成显示/对比差异
-  const { name, sets: orderedSets } = orderComboSets4First(sets);
-  return { name, sets: orderedSets };
-}
-
-/** 爬取工坊全服配装统计并写入 data/workshop-grad.json。onProgress({step, done, total}) 供进度轮询。 */
-export async function fetchWorkshopGrad(onProgress) {
-  const sys = await apiGet('/api/v1/system_data/public', {});
-  const roles = (sys.data && sys.data.system_roles) || [];
-  const weapons = (sys.data && sys.data.system_weapons) || [];
-  const artifacts = (sys.data && sys.data.system_artifacts) || [];
-
-  const out = [];
-  let done = 0;
-  await pool(roles, CONCURRENCY, async (role) => {
-    const { item_id, nick_name } = role;
-    try {
-      const j = await apiGet('/api/v1/role/grad_stat', { item_id, level: 40 });
-      const d = j.data || {};
-      const ws = d.weapon_stat || [];
-      const rs = d.relic_stat || [];
-
-      // 角色名解析为 wiki 标准名（维琳娜→维琳娜·艾嘉德、11号→「11号」、星徽·比利→星徽·比利·奇德）；
-      // 图标用解析到的标准条目（官方 wiki 大图 portrait 优先）
-      const roleName = canonicalName(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true }) || nick_name;
-      const libChar = resolveEntry(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true });
-      const roleIcon = libChar?.portrait || libChar?.icon || '';
-
-      // 音擎图标：wiki 源
-      const wTotal = ws.reduce((a, x) => a + Number(x.weapon_count || 0), 0);
-      const weaponsStat = [];
-      for (const w of ws) {
-        const sysW = weapons.find((x) => String(x.item_id) === String(w.weapon_id));
-        const rawName = sysW ? sysW.nick_name : '';
-        const libW = sysW ? resolveWengine(rawName) : null;
-        const name =
-          w.weapon_id === 'other'
-            ? '其他'
-            : libW
-              ? libW.name
-              : rawName
-                ? romanNumeralUnicode(rawName)
-                : `音擎${w.weapon_id}`;
-        const icon = w.weapon_id === 'other' ? '' : libW?.icon || '';
-        weaponsStat.push({
-          id: w.weapon_id,
-          name,
-          icon,
-          count: Number(w.weapon_count || 0),
-          percent: wTotal ? Number(((Number(w.weapon_count || 0) / wTotal) * 100).toFixed(1)) : 0,
-        });
-      }
-
-      // 驱动盘组合：各套装 wiki 图标（套装名已由 parseSetInfo 解析为 wiki 标准名）
-      const rTotal = rs.reduce((a, x) => a + Number(x.set_info_count || 0), 0);
-      const relicsStat = [];
-      for (const r of rs) {
-        const info = parseSetInfo(r.set_info, artifacts);
-        const sets = [];
-        for (const s of info?.sets || []) {
-          const libD = resolveEntry(CATEGORY.DISC, libDiscs, s.name);
-          sets.push({ ...s, icon: libD?.icon || '' });
-        }
-        relicsStat.push({
-          set_info: r.set_info,
-          name: info ? info.name : r.set_info,
-          sets,
-          count: Number(r.set_info_count || 0),
-          percent: rTotal ? Number(((Number(r.set_info_count || 0) / rTotal) * 100).toFixed(1)) : 0,
-        });
-      }
-
-      out.push({ item_id, name: roleName, icon: roleIcon, weapons: weaponsStat, relics: relicsStat });
-    } catch (e) {
-      console.log(`角色 ${item_id} 失败: ${e.message}`);
-    }
-    done++;
-    onProgress?.({ step: 'grad', done, total: roles.length });
-  });
-
-  const data = { meta: { scrapedAt: new Date().toISOString(), roles: out.length }, roles: out };
-  fs.writeFileSync(GRAD_FILE, JSON.stringify(data));
-  return { stats: { roles: out.length } };
-}
+// ---------- 聚合（buildWorkshopStats / fetchWorkshopGrad 已拆分到 workshop-stats.js，原样透传供调用方复用） ----------
+export { buildWorkshopStats, fetchWorkshopGrad } from './workshop-stats.js';
 
 // ---------- 提取玩家某角色的配装（兼容 mys 源 / 2025 源两种 item_json） ----------
 // ctx = { weapons: system_weapons, artifacts: system_artifacts, items: 装备表 }
@@ -917,13 +666,10 @@ export async function fetchWorkshopData(onProgress) {
   for (const r of roles) {
     if (r && r.weight_json) weightJson[String(r.item_id)] = r.weight_json;
   }
-  fs.writeFileSync(
-    WEIGHTS_FILE,
-    JSON.stringify({
-      meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length },
-      weights: weightJson,
-    })
-  );
+  writeJsonAtomic(WEIGHTS_FILE, {
+    meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length },
+    weights: weightJson,
+  });
 
   // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails / roleDiscStats 输出角色名）
   const roleNameMap = new Map(
@@ -933,12 +679,20 @@ export async function fetchWorkshopData(onProgress) {
     ])
   );
   buildWorkshopStats(roleNameMap, weightJson, totalCount); // 配装数据更新后自动生成汇总（含 weightJson，流式遍历防 OOM）
-  const g = await fetchWorkshopGrad(onProgress); // 同时更新全服配装统计（workshop-grad.json）
+  // grad 是收尾步骤：此时配装与 stats 都已落盘，且本函数的 roleNameMap 来自 system_data 而非 grad，
+  // 故 grad 失败不影响已完成的工作——只告警不抛，避免把数小时的爬取整体报成失败。
+  let gradRoles = null;
+  try {
+    const g = await fetchWorkshopGrad(onProgress, CONCURRENCY); // 同时更新全服配装统计（workshop-grad.json）
+    gradRoles = g.stats.roles;
+  } catch (e) {
+    console.warn(`[工坊全服统计] 更新失败（保留现有 workshop-grad.json）: ${e.message}`);
+  }
   console.log(
     `\n完成：本次新爬 ${done} 个 uid（跳过 ${skippedCount} 个已缓存，失败 ${fail}），` +
       `配装条目共 ${totalCount} 条写入 ${OUT_FILE}`
   );
-  return { stats: { entries: totalCount, roles: g.stats.roles } };
+  return { stats: { entries: totalCount, roles: gradRoles } };
 }
 
 async function main() {

@@ -12,13 +12,28 @@ syncHeadHeight();
 new ResizeObserver(syncHeadHeight).observe(header);
 
 // 数据源为 server 提供的 /api/data（读取 data/*.json）
-const res = await fetch('/api/data');
-if (!res.ok) {
-  document.getElementById('grid').innerHTML =
-    `<div class="empty">无法加载数据（HTTP ${res.status}）。<br>请先运行 <b>npm start</b> 启动本地服务器，再打开本页。</div>`;
-} else {
-  const { library, characters, plans, workshopGrad, workshopStats } = await res.json();
-  setData(library, characters, plans, workshopGrad, workshopStats);
-  setCalcContext(dataCtx);
-  initUi();
+// 整段包 try：fetch 只在 HTTP 层出错时 reject，而 !res.ok 只覆盖「服务器答了但状态码非 2xx」。
+// 服务器没起、连接被拒、离线、JSON 截断都会直接抛，顶层 await 的异常无人捕获 =
+// 页面永久空白且控制台之外没有任何提示。
+const fail = (msg) => {
+  document.getElementById('grid').innerHTML = `<div class="empty">${msg}</div>`;
+};
+const START_HINT = '请先运行 <b>npm start</b> 启动服务器，再打开本页。';
+try {
+  const res = await fetch('/api/data');
+  if (!res.ok) {
+    fail(
+      res.status === 401
+        ? `未通过访问令牌校验（HTTP 401）。<br>请访问 <b>/login?token=&lt;AUTH_TOKEN&gt;</b> 后重试。`
+        : `无法加载数据（HTTP ${res.status}）。<br>${START_HINT}`
+    );
+  } else {
+    const { library, characters, plans, workshopGrad, workshopStats } = await res.json();
+    setData(library, characters, plans, workshopGrad, workshopStats);
+    setCalcContext(dataCtx);
+    initUi();
+  }
+} catch (e) {
+  console.error('加载 /api/data 失败:', e);
+  fail(`无法连接服务器（${e.message}）。<br>${START_HINT}`);
 }

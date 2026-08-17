@@ -131,6 +131,7 @@ export function isEmptyVal(v) {
 const STAT_ALIASES = {
   生命: STAT.HP,
   生命力: STAT.HP,
+  生命指: STAT.HP, // wiki 邦布页面笔误（幽浮布初始面板把「生命值」写成「生命指」）
   攻击: STAT.ATK,
   防御: STAT.DEF,
   暴击: STAT.CR,
