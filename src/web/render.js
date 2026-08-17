@@ -631,7 +631,8 @@ export function render() {
   }
   if (view === VIEWS.SIMULATE) {
     grid.innerHTML = renderSimulate();
-    mountCharts();
+    // 先让浏览器完成首帧绘制，再挂载图表，避免图表初始化阻塞面板加载。
+    setTimeout(() => mountCharts(), 0);
     return;
   }
   // 我的角色：卡片 / 汇总 二级子页面

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import zlib from 'node:zlib';
 import { warnIfInvalid } from './schema.js';
 
 /** 跨平台打开浏览器（Windows: start / macOS: open / Linux: xdg-open） */
@@ -232,6 +233,136 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
         if (st.started) st.elem += ch;
       }
     }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+// ---------- workshop.json：分块 gzip（非固实）存储 ----------
+// 内容仍是普通 JSON（entries 数组），但按固定条目数切成若干块、每块独立 gzip（非固实压缩：
+// 任一块可独立解压/定位，读第 N 块无需解压前面的块）。文件布局：
+//   第 0 行（JSON，以换行结尾）：{"meta":{...},"perChunk":20000,"offsets":[0,12345,...]}
+//     offsets 为各 gzip 块相对「头部行之后」的字节偏移（读时 + 头部行长度即文件内绝对位置）
+//   之后：N 个首尾相接的 gzip 流，第 i 块 = gzip(JSON.stringify(entries[i*perChunk .. (i+1)*perChunk)))
+// 读取：头部一次解析 → 逐块 readSync 定长读 → gunzipSync → JSON.parse（整块解析，远快于逐字符状态机）。
+// 合并：旧文件逐块解码 + PART 逐行解码 → 重新分块压缩写出（merge 只在爬取收尾跑一次，可接受）。
+export const WORKSHOP_PER_CHUNK = 20000;
+
+/** 读第 0 行头部（读完即关 fd；Windows 下未关的读句柄会挡住对同一文件的 rename） */
+export function readWorkshopHeader(file) {
+  const fd = fs.openSync(file, 'r');
+  const buf = Buffer.alloc(64 * 1024);
+  try {
+    let s = '';
+    while (s.indexOf('\n') < 0) {
+      const n = fs.readSync(fd, buf, 0, buf.length, null);
+      if (n <= 0) break;
+      s += buf.subarray(0, n).toString('utf8');
+      if (s.length > 4 * 1024 * 1024) break; // 防御：头不应超 4MB
+    }
+    const line = s.slice(0, s.indexOf('\n'));
+    if (!line) throw new Error('workshop 文件缺少头部行');
+    return JSON.parse(line);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** 迭代 workshop.json 的全部配装条目（流式按块解压，每块一次性 JSON.parse） */
+export function* iterWorkshopFile(file) {
+  const h = readWorkshopHeader(file);
+  const offsets = h.offsets || [];
+  if (!offsets.length) return;
+  const headLen = Buffer.byteLength(JSON.stringify(h)) + 1;
+  const fd = fs.openSync(file, 'r');
+  const size = fs.statSync(file).size;
+  try {
+    for (let i = 0; i < offsets.length; i++) {
+      const start = headLen + offsets[i];
+      const end = i + 1 < offsets.length ? headLen + offsets[i + 1] : size;
+      const len = end - start;
+      if (len <= 0) continue;
+      const buf = Buffer.alloc(len);
+      let read = 0;
+      while (read < len) {
+        const n = fs.readSync(fd, buf, read, len - read, start + read);
+        if (n <= 0) break;
+        read += n;
+      }
+      const arr = JSON.parse(zlib.gunzipSync(buf).toString('utf8'));
+      for (const e of arr) yield e;
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/** 把条目流按 perChunk 分块 gzip 写入 outFile（原子：tmp+rename；头部最后拼装）。
+ *  @param {Iterable<object>} entries  条目迭代器（可为 generator，只消费一次）
+ *  @param {object|Function} meta  头部 meta；传函数时以实际条数调用 meta(count)（转换场景 entryCount 未知）
+ *  @returns {number} 写入的条目数 */
+export function writeWorkshopFile(outFile, entries, meta = {}, perChunk = WORKSHOP_PER_CHUNK) {
+  const tmp = `${outFile}.tmp`;
+  const fd = fs.openSync(tmp, 'w');
+  const offsets = [];
+  let count = 0;
+  let buf = [];
+  const flush = () => {
+    if (!buf.length) return;
+    offsets.push(fs.fstatSync(fd).size); // body 相对偏移（tmp 无头部）
+    fs.writeSync(fd, zlib.gzipSync(Buffer.from(JSON.stringify(buf)), { level: 6 }));
+    buf = [];
+  };
+  try {
+    for (const e of entries) {
+      buf.push(e);
+      count++;
+      if (buf.length >= perChunk) flush();
+    }
+    flush();
+    if (!offsets.length) offsets.push(0); // 空文件也留一个块槽位（读侧空转）
+  } finally {
+    fs.closeSync(fd);
+  }
+  // 头部 + body 拼接（meta 为函数时按实际条数生成）
+  const finalMeta = typeof meta === 'function' ? meta(count) : meta;
+  const head = Buffer.from(JSON.stringify({ meta: finalMeta, perChunk, offsets }) + '\n');
+  const bodyFd = fs.openSync(tmp, 'r');
+  const outFd = fs.openSync(`${tmp}.head`, 'w');
+  try {
+    fs.writeSync(outFd, head);
+    const buf2 = Buffer.alloc(1 << 20);
+    let n;
+    while ((n = fs.readSync(bodyFd, buf2, 0, buf2.length, null)) > 0) fs.writeSync(outFd, buf2, 0, n);
+  } finally {
+    fs.closeSync(bodyFd);
+    fs.closeSync(outFd);
+  }
+  fs.renameSync(`${tmp}.head`, outFile);
+  fs.rmSync(tmp, { force: true });
+  return count;
+}
+
+/** 通用按行读（供 PART 裸流等 JSON 行文件；\n 字节不可能出现在 UTF-8 多字节字符内，切分安全） */
+export function* readLines(file, chunkSize = 1 << 20) {
+  const fd = fs.openSync(file, 'r');
+  const buf = Buffer.alloc(chunkSize);
+  let carry = Buffer.alloc(0);
+  try {
+    while (true) {
+      const n = fs.readSync(fd, buf, 0, chunkSize, null);
+      if (n <= 0) break;
+      const chunk = carry.length ? Buffer.concat([carry, buf.subarray(0, n)]) : buf.subarray(0, n);
+      let start = 0;
+      for (let i = 0; i < chunk.length; i++) {
+        if (chunk[i] === 0x0a) {
+          if (i > start) yield chunk.toString('utf8', start, i);
+          start = i + 1;
+        }
+      }
+      carry = Buffer.from(chunk.subarray(start));
+    }
+    if (carry.length) yield carry.toString('utf8');
   } finally {
     fs.closeSync(fd);
   }

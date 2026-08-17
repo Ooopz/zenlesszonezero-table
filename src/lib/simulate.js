@@ -471,9 +471,24 @@ export function simulateFrontier(ctx, opts) {
 }
 
 /**
- * 计算三维帕累托前沿（三个坐标轴属性的成长极限曲面）。
- * @returns {{ fixed:object, points:Array<{x,y,z}>, sourceDefs:Array, discOptions:Array, axes:Array }}
+ * 计算按有效强化次数预算分层的前沿：完美（100%）、大毕业（80%）、小毕业（70%）。
+ * 为控制计算耗时，这里不再做带预算的逐盘 DP，而是把完整二维前沿按固定面板原点做等比缩放。
  */
+export function simulateFrontierLevels(ctx, opts, maxRolls, levels = [1, 0.8, 0.7]) {
+  const full = simulateFrontier(ctx, opts);
+  const fixedX = full.fixed[opts.xAxis];
+  const fixedY = full.fixed[opts.yAxis];
+  const frontiers = levels.map((level) => ({
+    level,
+    budget: Math.round(maxRolls * level),
+    points: full.points.map((p) => ({
+      x: fixedX + (p.x - fixedX) * level,
+      y: fixedY + (p.y - fixedY) * level,
+    })),
+  }));
+  return { fixed: full.fixed, base: full.base, frontiers, maxRolls };
+}
+
 export function simulateFrontier3D(ctx, opts) {
   const { withSets, mains } = resolveBuild(ctx, opts);
   const axes = [opts.xAxis, opts.yAxis, opts.zAxis];
