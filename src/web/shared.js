@@ -41,8 +41,6 @@ export function skillIconForType(type) {
   return SKILL_ICON[TYPE_KEY[type]] || SKILL_ICON.core;
 }
 /** 账号技能数字 type → 中文标签（官方语义，同上） */
-export const SKILL_LABEL = { 0: '普攻', 1: '特殊技', 2: '闪避', 3: '终结技', 5: '核心技', 6: '支援技' };
-
 /** 把对象合并进 window.ZZZ（内联 onclick 引用的全局注册，wiki/ui 共用） */
 export function registerZZZ(obj) {
   window.ZZZ = window.ZZZ || {};

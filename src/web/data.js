@@ -22,8 +22,8 @@ export let plansByName = {};
 export let workshopGrad = { roles: [] };
 
 /** 工坊配装汇总（src/sync/workshop.js 的 buildWorkshopStats 生成，基于 workshop.json）：
- *  { wengines, discs, panels, panelCorr, panelScatter, discDetails, relicStats, rankLayers, rankDist,
- *    skillStats, roleDiscStats, roleCooccurrence, rankRelic, skillCombos, weightJson }
+ *  { wengines, discs, panels, panelCorr, panelScatter, discDetails, relicStats, rankDist,
+ *    skillStats, roleDiscStats, roleCooccurrence, rankRelic, skillCombos, roleOwnership, weightJson }
  *  discDetails 为驱动盘单盘真实统计，供「统计→驱动盘」决策卡实况口径 */
 export let workshopStats = { wengines: [], discs: [], panels: [], discDetails: [] };
 
@@ -91,11 +91,6 @@ export function readValidStats(name) {
   return (character.equipPlan?.plan_effective_property_list || [])
     .map((p) => (p.full_name && p.full_name.includes('百分比') ? `${p.name}%` : p.name))
     .filter((t) => SUBSTAT_TYPE_SET.has(t));
-}
-export function saveValidStats(name, list) {
-  const target = readCharTarget(name);
-  target[TARGET_KEYS.VALID_STATS] = list;
-  saveCharTarget(name, target);
 }
 export function readNote(name) {
   return userConfig.notes[name] || '';

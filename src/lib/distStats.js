@@ -174,17 +174,6 @@ export function computeDist(arr) {
     hist: { bins: hbins, counts: hcounts },
   };
 }
-/** 综合战力得分：各属性值相对玩家中位数归一化后加权求和（越高越强） */
-export function computePowerScore(attrVals, medianMap, weights) {
-  let score = 0;
-  for (const [attr, w] of Object.entries(weights || {})) {
-    const v = attrVals[attr];
-    const m = medianMap[attr];
-    if (v == null || m == null || !m) continue;
-    score += (v / m) * w;
-  }
-  return score;
-}
 /** 简单 k-means 聚类（确定性初始化：前 k 个点作质心）。points 为等长数值向量，返回每项簇编号 */
 export function kmeans(points, k = 3, maxIter = 50) {
   if (!points.length) return [];
@@ -223,12 +212,4 @@ export function kmeans(points, k = 3, maxIter = 50) {
     if (!moved) break;
   }
   return assign;
-}
-/** 推荐档位匹配：个人值落推荐三档的位置 */
-export function tierFit(value, rec) {
-  if (value == null || !rec || rec.low == null || rec.high == null) return null;
-  if (value < rec.low) return { tier: 'below', label: '低于低标' };
-  if (value < rec.mid) return { tier: 'low-mid', label: '低标~中标' };
-  if (value < rec.high) return { tier: 'mid-high', label: '中标~高标' };
-  return { tier: 'above', label: '高于高标' };
 }

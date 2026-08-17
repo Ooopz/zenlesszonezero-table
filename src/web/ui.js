@@ -299,6 +299,8 @@ function renderPlanTable(name) {
 
   // 排序（未激活时 apply 原样返回；激活时空值行始终排最后，不受升降序影响）
   const list = planSort.apply(plansList, planSortValue);
+  // 方案对象 → 原始下标（「应用」按钮要写回原方案；排序后 indexOf 是 O(n²)，这里一次建表）
+  const planIndex = new Map(plansList.map((p, i) => [p, i]));
 
   const heads = [
     '',
@@ -332,7 +334,7 @@ function renderPlanTable(name) {
         .map((s) => s.name)
         .join('、') || '—';
     const cells = [
-      `<td><button class="mini apply-btn" onclick="window.ZZZ.applyPlan('${escapeJsAttr(name)}', ${plansList.indexOf(p)})">应用</button></td>`,
+      `<td><button class="mini apply-btn" onclick="window.ZZZ.applyPlan('${escapeJsAttr(name)}', ${planIndex.get(p)})">应用</button></td>`,
       `<td class="pname" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</td>`,
       `<td>${released}</td>`,
       ...statNames.map((n) => {

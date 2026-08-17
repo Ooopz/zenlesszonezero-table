@@ -1134,3 +1134,34 @@ export function scoreRelicOption(rows) {
     ],
   };
 }
+
+/** 角色拥有率横向条：样本池（全部上榜去重 uid）中拥有该角色的占比，降序排列（类目轴首项在底部） */
+export function roleOwnershipOption(rows) {
+  return {
+    animation: false,
+    grid: { left: 90, right: 64, top: 10, bottom: 30, containLabel: true },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      formatter: (p) => {
+        const d = p.data?.d || p.data;
+        return `<b>${d.name}</b><br>拥有率 <b>${d.rate.toFixed(1)}%</b><br><span style="color:${CHART_COLORS.dim}">拥有 ${d.n.toLocaleString()} / ${d.pool.toLocaleString()} 名上榜玩家</span>`;
+      },
+    },
+    xAxis: {
+      type: 'value', min: 0, max: 100,
+      axisLine: { show: false }, axisLabel: { ...AXIS_LABEL, formatter: '{value}%' }, splitLine: SPLIT_LINE,
+    },
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    series: [
+      {
+        type: 'bar',
+        barWidth: 10,
+        data: rows.map((r) => ({ value: +r.rate.toFixed(1), d: r })),
+        itemStyle: {
+          color: (p) => (p.value >= 50 ? CHART_COLORS.green : p.value >= 20 ? CHART_COLORS.acc : CHART_COLORS.orange),
+        },
+        label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11, formatter: '{c}%' },
+      },
+    ],
+  };
+}

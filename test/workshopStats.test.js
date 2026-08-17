@@ -8,7 +8,6 @@ import {
   computePanelScatter,
   discStatName,
   computeRelicStats,
-  computeRankLayers,
   computeRankDist,
   computeSkillStats,
   computeRoleDiscStats,
@@ -22,6 +21,7 @@ import {
   computeSourceAudit,
   computeRoleStyles,
   computeAllWorkshopStats,
+  computeRoleOwnership,
   styleLabel,
   styleAttrShort,
   styleMatch,
@@ -366,22 +366,6 @@ test('computeRelicStats：每角色评分分布，0/非法排除', () => {
   // 字符串评分兜底（旧数据）
   const old = computeRelicStats([{ role_id: '1011', relic_point: '188.20' }]);
   assert.equal(old['1011'].mean, 188.2);
-});
-
-test('computeRankLayers：每角色×影画档的关键属性分布', () => {
-  const out = computeRankLayers(NEW_META_ENTRIES);
-  assert.ok(out['1011']);
-  assert.ok(out['1011'][0], 'rank 0 有分布');
-  assert.ok(out['1011'][6], 'rank 6 有分布');
-  assert.equal(out['1011'][0]['攻击力'].median, 2000);
-  assert.equal(out['1011'][6]['攻击力'].median, 3000);
-  assert.equal(out['1011'][6]['暴击率'].mean, 0.7);
-  assert.equal(out['1011'][6]['暴击率'].count, 1);
-  // 非关键属性不进入
-  assert.equal(out['1011'][0]['防御力'], undefined);
-  // 无 rank 条目跳过
-  const noRank = computeRankLayers([{ role_id: '1011', rank: null, panel: [{ name: '攻击力', final: '1' }] }]);
-  assert.deepEqual(noRank, {});
 });
 
 test('computeRankDist：每角色影画档位占比', () => {
@@ -991,4 +975,23 @@ test('computeAllWorkshopStats：单遍历结果与逐个公开函数逐位相等
   eq(all.rollEfficiency, computeRollEfficiency(entries), 'rollEfficiency');
   eq(all.sourceAudit, computeSourceAudit(entries), 'sourceAudit');
   eq(all.roleStyles, computeRoleStyles(entries), 'roleStyles');
+  eq(all.roleOwnership, computeRoleOwnership(entries), 'roleOwnership');
+});
+
+test('computeRoleOwnership：拥有率 = 拥有该角色的去重 uid 数 / 样本池去重 uid 总数', () => {
+  const entries = [
+    { role_id: '1011', uid: 'a' },
+    { role_id: '1011', uid: 'b' },
+    { role_id: '1022', uid: 'a' },
+    { role_id: '1022', uid: 'b' },
+    { role_id: '1022', uid: 'c' },
+    { role_id: '1033', uid: 'a' },
+    { role_id: null, uid: 'd' }, // 脏条目不计
+    { role_id: '1011' }, // 无 uid 不计
+  ];
+  const { pool, roles } = computeRoleOwnership(entries);
+  assert.equal(pool, 3, '样本池 = 去重 uid 总数（a/b/c）');
+  assert.equal(roles['1011'], 2 / 3, 'a/b 拥有 1011 → 2/3');
+  assert.equal(roles['1022'], 1, 'a/b/c 都拥有 1022 → 100%');
+  assert.equal(roles['1033'], 1 / 3, '仅 a 拥有 1033 → 1/3');
 });
