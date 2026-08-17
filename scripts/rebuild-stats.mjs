@@ -7,7 +7,7 @@
 // 注意: role_id → 角色名映射只能来自 grad（library 的 id 是另一套体系，不可用）。
 import fs from 'node:fs';
 import path from 'node:path';
-import { DATA_DIR } from '../src/lib/node.js';
+import { DATA_DIR, readWorkshopHeader } from '../src/lib/node.js';
 import { maskProxyUrl } from '../src/sync/proxy.js';
 
 // 代理（可选第 1 参）：workshop-api.js 模块加载时读 argv[5] 与环境变量，这里把代理写进环境变量
@@ -57,15 +57,9 @@ console.log('重算 workshop-stats.json …');
 const t0 = Date.now();
 let entryCount = -1;
 try {
-  // 只读文件头 256 字节：此前用 readFileSync(...,'utf8').slice(0,256) 把整个 2GB 文件读成字符串，
-  // 超过 Node 的 2 GiB 单次读取上限直接抛错，被 catch 吞掉 → entryCount 静默保持 -1，
-  // 写进 stats 的 meta.entries 也就一直是 -1。改成定长 read，既正确又不占内存。
-  const fd = fs.openSync(dataPath('workshop.json'), 'r');
-  const buf = Buffer.alloc(256);
-  const n = fs.readSync(fd, buf, 0, 256, 0);
-  fs.closeSync(fd);
-  const m = /"meta":\s*\{[^}]*?"entryCount"\s*:\s*(\d+)/.exec(buf.subarray(0, n).toString('utf8'));
-  if (m) entryCount = Number(m[1]);
+  // 分块 gzip 的头部行含 meta：只读第 0 行（readWorkshopHeader 读完即关），不整文件加载。
+  const h = readWorkshopHeader(dataPath('workshop.json'));
+  if (h && h.meta && h.meta.entryCount != null) entryCount = Number(h.meta.entryCount);
 } catch {
   /* 读取失败时保持 -1（meta.entries 写 -1） */
 }

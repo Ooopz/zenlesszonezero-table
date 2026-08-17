@@ -22,7 +22,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
-import { streamJsonArrayElements, DATA_DIR, isMain, pool, writeJsonAtomic } from '../lib/node.js';
+import {
+  iterWorkshopFile,
+  readLines,
+  writeWorkshopFile,
+  DATA_DIR,
+  isMain,
+  pool,
+  writeJsonAtomic,
+} from '../lib/node.js';
 import { apiGet, apiPost } from './workshop-api.js';
 import { buildWorkshopStats, fetchWorkshopGrad, OUT_FILE } from './workshop-stats.js';
 import { items, rolebase, suits, weapons } from './workshop-static.js';
@@ -81,11 +89,8 @@ export function flushPart(entries, partCount, file = PART_FILE) {
   if (!entries.length) return partCount;
   const fd = fs.openSync(file, 'a');
   try {
-    if (partCount > 0) fs.writeSync(fd, ',');
-    for (let i = 0; i < entries.length; i += 5000) {
-      if (i > 0) fs.writeSync(fd, ',');
-      fs.writeSync(fd, JSON.stringify(entries.slice(i, i + 5000)).slice(1, -1));
-    }
+    // 每条约一行（完整 JSON）：合并时按行读取，跨块 UTF-8 天然安全（\n 不出现在多字节字符内）
+    for (const e of entries) fs.writeSync(fd, JSON.stringify(e) + '\n');
   } finally {
     fs.closeSync(fd);
   }
@@ -94,57 +99,28 @@ export function flushPart(entries, partCount, file = PART_FILE) {
   return partCount + n;
 }
 
-/** 流式复制 src（{"meta":...,"entries":[...]} 结构）的 entries 到 outFd：
- *  用 streamJsonArrayElements 逐条解析后原样写入——不能做字符级 slice 块切分
- *  （条目含中文 UTF-8 多字节字符，块边界切断会损坏 JSON，曾致解析卡死 OOM）。
- *  只写元素与分隔逗号，**不写数组括号**——括号由调用方统一负责，
- *  否则与调用方写的 '[' 叠加成 `"entries":[[…`（曾导致落盘文件不是合法 JSON，
- *  仅因 streamJsonArrayElements 解析宽松而长期未被发现）。
- *  @returns {number} 实际复制的条目数（调用方据此决定是否需要补分隔逗号） */
-function copyEntriesTo(outFd, srcFile) {
-  let n = 0;
-  for (const raw of streamJsonArrayElements(srcFile)) {
-    if (n++) fs.writeSync(outFd, ',');
-    fs.writeSync(outFd, raw);
-  }
-  return n;
-}
-
-/** 流式复制 PART 裸流到 outFd（内容即元素逗号流，无头尾）。
- *  ⚠️ 必须按**字节**搬运：buf.toString('utf8', 0, n) 会独立解码每个 1MB 块，
- *  跨块边界的中文字符被截断成 U+FFFD（2.2GB 文件 ≈ 2100 处损坏）。 */
-function appendPartTo(outFd, file = PART_FILE) {
-  const buf = Buffer.alloc(1 << 20);
-  const fd = fs.openSync(file, 'r');
-  try {
-    let n;
-    while ((n = fs.readSync(fd, buf, 0, buf.length, null)) > 0) {
-      if (outFd) fs.writeSync(outFd, buf, 0, n); // Buffer 重载：原样写字节，不经解码
+/** 合并写出 workshop.json（分块 gzip，原子 tmp+rename）：旧文件逐块解码 + PART 逐行解码 → 重新分块压缩。
+ *  在爬取收尾跑一次（数小时爬取的最后一步），全量重压 ~2 分钟可接受；换来格式简单、无偏移拼接逻辑。
+ *  perChunk 可选（默认 WORKSHOP_PER_CHUNK），测试用小值强制多块。 */
+export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile, perChunk }) {
+  const entries = (function* () {
+    // 旧文件已是分块 gzip：iterWorkshopFile 逐块解压
+    if (oldFile && fs.existsSync(oldFile)) {
+      for (const e of iterWorkshopFile(oldFile)) yield e;
     }
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-/** 合并写出 workshop.json（原子：tmp + rename）：meta + 旧文件 entries（流式复制）+ PART 裸流。
- *  数组括号在此统一负责——helper 只写元素与分隔逗号，避免重复写 '[' 产生非法 JSON。 */
-export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile }) {
-  const tmp = `${outFile}.tmp`;
-  const fd = fs.openSync(tmp, 'w');
-  try {
-    fs.writeSync(fd, `{"meta":${JSON.stringify(meta)},"entries":[`);
-    // 用实际复制条数（而非 existsSync）判断是否补分隔逗号——旧文件存在但为空时不能写 `[,`
-    let copied = 0;
-    if (oldFile && fs.existsSync(oldFile)) copied = copyEntriesTo(fd, oldFile);
+    // PART：完整 JSON 行（flushPart 写入）
     if (partCount > 0 && partFile && fs.existsSync(partFile)) {
-      if (copied > 0) fs.writeSync(fd, ',');
-      appendPartTo(fd, partFile);
+      for (const line of readLines(partFile)) {
+        if (!line) continue;
+        try {
+          yield JSON.parse(line);
+        } catch {
+          /* 坏行丢弃（自愈：缺的 uid 下次自动重爬） */
+        }
+      }
     }
-    fs.writeSync(fd, ']}');
-  } finally {
-    fs.closeSync(fd);
-  }
-  fs.renameSync(tmp, outFile);
+  })();
+  writeWorkshopFile(outFile, entries, meta, perChunk);
 }
 
 // ---------- 属性映射（get_prop_desc：PropertyId → 属性名，逆向自工坊） ----------
@@ -592,8 +568,7 @@ export async function fetchWorkshopData(onProgress) {
   const fileUids = new Set(); // 旧文件实际覆盖的 uid（跳过判断的唯一依据：文件里没有的 uid 一律重爬，自愈进度领先）
   let oldEntryCount = 0;
   if (fs.existsSync(OUT_FILE)) {
-    for (const raw of streamJsonArrayElements(OUT_FILE)) {
-      const e = JSON.parse(raw);
+    for (const e of iterWorkshopFile(OUT_FILE)) {
       oldEntryCount++;
       if (e && e.uid) fileUids.add(e.uid);
     }

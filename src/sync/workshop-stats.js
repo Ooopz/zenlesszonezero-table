@@ -9,7 +9,7 @@ import { computeAllWorkshopStats } from '../lib/workshopStats.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
-import { streamJsonArrayElements, DATA_DIR, pool, writeJsonAtomic } from '../lib/node.js';
+import { iterWorkshopFile, DATA_DIR, pool, writeJsonAtomic } from '../lib/node.js';
 import { apiGet } from './workshop-api.js';
 import { loadNameIndexes } from './name-index.js';
 
@@ -39,9 +39,9 @@ function resolveWengine(rawName, libWengines) {
   return resolveEntry(CATEGORY.WENGINE, libWengines, rawName);
 }
 
-/** 流式遍历 workshop.json 的 entries（generator）：聚合函数 for...of 天然兼容，不把大数组放内存 */
+/** 流式遍历 workshop.json 的 entries（generator）：分块 gzip 按块解压，聚合函数 for...of 天然兼容，不把大数组放内存 */
 function* iterWorkshopEntries() {
-  for (const raw of streamJsonArrayElements(OUT_FILE)) yield JSON.parse(raw);
+  yield* iterWorkshopFile(OUT_FILE);
 }
 
 // ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------

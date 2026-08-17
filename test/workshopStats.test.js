@@ -27,7 +27,7 @@ import {
   styleMatch,
 } from '../src/lib/workshopStats.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
-import { streamJsonArrayElements } from '../src/lib/node.js';
+import { iterWorkshopFile } from '../src/lib/node.js';
 import { loadDataFile } from './helpers.js';
 
 test('discStatName：workshop 词条名 → 统一名（全表 + mys 源百分比判定 + 幂等）', () => {
@@ -177,12 +177,11 @@ test('真实数据冒烟：workshop.json 全量聚合不抛错、计数合法', 
   const grad = loadDataFile('workshop-grad.json', 'node src/sync/workshop.js');
   const discIndex = buildNameIndex(lib.discs, CATEGORY.DISC);
   const roleNameMap = new Map((grad.roles || []).map((r) => [String(r.item_id), r.name]));
-  // workshop.json 达 2.13GB，一次性 readFileSync 会超 V8 字符串上限（Invalid string length），
-  // 用流式读抽样前 5 万条验证聚合逻辑（全量聚合在同步脚本 buildWorkshopStats 里做）
+  // workshop.json 为分块 gzip（~0.2GB），用流式逐块解压抽样前 5 万条验证聚合逻辑
   const entries = [];
   try {
-    for (const raw of streamJsonArrayElements(fileURLToPath(new URL('../data/workshop.json', import.meta.url)))) {
-      entries.push(JSON.parse(raw));
+    for (const e of iterWorkshopFile(fileURLToPath(new URL('../data/workshop.json', import.meta.url)))) {
+      entries.push(e);
       if (entries.length >= 50000) break;
     }
   } catch {
