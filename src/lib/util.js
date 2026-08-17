@@ -92,18 +92,6 @@ export function parseNum(s) {
   return str.includes('%') ? n / 100 : n;
 }
 
-/** 构建归一化索引 {归一化名: 原名} */
-export function buildIndex(lib) {
-  const idx = {};
-  for (const k in lib) idx[normalize(k)] = k;
-  return idx;
-}
-
-/** 按名称查条目：先精确匹配，再按去标点归一化匹配 */
-export function lookup(lib, index, name) {
-  return name ? lib[name] || lib[index[normalize(name)]] || null : null;
-}
-
 /** 把「词条」统一成 [{name, value}]：兼容数组（新格式）与对象（旧格式/套装加成） */
 export function statEntries(data) {
   if (Array.isArray(data)) return data.filter((t) => t && t.name != null && t.value != null);

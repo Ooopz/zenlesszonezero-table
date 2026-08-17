@@ -2,7 +2,7 @@
 // 输入：workshop.json 的 entries（每条约一个玩家角色的配装：weapon/equips/panel/skills/rank/relic_point）
 // 输出（按角色/盘/玩家聚合）：computeWorkshopStats（音擎/驱动盘条目数 + 面板真实样本统计）、
 //   computePanelCorrelations（属性相关）、computeWorkshopDiscStats（驱动盘单盘统计）、
-//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankLayers/rankDist/skillStats/roleDiscStats）、
+//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankDist/skillStats/roleDiscStats/roleOwnership）、
 //   2026-10 新增（roleCooccurrence/rankRelic/skillCombos）、
 //   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度、sourceAudit 两源一致性 D10）、
 //   discStatName、substatRolls、buildRoleSubstatWeights、sourceOf、bin2D。
@@ -607,47 +607,31 @@ function makeRankDistAcc() {
   };
 }
 
-/** 每角色 × 影画档（rank 0-6）的关键属性分布（轻量，无 hist）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, rank, panel}）
- *  @param {string[]} [attrs]  参与分层的属性（默认 8 个核心属性）
- *  @returns {Object<string, Object<string, Object<string, LightDist>>>} role_id → rank → attr → 分布 */
-export function computeRankLayers(entries, attrs) {
-  return runAcc(makeRankLayersAcc(attrs), entries);
-}
-
-/** rankLayers 默认参与分层的属性（8 个核心属性） */
-const LAYER_ATTRS_DEFAULT = ['攻击力', '暴击率', '暴击伤害', '异常精通', '冲击力', '生命值', '防御力', '能量自动回复'];
-
-function makeRankLayersAcc(attrs) {
-  const LAYER_ATTRS = attrs || LAYER_ATTRS_DEFAULT;
-  const acc = new Map(); // rid -> Map<rank -> Map<attr -> number[]>
+/** 角色拥有率：样本池（全部去重 uid）中拥有该角色（该 uid 有该角色条目）的占比。
+ *  workshop.json 的 v3 响应含每 uid 的**全部**角色，故「拥有」= uid 集合包含该角色。
+ *  @returns {{ pool:number, roles:Object<string, number> }} pool=池 uid 总数，roles=role_id → 拥有率 */
+function makeRoleOwnershipAcc() {
+  const perRole = new Map();
+  const pool = new Set();
   return {
     add(e) {
-      if (!e || e.role_id == null || e.rank == null) return;
-      let byRank = acc.get(e.role_id);
-      if (!byRank) acc.set(e.role_id, (byRank = new Map()));
-      let byAttr = byRank.get(e.rank);
-      if (!byAttr) byRank.set(e.rank, (byAttr = new Map()));
-      for (const p of e.panel || []) {
-        if (!LAYER_ATTRS.includes(p.name)) continue;
-        const v = parsePanelFinal(p.final);
-        if (v == null) continue;
-        if (!byAttr.has(p.name)) byAttr.set(p.name, []);
-        byAttr.get(p.name).push(v);
-      }
+      if (!e || e.role_id == null || e.uid == null) return;
+      pool.add(String(e.uid));
+      let s = perRole.get(e.role_id);
+      if (!s) perRole.set(e.role_id, (s = new Set()));
+      s.add(String(e.uid));
     },
     finish() {
-      const out = {};
-      for (const [rid, byRank] of acc) {
-        out[rid] = {};
-        for (const [rank, byAttr] of byRank) {
-          out[rid][rank] = {};
-          for (const [attr, vals] of byAttr) out[rid][rank][attr] = lightDist(vals);
-        }
-      }
-      return out;
+      const roles = {};
+      for (const [rid, s] of perRole) roles[rid] = pool.size ? s.size / pool.size : 0;
+      return { pool: pool.size, roles };
     },
   };
+}
+
+/** 角色拥有率（公开函数：与 computeAllWorkshopStats 单遍历逐位相等） */
+export function computeRoleOwnership(entries) {
+  return runAcc(makeRoleOwnershipAcc(), entries);
 }
 
 /** 每角色 × 技能类型（canonical 编号，见 constants.SKILL_TYPES）的等级分布（轻量分位 + 逐等级计数 dist，供技能分布柱状图）。
@@ -1339,7 +1323,6 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   const accOpts = { ...opts, roleWeights: resolveRoleWeights(opts) };
   const discAcc = makeWorkshopDiscStatsAcc(discIndex, accOpts);
   const relicAcc = makeRelicStatsAcc();
-  const rankLayersAcc = makeRankLayersAcc();
   const rankDistAcc = makeRankDistAcc();
   const skillAcc = makeSkillStatsAcc();
   const roleDiscAcc = makeRoleDiscStatsAcc(accOpts);
@@ -1349,6 +1332,7 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   const rollEffAcc = makeRollEfficiencyAcc(accOpts);
   const auditAcc = makeSourceAuditAcc();
   const styleAcc = makeRoleStylesAcc(opts.traits);
+  const ownAcc = makeRoleOwnershipAcc();
 
   // 唯一一次遍历：每条目喂给全部累加器。add 之间互不共享中间态，故顺序无副作用
   for (const e of entries || []) {
@@ -1357,7 +1341,6 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     discAcc.add(e);
     scatterAcc.add(e);
     relicAcc.add(e);
-    rankLayersAcc.add(e);
     rankDistAcc.add(e);
     skillAcc.add(e);
     roleDiscAcc.add(e);
@@ -1367,6 +1350,7 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     rollEffAcc.add(e);
     auditAcc.add(e);
     styleAcc.add(e);
+    ownAcc.add(e);
   }
 
   const scatter = scatterAcc.finish();
@@ -1376,7 +1360,6 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     discDetails: discAcc.finish(),
     panelScatter: finishPanelScatter(scatter.perRole, scatter.global),
     relicStats: relicAcc.finish(),
-    rankLayers: rankLayersAcc.finish(),
     rankDist: rankDistAcc.finish(),
     skillStats: skillAcc.finish(),
     roleDiscStats: roleDiscAcc.finish(),
@@ -1386,5 +1369,6 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     rollEfficiency: rollEffAcc.finish(),
     sourceAudit: auditAcc.finish(),
     roleStyles: styleAcc.finish(),
+    roleOwnership: ownAcc.finish(),
   };
 }

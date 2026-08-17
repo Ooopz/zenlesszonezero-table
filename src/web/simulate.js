@@ -4,12 +4,34 @@ import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName,
 import { PANEL_ORDER, MAIN_STAT_OPTIONS, TARGET_KEYS } from '../lib/constants.js';
 import { simulateFrontier, simulateFrontier3D, simulateFixedPanel, axisAvailable } from '../lib/simulate.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
+import { notify } from './util.js';
 import { clearCharts, registerChart, chartBox, CHART_COLORS } from './charts.js';
 
 // 重渲染回调由 ui.js 注入（render 函数在 render.js，避免循环依赖）。
 let rerender = () => {};
 export function setSimRerender(fn) {
   rerender = fn;
+}
+
+// ---------- echarts-gl 按需加载（625KB，仅三维图需要） ----------
+// index.html 不再预载 echarts-gl：页面打开（含统计视图）不解析这 625KB，
+// 首次「添加三维图」时才注入脚本；加载完成后才创建 3D 图（见 simAddChart）。
+let glPromise = null;
+function ensureEchartsGl() {
+  if (window.echarts?.gl) return Promise.resolve();
+  glPromise =
+    glPromise ||
+    new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/src/vendor/echarts-gl.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => {
+        glPromise = null; // 失败可重试
+        reject(new Error('三维图组件加载失败，请刷新页面重试'));
+      };
+      document.head.appendChild(s);
+    });
+  return glPromise;
 }
 
 let nextChartId = 1;
@@ -348,8 +370,16 @@ export function simAxis(id, axis, value) {
   rerender();
 }
 
-export function simAddChart(kind) {
+export async function simAddChart(kind) {
   const is3d = kind === '3d';
+  if (is3d) {
+    try {
+      await ensureEchartsGl(); // 首次添加三维图：先加载 echarts-gl，避免 scatter3D 未注册
+    } catch (e) {
+      notify(e.message, 8);
+      return;
+    }
+  }
   if (is3d) {
     const used = new Set(state.charts.filter((c) => c.kind === '3d').map((c) => c.x + '/' + c.y + '/' + c.z));
     const fallback = [

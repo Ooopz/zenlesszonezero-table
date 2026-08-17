@@ -1,12 +1,7 @@
-// test/panelBench.test.js —— 面板对标三源合并（推荐 high 档 / 玩家真实样本 / 我的）
+// test/panelBench.test.js —— 推荐方案三档统计（computeRecTierStats：low/mid/high 的 mean/median/sd/cv）
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  traitKeyStats,
-  TRAIT_KEY_STATS,
-  computeRecHighStats,
-  buildPanelBenchmark,
-} from '../src/lib/panelBench.js';
+import { computeRecTierStats } from '../src/lib/panelBench.js';
 import { loadDataFile } from './helpers.js';
 
 const PLANS = {
@@ -27,6 +22,12 @@ const PLANS = {
           { name: '暴击率', low: 0.52, mid: 0.62, high: 0.72 },
         ],
       },
+      {
+        panel: [
+          { name: '攻击力', low: 2200, mid: 2700, high: 3200 },
+          { name: '暴击率', low: 0.54, mid: 0.64, high: 0.74 },
+        ],
+      },
     ],
   },
   1002: {
@@ -41,115 +42,64 @@ const PLANS = {
     ],
   },
 };
-const SAMPLE = {
-  艾莲: {
-    攻击力: { count: 50, min: 2200, max: 3200, mean: 2700, median: 2650 },
-    暴击率: { count: 50, min: 0.5, max: 0.8, mean: 0.65, median: 0.64 },
-    暴击伤害: { count: 50, min: 0.8, max: 1.4, mean: 1.1, median: 1.08 },
-    穿透率: { count: 50, min: 0, max: 0.5, mean: 0.25, median: 0.24 },
-  },
-  苍角: {
-    攻击力: { count: 40, min: 1400, max: 2200, mean: 1800, median: 1750 },
-    异常精通: { count: 40, min: 90, max: 160, mean: 120, median: 118 },
-  },
-};
-const MINE = { 艾莲: { 攻击力: 2400, 暴击率: 0.55 } };
-const TRAIT = { 艾莲: '强攻', 苍角: '异常' };
 
-test('traitKeyStats：各特性模板正确，未知特性回退通用', () => {
-  assert.deepEqual(traitKeyStats('强攻'), TRAIT_KEY_STATS.强攻);
-  assert.deepEqual(traitKeyStats('异常'), ['攻击力', '异常精通', '异常掌控']);
-  assert.deepEqual(traitKeyStats('未知特性'), ['攻击力', '暴击率', '暴击伤害']);
+test('computeRecTierStats：每角色每属性三档 mean/median/sd/cv', () => {
+  const out = computeRecTierStats(PLANS);
+  const atk = out['艾莲']['攻击力'];
+  // 三个方案的 low：2000、2100、2200 → median/mean 2100
+  assert.equal(atk.low.count, 3);
+  assert.equal(atk.low.median, 2100);
+  assert.equal(atk.low.mean, 2100);
+  assert.ok(atk.low.sd > 0);
+  assert.ok(atk.low.cv > 0);
+  assert.equal(atk.high.median, 3100);
+  // 单方案档位：样本 <3 视为不可靠 → null
+  const cj = out['苍角']['攻击力'];
+  assert.equal(cj.low, null);
 });
 
-test('computeRecHighStats：对方案 high 档聚合 min/max/mean/median', () => {
-  const rec = computeRecHighStats(PLANS);
-  const atk = rec['艾莲']['攻击力'];
-  // 两个方案的 high：3000、3100 → mean/median 3050
-  assert.equal(atk.count, 2);
-  assert.equal(atk.min, 3000);
-  assert.equal(atk.max, 3100);
-  assert.equal(atk.mean, 3050);
-  assert.equal(atk.median, 3050); // 偶数样本取相邻均值
-  const crit = rec['艾莲']['暴击率'];
-  assert.equal(crit.count, 2);
-  assert.ok(Math.abs(crit.mean - 0.71) < 1e-9);
-  assert.equal(rec['苍角']['异常精通'].count, 1);
-  assert.equal(rec['苍角']['异常精通'].median, 140);
-});
-
-test('buildPanelBenchmark：特性模板排前 + 三源合并 + keyAttrs', () => {
-  const rows = buildPanelBenchmark(PLANS, SAMPLE, MINE, TRAIT);
-  const ai = rows.find((r) => r.name === '艾莲');
-  assert.equal(ai.trait, '强攻');
-  assert.equal(ai.planCount, 2);
-  assert.deepEqual(ai.keyAttrs, ['攻击力', '暴击率', '暴击伤害', '穿透率']);
-  assert.deepEqual(Object.keys(ai.stats), ['攻击力', '暴击率', '暴击伤害', '穿透率']);
-  const atk = ai.stats['攻击力'];
-  assert.deepEqual(atk.rec, { count: 2, min: 3000, max: 3100, mean: 3050, median: 3050 });
-  assert.deepEqual(atk.ws, SAMPLE['艾莲']['攻击力']);
-  assert.equal(atk.mine, 2400);
-  assert.equal(ai.stats['暴击率'].mine, 0.55);
-  const cj = rows.find((r) => r.name === '苍角');
-  assert.equal(cj.trait, '异常');
-  assert.deepEqual(Object.keys(cj.stats), ['攻击力', '异常精通']); // 掌控无数据不加入
-  assert.equal(cj.stats['异常精通'].mine, null); // 非账号角色无 mine
-});
-
-test('buildPanelBenchmark：展示全部有数据属性，关键属性标记并排前', () => {
-  const manyAttr = {
-    2001: {
-      name: '多属性角色',
+test('computeRecTierStats：MAD 排除离群哨兵值（如生命 100000）', () => {
+  const plans = {
+    1001: {
+      name: '角色',
       plans: [
-        {
-          panel: [
-            { name: '攻击力', low: 1, mid: 2, high: 3 },
-            { name: '暴击率', low: 0.5, mid: 0.6, high: 0.7 },
-            { name: '暴击伤害', low: 0.8, mid: 1, high: 1.2 },
-            { name: '异常精通', low: 1, mid: 2, high: 3 },
-            { name: '异常掌控', low: 1, mid: 2, high: 3 },
-            { name: '冲击力', low: 1, mid: 2, high: 3 },
-            { name: '能量自动回复', low: 1, mid: 2, high: 3 },
-          ],
-        },
+        { panel: [{ name: '生命值', low: 8000, mid: 9000, high: 10000 }] },
+        { panel: [{ name: '生命值', low: 8100, mid: 9100, high: 10100 }] },
+        { panel: [{ name: '生命值', low: 8200, mid: 9200, high: 10200 }] },
+        // 哨兵：high 100000 超出 MAD 阈值 → 排除
+        { panel: [{ name: '生命值', low: 8000, mid: 9000, high: 100000 }] },
       ],
     },
   };
-  const rows = buildPanelBenchmark(manyAttr, {}, {}, { '多属性角色': '强攻' });
-  const r = rows[0];
-  assert.equal(Object.keys(r.stats).length, 7); // 全部属性都展示
-  assert.deepEqual(r.keyAttrs, ['攻击力', '暴击率', '暴击伤害']); // 穿透率无数据不标记
-  assert.equal(Object.keys(r.stats)[0], '攻击力'); // 关键属性排前
+  const out = computeRecTierStats(plans);
+  const t = out['角色']['生命值'];
+  assert.equal(t.high.outliers, 1, '哨兵被 MAD 排除');
+  assert.equal(t.high.median, 10100, '剩余 3 个正常样本的中位');
 });
 
-test('真实数据冒烟：三源合并不报错、每属性有来源', () => {
+test('computeRecTierStats：low/mid 恒 0 的占位属性 → low/mid 置 null', () => {
+  const plans = {
+    1001: {
+      name: '角色',
+      plans: [
+        { panel: [{ name: '冲击力', low: 0, mid: 0, high: 120 }] },
+        { panel: [{ name: '冲击力', low: 0, mid: 0, high: 125 }] },
+        { panel: [{ name: '冲击力', low: 0, mid: 0, high: 130 }] },
+      ],
+    },
+  };
+  const out = computeRecTierStats(plans);
+  const t = out['角色']['冲击力'];
+  assert.equal(t.low, null);
+  assert.equal(t.mid, null);
+  assert.equal(t.high.median, 125);
+});
+
+test('真实数据冒烟：plans.json 三档统计不报错且多数角色有值', () => {
   const plans = loadDataFile('plans.json', 'npm run sync:plans');
-  const lib = loadDataFile('library.json', 'npm run sync:library');
-  const stats = loadDataFile('workshop-stats.json', 'node src/sync/workshop.js');
-  const grad = loadDataFile('workshop-grad.json', 'node src/sync/workshop.js');
-  const chars = loadDataFile('characters.json', 'npm run sync:characters');
-  const traitMap = {};
-  for (const c of Object.values(lib.characters || {})) {
-    traitMap[c.name] = c.trait;
-    for (const v of Object.values(plans)) if (v.name && v.name !== c.name && v.name.includes(c.name)) traitMap[v.name] = c.trait;
-  }
-  const myFinalMap = {};
-  for (const c of chars || []) myFinalMap[c.name] = c.panel || {};
-  const idName = new Map((grad.roles || []).map((r) => [String(r.item_id), r.name]));
-  const sampleMap = {};
-  for (const p of stats.panels || []) {
-    const nm = idName.get(String(p.name));
-    if (nm) sampleMap[nm] = p.stats; // 真实样本统计 {属性:{count,min,max,mean,median}}
-  }
-  const rows = buildPanelBenchmark(plans, sampleMap, myFinalMap, traitMap);
-  assert.ok(rows.length > 0);
-  const sample = rows.find((r) => Object.keys(r.stats).length);
-  assert.ok(sample, '有角色带关键属性');
-  for (const [attr, v] of Object.entries(sample.stats)) {
-    // 每属性至少一个来源；推荐 rec/样本 ws 为统计对象
-    assert.ok(v.rec || v.ws || v.mine != null, `${sample.name} 的 ${attr} 应有至少一个来源`);
-    if (v.rec) assert.ok('median' in v.rec);
-    if (v.ws) assert.ok('median' in v.ws && 'count' in v.ws);
-    assert.ok(attr);
-  }
+  const out = computeRecTierStats(plans);
+  const names = Object.keys(out);
+  assert.ok(names.length > 0);
+  const withAttr = names.filter((n) => Object.keys(out[n]).length);
+  assert.ok(withAttr.length > 0, '有角色带三档统计');
 });

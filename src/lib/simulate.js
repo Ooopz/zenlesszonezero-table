@@ -74,20 +74,6 @@ const SUBSTAT_SOURCES = {
   [STAT.PEN_VALUE]: [{ type: '穿透值', kind: 'add', stat: STAT.PEN_VALUE, value: S['穿透值'] }],
 };
 
-/** 副词条成长值（供 UI 展示每条强化次数带来的收益） */
-export const SUBSTAT_ROLL_VALUES = {
-  '攻击力%': S['攻击力%'],
-  攻击力: S['攻击力'],
-  '生命值%': S['生命值%'],
-  生命值: S['生命值'],
-  '防御力%': S['防御力%'],
-  防御力: S['防御力'],
-  暴击率: S['暴击率'],
-  暴击伤害: S['暴击伤害'],
-  异常精通: S['异常精通'],
-  穿透值: S['穿透值'],
-};
-
 /** 主词条 UI 名 -> 面板属性名（456 的 攻击力%/生命值%/防御力% 累加到对应面板属性乘区）。 */
 function mainStatForPanel(name) {
   if (name === '攻击力%') return STAT.ATK;

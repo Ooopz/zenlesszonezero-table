@@ -106,7 +106,7 @@ zzz/
 | `plans.json` | ~25 MB | `src/sync/plans.js` | `{avatarId: {name, plans: [...]}}`，方案含 sets/mainProps/subStats/panel/weapon/skills/team | 目标弹窗方案表、统计视图方案侧统计 |
 | `workshop.json` | **2.13 GB** | `src/sync/workshop.js` | `{meta, entries:[...]}`，90 万+ 条配装实例（uid/角色/面板/音擎/驱动盘/技能） | 只被聚合脚本流式读，**前端不加载** |
 | `workshop-grad.json` | ~0.1 MB | `workshop.js` 的 `fetchWorkshopGrad` | `{roles:[{item_id,name,weapons,relics}]}` 全服累计占比（grad_stat 接口） | 统计视图「角色配装对标」卡 |
-| `workshop-stats.json` | 1.91 MB | `workshop.js` 的 `buildWorkshopStats` | 14 项聚合（panels/discDetails/panelCorr/panelScatter/relicStats/rankLayers/rankDist/skillStats/roleDiscStats/roleCooccurrence/rankRelic/skillCombos/rollEfficiency/sourceAudit/roleStyles） | **浏览器唯一加载的工坊数据**（≤2 MB 红线） |
+| `workshop-stats.json` | 1.91 MB | `workshop.js` 的 `buildWorkshopStats` | 15 项聚合（panels/discDetails/panelCorr/panelScatter/relicStats/rankDist/skillStats/roleDiscStats/roleOwnership/roleCooccurrence/rankRelic/skillCombos/rollEfficiency/sourceAudit/roleStyles） | **浏览器唯一加载的工坊数据**（≤2 MB 红线） |
 | `workshop-weights.json` | ~10 KB | `workshop.js` | `{weights: {role_id: 默认流派权重}}`（system_data 的 weight_json） | 有效副词条口径 + rollEfficiency（消费方在聚合层） |
 | `user-config.json` | 0 | `server.js` `/api/config` | `{charTargets, validStats, notes, rowOrder, colOrder, view}` | 前端 `data.js` 的 userConfig |
 | `.cookie.json` | 0 | `characters.js` | 米游社 cookie 缓存（**明文，绝不出网**） | 同步时 cookie 来源 |
@@ -167,7 +167,7 @@ zzz/
 - 转义/富文本：`escapeHtml()`（⚠️ 用 `??` 不用 `||`，否则 0 会被抹掉）、`escapeJsAttr()`（JS 转义+HTML 转义两层）、`renderRichText()`（游戏 `<color=#HEX>` 标记 → span；清 `<script>`/`on*`）、`decodeHtmlEntities()`；
 - 展示：`formatValue(name, value)`（百分比/大数/能量两位小数）；
 - cookie：`parseCookies`/`serializeCookies`、`CLIPBOARD_SCRIPT`（控制台取 cookie 脚本，命令行与网页共用）；
-- 通用：`buildIndex`/`lookup`（旧通用工具，业务已收敛到 names.js）、`statEntries()`（词条统一成 `[{name,value}]`，兼容数组/旧对象格式）、`compareValues`/`isEmptyVal`（排序用）。
+- 通用：`statEntries()`（词条统一成 `[{name,value}]`，兼容数组/旧对象格式）、`compareValues`/`isEmptyVal`（排序用）。
 
 ### 5.3 names.js —— 统一名称解析（跨数据源匹配的命脉）
 - `CATEGORY`（char/wengine/disc/bangboo）+ 手工别名表 `ALIASES`（维琳娜→维琳娜·艾嘉德、星徽·比利→星徽·比利·奇德、棘刺玫瑰→荆棘玫瑰…）；
@@ -213,23 +213,19 @@ zzz/
 | `buildRoleSubstatWeights` | 工坊流派权重 → 每角色有效副词条表（>0 者） |
 | `computeWorkshopDiscStats` | 驱动盘单盘真实统计：盘数/使用角色/456 主词条分布/副词条频率 + 有效强化次数分布 `effDist` + 槽位分布 `slotDist` + 词条组合 Top `subCombos` + 主词条×副词条协同 `mainSubCross` |
 | `bin2D` / `computePanelScatter` | 面板属性对 2D 密度网格（暴击率×暴伤、攻击×暴伤，perRole/global） |
-| `computeRelicStats` / `computeRankDist` / `computeRankLayers` / `computeSkillStats` / `computeRoleDiscStats` | 练度指标：评分分布（含 hist）/ 影画 0-6 占比 / 每角色×影画关键属性分布（当前无前端消费，保留）/ 技能等级分布（按源归一）/ 每角色 456+副词条画像 |
+| `computeRelicStats` / `computeRankDist` / `computeSkillStats` / `computeRoleDiscStats` / `computeRoleOwnership` | 练度指标：评分分布（含 hist）/ 影画 0-6 占比 / 技能等级分布（按源归一）/ 每角色 456+副词条画像 / 样本池角色拥有率（meta.poolUids 记池大小） |
 | `sourceOf(e)` | **两源判别**：`source` 字段 → `equips[].rarity` 类型（string "S"=mys / number 4=2025）→ skills 数组顺序（末位兜底） |
 | `computeRollEfficiency` | 加权词条效率分（Σ强化次数×流派权重）+ `slotEff` 短板槽 + D9 `scoreVsRelic`（评分×毕业度皮尔逊，配对 <30 记 null） |
 | `computeSourceAudit` | D10 两源面板一致性审计（任一源 <30 样本不给 diff） |
 | `computeRoleCooccurrence` / `computeRankRelic` / `computeSkillComboStats` | 同 uid 同练角色共现（配队亲和）/ 每角色×影画档评分 count/mean/median / 技能拉满组合模式 Top + 全拉满率 |
 | `computeRoleStyles` + `styleBaseName`/`styleSuffix`/`styleLabel`/`styleAttrShort`/`styleMatch` | **角色流派分析**：聚类属性池按定位（trait）选（击破含冲击力、异常含精通/掌控…）→ cv<0.04 去噪（保底 3 维）→ z-score + k-means k=3（确定性初始化可复现，样本 <200 不聚类）→ 每簇 share/label/面板 mean+median/456 主词条 Top2/套装 Top2/音擎 Top2；`styleMatch` 供「你的面板最贴近 XX 流」联动 |
-| **`computeAllWorkshopStats(entries, discIndex, opts)`** | **单遍历总入口**：14 项聚合各拆成 `{add(entry), finish()}` 累加器，一次 for 循环全部喂完再收尾（此前每项各遍历一遍 2.13GB 文件，每遍 ~27s）。**硬约束：累加器 Map/数组必须按条目出现顺序写入**，否则键序与浮点累加顺序漂移；**`opts.weightJson`/`roleWeights` 必须在聚合前传入**，否则 effDist/rollEfficiency 静默退化为「全部合法副词条」 |
+| **`computeAllWorkshopStats(entries, discIndex, opts)`** | **单遍历总入口**：15 项聚合各拆成 `{add(entry), finish()}` 累加器，一次 for 循环全部喂完再收尾（此前每项各遍历一遍 2.13GB 文件，每遍 ~27s）。**硬约束：累加器 Map/数组必须按条目出现顺序写入**，否则键序与浮点累加顺序漂移；**`opts.weightJson`/`roleWeights` 必须在聚合前传入**，否则 effDist/rollEfficiency 静默退化为「全部合法副词条」 |
 
 ### 5.10 其余纯逻辑模块（小而专）
-- `gradStats.js`：`computeGradStats(roles)` —— workshop-grad 全服占比聚合纯函数（前端「角色配装」对标卡直接读 `workshopGrad.roles` 不经它，保留模块与测试）；
 - `discstats.js`：`computeDiscStats(plans, discNames, discSet2)`（推荐该盘的角色/副词条频次/456 主属性/二件套替代）+ **`computeDiscAdvisor(official, live, mainOptions, threshold=0.03)`**（决策卡合并层：两口径对齐 → keep=双边保留 / split=单边分歧 / drop=双边未用可抛弃）；
 - `plansStats.js`：`orderComboSets4First`（套装组合名 4 件套在前排序归一，工坊/方案两源组合文本一致）+ `computeRoleBuildsFromPlans`（方案侧每角色 Top 音擎/套装，与 workshop-grad 结构一致供对比）；
-- `teamStats.js`：`computeTeamStats(plans, charNames)` —— 配队推荐统计（原「角色配队」面板已移除，保留模块与测试）；
-- `panelBench.js`：`traitKeyStats`（特性→关键属性模板）+ `computeRecHighStats`（推荐 high 档毕业值聚合）+ **`computeRecTierStats`**（推荐三档 low/mid/high 的 mean/median/sd/cv，过滤 low=mid=0 占位，统计视图消费，结果有缓存）+ `buildPanelBenchmark`（推荐 high/玩家样本/我的 final 合并为每角色全属性）；
-- `panelRange.js`：`computePanelRanges(plans)`（方案 panel 三档区间，当前未被 web 引用，仅测试）；
-- `distStats.js`：分布统计（`quantile`/`median`/`sd`/`skew`/`kurt`/`pearson`/`computeDist`/`computePowerScore`/`kmeans`/`tierFit`）——workshopStats 与 panelBench 共用；
-- `wengineStats.js`：`computeWengineStats(plans, wengineNames)`（每音擎使用角色/主备占比，无生产消费，保留）。
+- `panelBench.js`：**`computeRecTierStats`**（推荐三档 low/mid/high 的 mean/median/sd/cv，MAD 排除离群哨兵值，过滤 low=mid=0 占位，统计视图消费，结果有缓存）nal 合并为每角色全属性）；
+- `distStats.js`：分布统计（`quantile`/`median`/`sd`/`skew`/`kurt`/`pearson`/`computeDist`/`kmeans`）——workshopStats 与 panelBench 共用；
 
 ---
 
@@ -330,7 +326,7 @@ zzz/
 
 ### 7.9 recommend.js —— 统计视图容器（最大 web 文件，56KB）
 - 仿 wiki.js：`TABS`（角色面板 detail / 驱动盘 discs / 全服总览 overview / **待定 pending**）+ `PANEL_RENDERERS` + 共享排序 `recSort`；
-- `roleKeyedMap`：role_id 键的 stats（relicStats/rankLayers/rankDist/skillStats/roleCooccurrence/rankRelic/skillCombos/rollEfficiency）统一映射到 plans 角色名（grad 名对齐）；WeakMap 缓存；
+- `roleKeyedMap`：role_id 键的 stats（relicStats/rankDist/skillStats/roleCooccurrence/rankRelic/skillCombos/rollEfficiency）统一映射到 plans 角色名（grad 名对齐）；WeakMap 缓存；
 - 「角色面板」：**流派分析卡**（roleStyles 占比堆叠条 + 典型面板表 + 456/套装/音擎偏好 + `styleMatch` 我的联动）+ 玩家分布小提琴箱线（叠加推荐三档点 + 我的）+ 推荐三档增强图 + 面板属性对密度散点 + 技能对标分布图（`OFFICIAL_SKILL_TYPE` 映射我的等级）+ 技能组合卡 + **角色配装对标卡**（`computeRoleBuildsFromPlans` 方案侧 vs workshop-grad 实况并排 + 差异分析）+ **配队亲和卡**（roleCooccurrence 玩家实配 vs plans team 攻略配队 Top6）；
 - 「全服总览」：共识度散点大图 + 影画×装配评分条 + 评分×盘毕业度（D9）；
 - 「待定」：**提升清单**（缺口×落后度 Top12）+ **面板达标**（平均落后度重排，悬浮带缺口）+ **驱动盘毕业度**（有效强化次数口径：rollEfficiency.weights → Disc.getHitCount → discDetails.effDist 百分位 + 主词条主流对照 + 替换建议）+ **两源一致性审计**（sourceAudit 表，按每角色最大 |diff| 降序，绿<5%/橙≥5%/红≥10%，本·比格 -41.5% 成因写进悬浮）；

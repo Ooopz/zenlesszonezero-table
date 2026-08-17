@@ -642,10 +642,6 @@ export function render() {
     return;
   }
   const list = myCharacters;
-  if (!list.length) {
-    grid.innerHTML = myCharsShell('<div class="empty">没有匹配的角色。<br>试试调整或清空筛选条件。</div>');
-    return;
-  }
   // 兼容旧配置 card/table 视图值 → 初始化子页面 tab
   if (legacy === VIEWS.TABLE) myTab = 'table';
   else if (legacy === VIEWS.CARD) myTab = 'card';

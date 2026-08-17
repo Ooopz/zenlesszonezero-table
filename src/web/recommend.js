@@ -28,6 +28,7 @@ import {
   tierRichOption,
   rankRelicGapOption,
   scoreRelicOption,
+  roleOwnershipOption,
 } from './charts.js';
 export let recommendTab = 'detail';
 export function setRecommendTab(key) {
@@ -457,10 +458,25 @@ function renderOverview() {
 
   // 两源一致性审计已移至「待定」面板（auditCard()，见模块底部 2026-10）
 
+  
+  // 5. 角色拥有率：样本池（全部上榜去重 uid）中拥有该角色的占比，降序排列
+  const ownMap = roleKeyedMap(workshopStats.roleOwnership);
+  const poolUids = workshopStats.meta?.poolUids || 0;
+  const ownRows = [];
+  for (const name of roleNames) {
+    const rate = ownMap.get(name);
+    if (rate == null || !poolUids) continue;
+    ownRows.push({ name, rate: rate * 100, n: Math.round(rate * poolUids), pool: poolUids });
+  }
+  ownRows.sort((a, b) => b.rate - a.rate);
+  if (ownRows.length) registerChart('overview-ownership', roleOwnershipOption(ownRows));
+  const ownTip = `<b>角色拥有率</b><br><span style="color:var(--dim)">口径：工坊配装样本池（排行榜上榜玩家的去重 uid 池，${poolUids.toLocaleString()} 人）中<b>拥有该角色</b>（该 uid 的账号数据里练了这个角色）的占比。<br>占比越高说明该角色在高练度玩家中越普及；结合「装配评分/影画」看：高拥有率 + 高练度 = 该角色的养成基准。</span>`;
+
   return `<div class="chart-grid">
     ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(consensusTip)}">玩家分化 vs 攻略分歧</h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
     ${rrRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(rrTip)}">影画 × 装配评分</h3>${chartBox('overview-rank-relic', Math.max(320, rrRows.length * 16))}</div>` : ''}
     ${srRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(srTip)}">评分 × 盘毕业度</h3>${chartBox('overview-score-relic', Math.max(320, srRows.length * 16))}</div>` : ''}
+    ${ownRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(ownTip)}">角色拥有率</h3>${chartBox('overview-ownership', Math.max(320, ownRows.length * 16))}</div>` : ''}
     ${progressCardsHtml()}
   </div>`;
 }

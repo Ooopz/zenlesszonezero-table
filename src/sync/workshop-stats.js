@@ -65,8 +65,6 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     discDetails, // 驱动盘单盘真实统计（含 D7 套装×槽位 slotDist、有效强化次数 effDist）
     panelScatter, // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
     // 练度指标：评分分布 / 影画占比 / 技能练度 / 角色盘画像
-    //（rankLayers 仍在 computeAllWorkshopStats 里产出，但**不写入** stats 文件：前端从无消费点，
-    //  却占 348KB / 17.7% 的浏览器载荷。需要时从 computeRankLayers 单独重算即可。）
     relicStats,
     rankDist,
     skillStats,
@@ -80,10 +78,16 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     sourceAudit,
     // 2026-10 新增：角色流派分析（面板 k-means，每角色 3 流派 + 典型面板）
     roleStyles,
+    // 角色拥有率（样本池口径）：{pool, roles}，pool=去重 uid 总数
+    roleOwnership,
     // weightJson 同时供 effDist 的「按角色区分有效副词条」与 rollEfficiency 使用，必须在聚合前传入
   } = computeAllWorkshopStats(iterWorkshopEntries(), libDiscs, { roleNameMap, weightJson, traits });
   const data = {
-    meta: { scrapedAt: new Date().toISOString(), entries: totalEntries ?? -1 },
+    meta: {
+      scrapedAt: new Date().toISOString(),
+      entries: totalEntries ?? -1,
+      poolUids: roleOwnership?.pool ?? 0,
+    },
     ...stats,
     discDetails,
     panelCorr,
@@ -98,6 +102,7 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     rollEfficiency,
     sourceAudit,
     roleStyles,
+    roleOwnership: roleOwnership?.roles || {},
   };
   // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;

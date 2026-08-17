@@ -4,7 +4,7 @@
 //       ③ 提供 /api/data 让前端读取 data/*.json 数据；
 //       ④ cookie 缓存到本地文件，更新时无需反复粘贴。
 //
-// 运行:  npm start   或   node server.js   →  浏览器打开 http://localhost:8718
+// 运行:  npm start   或   node server.js   →  浏览器打开 http://localhost:8719
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -48,6 +48,22 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
 };
+
+/** 静态资源 gzip 压缩：只压文本类（字体/图片本身已压缩，压了白费 CPU）。
+ *  压缩结果按「真实路径:mtime」缓存，文件未变则复用，避免每个请求重复 gzipSync。 */
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.json', '.css', '.svg', '.md', '.txt']);
+const gzipCache = new Map();
+function gzipFor(realPath, mtimeMs, data) {
+  const key = realPath + ':' + mtimeMs;
+  let gz = gzipCache.get(key);
+  if (!gz) {
+    gz = zlib.gzipSync(data, { level: 6 });
+    // 防缓存无限增长（正常场景只有几十个静态文件；文件更新时按 mtime 换键，旧键顺手清掉）
+    if (gzipCache.size > 200) gzipCache.clear();
+    gzipCache.set(key, gz);
+  }
+  return gz;
+}
 
 /** 简易「正在同步」互斥锁，避免两个同步同时写数据文件 */
 let busy = null;
@@ -133,17 +149,43 @@ function serveStatic(req, res) {
       res.writeHead(403);
       return res.end('Forbidden');
     }
-    fs.readFile(realPath, (err, data) => {
-      if (err) {
+    // 协商缓存：no-cache（仍需每次向服务器确认）+ Last-Modified 条件请求。
+    // 与 no-store 同等新鲜度（文件一变 Last-Modified 就变 → 200 全量），但未变时回 304 空响应——
+    // 字体/echarts 等静态资源合计 ~19MB，no-store 下每次刷新都全量重下（页面加载慢的主因）。
+    fs.stat(realPath, (sErr, st) => {
+      if (sErr) {
         res.writeHead(404);
         return res.end('Not Found');
       }
-      // no-store：彻底禁止缓存，任何改动强刷后必然加载最新资源（如 JS 修复不生效的常见原因）
-      res.writeHead(200, {
-        'Content-Type': MIME[path.extname(realPath)] || 'application/octet-stream',
-        'Cache-Control': 'no-store',
+      const lastMod = st.mtime.toUTCString();
+      if (req.headers['if-modified-since'] === lastMod) {
+        res.writeHead(304, { 'Last-Modified': lastMod, 'Cache-Control': 'no-cache' });
+        return res.end();
+      }
+      fs.readFile(realPath, (err, data) => {
+        if (err) {
+          res.writeHead(404);
+          return res.end('Not Found');
+        }
+        const headers = {
+          'Content-Type': MIME[path.extname(realPath)] || 'application/octet-stream',
+          'Cache-Control': 'no-cache',
+          'Last-Modified': lastMod,
+        };
+        // 文本类静态资源（echarts/JS/CSS/HTML）按 Accept-Encoding gzip 下发，大幅减少首屏传输
+        // Content-Encoding/Length 必须在 writeHead 之前设好（writeHead 发送的是调用时刻的快照）
+        const wantsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+        if (wantsGzip && COMPRESSIBLE.has(path.extname(realPath))) {
+          const gz = gzipFor(realPath, st.mtimeMs, data);
+          headers['Content-Encoding'] = 'gzip';
+          headers['Content-Length'] = gz.length;
+          res.writeHead(200, headers);
+          return res.end(gz);
+        }
+        headers['Content-Length'] = data.length;
+        res.writeHead(200, headers);
+        res.end(data);
       });
-      res.end(data);
     });
   });
 }
