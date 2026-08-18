@@ -1,9 +1,5 @@
-// src/sync/library.js —— 从米游社 wiki API 抓取绝区零「角色 / 音擎 / 驱动盘」基础属性库
-//
-// 运行:  npm run sync:library    （或 node src/sync/library.js）
-// 输出:  ① data/library.json    —— 解析后的属性库
-//        ② data/raw-library.json —— 每个 entry_page 的原始响应快照（日后备用）
-//
+// src/sync/library.js —— 从米游社 wiki API 抓取「角色 / 音擎 / 驱动盘」基础属性库
+// 运行: npm run sync:library（或 node src/sync/library.js）→ 输出 data/library.json
 // 依赖 Node 18+（自带 fetch），无需安装任何包。
 
 import fs from 'node:fs';
@@ -11,7 +7,7 @@ import path from 'node:path';
 import { stripHtml, normalizeStatKey, normalizeStatKeys, parseNum, decodeHtmlEntities } from '../lib/util.js';
 import { validateLibrary } from '../lib/schema.js';
 import { isMain, writeDataFile, DATA_DIR, pool } from '../lib/node.js';
-import { requestJson, retry } from './http.js';
+import { requestJson, retry } from './mihoyo-api.js';
 
 // ---------- 图片本地化（原 library-img.js 合并进来） ----------
 const IMG_DIR = path.join(DATA_DIR, 'img');
@@ -43,8 +39,7 @@ async function img(url, base) {
     return url;
   }
 }
-/** 对 library.json / characters.json 做图片本地化（下载到 data/img/ 并替换为本地路径）。
- *  同步（sync-library / sync-characters）后调用，避免重新抓取后图片回到远程。 */
+/** 图片本地化：把 library.json / characters.json 的图片下载到 data/img/ 并替换为本地路径（同步后调用，避免重新抓取后图片回到远程） */
 export async function localizeDataFiles() {
   fs.mkdirSync(IMG_DIR, { recursive: true });
   const stats = {};
@@ -111,8 +106,7 @@ function parseComponentData(comp) {
   return data || null;
 }
 
-/** 从 HTML 文本里抽出「名称：值」对，返回 {规范名: 数值}。值带 % 转成小数；
- *  键名统一归一化（页面各角色用词不一：生命/生命力/攻击/防御 → 生命值/攻击力/防御力）。 */
+/** 从 HTML 文本抽出「名称：值」对（值带 % 转小数），键名归一化（页面用词不一：生命/攻击/防御 → 生命值/攻击力/防御力） */
 function parseStatPairs(html) {
   const text = stripHtml(html);
   const out = {};
@@ -124,8 +118,7 @@ function parseStatPairs(html) {
   return normalizeStatKeys(out);
 }
 
-/** 从「属性+数值」文本（如 基础攻击力+665、攻击力+36%、防御力+16%）解析为 {属性: 数值}。
- *  部分套装文本用全角符号（如「异常精通＋30点」），需同时匹配半角 +- 与全角 ＋－。 */
+/** 从「属性+数值」文本（如 基础攻击力+665）解析为 {属性: 数值}；套装文本可能用全角 ＋－，需同时匹配 */
 function parseSignedStat(text) {
   const s = stripHtml(text);
   const m = s.match(/([一-鿿A-Za-z]+)([+\-＋－])([\d.]+%?)/);
@@ -170,7 +163,6 @@ async function fetchDetail(id) {
   return jso.data.page;
 }
 
-/** 在页面的所有模块里，找到第一个满足谓词的组件数据 */
 function findModule(page, predicate) {
   for (const m of page.modules || []) {
     for (const c of m.components || []) {
@@ -181,7 +173,6 @@ function findModule(page, predicate) {
   return null;
 }
 
-/** 解析 fe_ext（字符串 JSON） */
 function parseFe(page) {
   try {
     return JSON.parse(page.ext?.fe_ext || '{}');
@@ -244,8 +235,7 @@ function findEffectStart(html) {
   return before >= 0 ? before : m.index;
 }
 
-/** 音擎：特效效果说明（含各精炼档位数值）。
- *  结构不统一：有的「音擎效果」表单独一行是特效，有的特效与「满级面板」挤在同一格。 */
+/** 音擎特效说明（含各精炼档位数值）；页面结构不统一：特效可能独占一行，也可能与「满级面板」挤同一格 */
 function fetchWengineEffect(page) {
   for (const m of page.modules || []) {
     for (const c of m.components || []) {
@@ -266,9 +256,8 @@ function fetchWengineEffect(page) {
               if (fxStart != null) return html.slice(fxStart);
               continue;
             }
-            // 情形②：纯特效格（含「档位数值」+ 效果关键词）→ 返回原始 HTML
-            // 档位可能是百分比（8%/9%）也可能是点数（30/34），故模式为 数字(可选%)/数字(可选%)；
-            // 注意斜杠两侧必须是数字（「特殊技/强化特殊技」这类中文斜杠不会误判）
+            // 情形②：纯特效格（档位数值 + 效果关键词）→ 返回原始 HTML；档位可能是百分比（8%/9%）或点数（30/34），
+            // 斜杠两侧必须是数字（「特殊技/强化特殊技」这类中文斜杠不误判）
             if (
               /(\d+(\.\d+)?%?\s*\/\s*\d+(\.\d+)?%?)/.test(txt) &&
               /(提升|触发|造成|伤害|精通|暴击|防御|冲击|异常)/.test(txt) &&
@@ -283,9 +272,8 @@ function fetchWengineEffect(page) {
   return null;
 }
 
-/** 音擎：满级(Lv60) 基础攻击力 + 副属性 + 特效
- *  注意：attr 表只到 Lv50（最后一次突破），真正的满级数值在「满级面板：…」文本里，
- *  因此优先解析「满级面板」，找不到时回退到 attr 最后一组。 */
+/** 音擎满级(Lv60) 基础攻击力 + 副属性 + 特效。
+ *  attr 表只到 Lv50（最后一次突破），满级数值在「满级面板：…」文本里——优先解析它，找不到回退 attr 最后一组 */
 function fetchWengineStats(page) {
   const specialEffect = fetchWengineEffect(page);
   // ① 优先：满级面板文本
@@ -330,8 +318,7 @@ function fetchWengineStats(page) {
   };
 }
 
-/** 驱动盘圆形光盘图标：modules 里出现次数最多的图片（圆形图标多尺寸变体，区别于方形主图 icon_url）。
- *  规律：驱动盘页面 modules 里圆形光盘图有 6 个尺寸变体（出现 6 次），其他图出现 2 次。 */
+/** 驱动盘圆形图标：取 modules 中出现次数最多的图片——圆形图有 6 个尺寸变体（出现 6 次），其他图 2 次 */
 function fetchDiscRound(page) {
   const s = JSON.stringify(page.modules || '');
   const count = {};
@@ -372,7 +359,7 @@ function fetchDiscSet(page) {
       out.set4Text = item.value;
     }
   }
-  // 二/四件套说明优先取模块套装表格（含富文本 HTML，如 <span style="color">、<color=>），由前端 renderRichText 渲染
+  // 二/四件套说明优先取套装表格（含富文本 HTML），由前端 renderRichText 渲染
   const setTable = findModule(
     page,
     (d) => Array.isArray(d.tables) && d.tables.some((t) => (t.header || []).join(',') === '二件套,四件套')
@@ -387,7 +374,7 @@ function fetchDiscSet(page) {
 
 // ---------------- 全量扩展解析 ----------------
 
-/** 提取推荐角色/代理人：tables 中 header 含"推荐"的表，row 里取 data-entry-name 或首格文本 */
+/** 提取推荐角色：header 含「推荐」的表，取 data-entry-name 或首格文本 */
 function fetchRecommend(page) {
   const rec = findModule(
     page,
@@ -415,13 +402,9 @@ function fetchMaterials(page) {
     .filter((m) => m.name);
 }
 
-/** 把技能「详细数据」的 HTML 拆成逐行数值 [{k, v}]。
- *  实测 22000+ 行全部为「每行一段 <p>」；段内以「名称：数值」为基本单元：
- *  - 冒号后紧跟数值（数字/正负号/百分号）才算分隔符——「蓄力伤害倍率：215%炮击伤害倍率：215%」可拆成多对；
- *  - 值从冒号后取「数值 token」（含 %、+固定值、点/秒 等单位），如 215% / 20点/秒 / 13.8%+44；
- *  - 技能名自身含冒号的（如「强化特殊技：极寒重碾伤害倍率：1007.6%」），前面的冒号后不是数值，自然不拆分；
- *  - 值以中文开头（如「攻击力提升：露西攻击力13.8%+44」）视为纯说明。
- *  纯说明段落返回 { k:null, v:整段 }；完全解析不出返回空数组。 */
+/** 把技能「详细数据」HTML 拆成逐行数值 [{k, v}]（实测每行一段 <p>）。
+ *  分隔符规则：冒号后紧跟数值才算——「蓄力伤害倍率：215%炮击伤害倍率：215%」可拆多对；
+ *  技能名自身含冒号（「强化特殊技：极寒重碾…」）或值以中文开头视为纯说明（{k:null, v:整段}）。 */
 export function parseSkillValueLines(html) {
   const paras = String(html || '')
     .match(/<p[^>]*>([\s\S]*?)<\/p>/gi)
@@ -458,8 +441,7 @@ export function parseSkillValueLines(html) {
   return lines;
 }
 
-/** 占位分组名（wiki 源数据的内部名：分类1/分类2/强化效果/空）→ 推导有意义的列名。
- *  从行键取「公共后缀」（轻/重/连续招架失衡倍率 → 招架失衡倍率），单行取该行键，回退首行键。 */
+/** 占位分组名（分类1/分类2/强化效果/空）→ 推导有意义列名：取行键公共后缀（轻/重/连续招架失衡倍率 → 招架失衡倍率），单行取该行键 */
 function deriveGroupName(lines) {
   const keys = (lines || []).map((l) => l.k).filter((k) => k != null && k);
   if (!keys.length) return '说明';
@@ -474,10 +456,8 @@ function deriveGroupName(lines) {
 }
 const isJunkGroupName = (n) => /^(分类\d*|强化效果|)$/.test((n || '').trim());
 
-/** 技能条目的每级数值：把 children 的 growth（每级一组「详细数据」）结构化。
- *  数字档（普攻/闪避/支援/特殊/终结为 1-16）每级 → { level, groups: [{ name, lines: [{k,v}] }] }；
- *  核心技 A-F 档（字母档）每级取开头基础提升（text）+ data-name 内嵌被动详情（rich，数值随档位递增）。
- *  行文本解析不出 名称：数值 时退化存 text；无任何档位返回 null。 */
+/** 技能每级数值：数字档（1-16）→ {level, groups:[{name, lines}]}；核心技 A-F 档取开头基础提升 + data-name 被动详情。
+ *  解析不出 名称：数值 时退化存 text；无档位返回 null。 */
 function parseSkillGrowth(ch) {
   const out = [];
   for (const g of ch.growth || []) {
@@ -560,13 +540,9 @@ const coreStatAlias = {
   穿透率: '穿透率',
 };
 
-/** 核心技 A-F 档位开头的基础面板提升（如「暴击率提升4.8%」「基础攻击力提升25点」），
- *  按档存储为增量数组：第 i 项 = 第 i 档（A-F 顺序）给的基础提升，对应核心技等级 i+2
- *  （核心被动初始 1 级，每升一档 +1，满级 7 = A-F 全升）。基础提升固定位于档位文本开头，
- *  仅匹配开头（^）与白名单属性名，天然跳过条件性/招式增强（如「猫又处于[肉球突袭]状态时暴击伤害提升20%」开头即不匹配）。
- *  数字档（2-6）是核心被动增强而非基础面板提升，不在此列。百分比值除以 100 归一化。
- *  同时提取各档位内嵌 data-name 的核心被动完整说明：数值逐档递增，wiki 标注「此处数据为初始数据」仅指 A 档；
- *  末档（遍历顺序即档位顺序，最后覆盖的是最高档）即满级数据，存为 passiveMax 供前端展示。 */
+/** 核心技 A-F 档开头的基础面板提升（如「暴击率提升4.8%」），按档存增量数组：第 i 项 = 第 i 档（对应核心技等级 i+2）。
+ *  仅匹配开头 + 白名单属性名，天然跳过条件性/招式增强（如「猫又处于[肉球突袭]状态时…」开头即不匹配）；% 除 100。
+ *  同时提取各档 data-name 被动详情：数值逐档递增，末档即满级数据存 passiveMax。 */
 function fetchCoreSkill(page) {
   const boost = [];
   let passiveMax = null;
@@ -578,7 +554,7 @@ function fetchCoreSkill(page) {
         if (it.tab_name !== '核心技') continue;
         for (const ch of it.children || []) {
           for (const g of ch.growth || []) {
-            if (!/^[A-F]$/.test(g.name)) continue; // 仅 A-F 档
+            if (!/^[A-F]$/.test(g.name)) continue;
             const html = g.children?.[0]?.row?.[0]?.[0] || '';
             const txt = stripHtml(html);
             const entry = {};
@@ -619,9 +595,7 @@ function fetchCharacterTachie(page) {
       try {
         const d = JSON.parse(comp.data);
         if (typeof d.tachie_m === 'string' && d.tachie_m) return d.tachie_m;
-      } catch {
-        /* 组件 data 解析失败则忽略 */
-      }
+      } catch { /* 非 JSON 模块，跳过 */ }
     }
   }
   return null;
@@ -705,10 +679,8 @@ export function fetchBangboo(page) {
   return out;
 }
 
-/** 邦布：初始/满级基础属性（role_ascension 组件的 tab 列表，其余为突破档）。
- *  页面用词不一：初始档「初始等级」/「初始数据」、满级档「满级属性」/「满级数据」；
- *  部分键带前导空格（如罗宾满级 tab）、幽浮布把「生命值」写成「生命指」——统一 trim + normalizeStatKeys。
- *  值与角色成长表同构（百分比带 % 归一成小数）。 */
+/** 邦布初始/满级基础属性（role_ascension 组件的 tab 列表）。
+ *  页面用词不一（初始等级/初始数据、满级属性/满级数据），部分键带前导空格、幽浮布把「生命值」写「生命指」——统一 trim + normalizeStatKeys */
 function fetchBangbooBaseStats(page) {
   const out = {};
   const comp = findModule(page, (d) => Array.isArray(d?.list) && d.list.some((t) => Array.isArray(t.attr)));
@@ -731,8 +703,7 @@ function fetchBangbooBaseStats(page) {
   return out;
 }
 
-/** 邦布属性（元素）：取主动/连携技描述里的「造成X(属性)伤害」首个命中（如「火属性伤害」「以太伤害」），
- *  雷归一到电；描述不提元素（支援型邦布）时返回空。被动技的「[X属性]角色」是配队条件、非自身属性，不取。 */
+/** 邦布元素：取主动/连携技描述里首个「造成X伤害」命中（雷归一到电）；被动技的「[X属性]角色」是配队条件、非自身属性，不取 */
 function fetchBangbooElement(skills) {
   const texts = [];
   for (const s of skills || []) {
@@ -745,15 +716,10 @@ function fetchBangbooElement(skills) {
 
 // ---------------- 主流程 ----------------
 
-/** 抓取并组装属性库，写入 data/library.json 与 data/raw-library.json。
- *  onProgress 可选回调，上报 { step, done, total } 供同步进度展示。
- *  opts.strict 为 true 时校验异常直接抛错（命令行 STRICT=1 开启）。 */
+/** 抓取并组装属性库写入 data/library.json；onProgress 上报进度 {step, done, total}，strict 时校验异常抛错（STRICT=1） */
 export async function fetchLibrary(onProgress, { strict = false } = {}) {
   console.log('① 获取内容列表…');
   const list = await fetchContentList();
-
-  // 原始响应快照：{ characters: {名字: page}, wengines: {...}, discs: {...} }
-  const raw = { characters: {}, wengines: {}, discs: {}, bangboos: {} };
 
   console.log('② 抓取角色详情…');
   const characters = await pool(
@@ -761,7 +727,6 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     6,
     async (x) => {
       const page = await fetchDetail(x.id);
-      raw.characters[x.key] = page;
       return {
         name: stripHtml(page.name || x.key),
         key: x.key,
@@ -785,7 +750,6 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     6,
     async (x) => {
       const page = await fetchDetail(x.id);
-      raw.wengines[x.key] = page;
       return {
         name: stripHtml(page.name || x.key),
         key: x.key,
@@ -809,7 +773,6 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     6,
     async (x) => {
       const page = await fetchDetail(x.id);
-      raw.discs[x.key] = page;
       return {
         name: stripHtml(page.name || x.key),
         key: x.key,
@@ -829,7 +792,6 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     6,
     async (x) => {
       const page = await fetchDetail(x.id);
-      raw.bangboos[x.key] = page;
       // 稀有度取自 fe_ext.c_44（仅稀有度）
       const rarity =
         parseTagList(parseFe(page), 'c_44')
@@ -897,12 +859,10 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
     bangboos: Object.keys(bangbooLib).length,
   };
 
-  // 校验 + 写入 data/。library.json 用紧凑格式：技能每级数值（growth）嵌套 5 层，
-  // pretty 缩进会膨胀到 ~11MB，紧凑仅 ~3.5MB；raw-library.json 为原始响应快照（日后备用）
+  // library.json 用紧凑格式：技能 growth 嵌套 5 层，pretty 会膨胀到 ~11MB，紧凑仅 ~3.5MB
   writeDataFile('library.json', library, { label: '属性库', validate: validateLibrary, strict, pretty: false });
-  writeDataFile('raw-library.json', raw, { pretty: false });
 
-  // 图片本地化：更新 wiki 后同步下载 library 图片到 data/img/（与 wiki 数据绑定）
+  // 图片本地化：同步下载 library 图片到 data/img/
   await localizeDataFiles();
 
   return { library, stats };
@@ -915,7 +875,6 @@ async function main() {
     `  角色 ${stats.characters} 个，音擎 ${stats.wengines} 个，驱动盘 ${stats.discs} 个，邦布 ${stats.bangboos} 个`
   );
   console.log('  data/library.json 已生成（含介绍/技能/影画/推荐等扩展字段）');
-  console.log('  data/raw-library.json 已生成（原始响应快照）');
 }
 
 // ESM 入口判断：仅当直接运行本文件时执行 main()

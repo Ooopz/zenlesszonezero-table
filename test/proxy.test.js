@@ -1,6 +1,5 @@
 // test/proxy.test.js —— 代理隧道自测（src/sync/proxy.js）
-// 用本地 mock 目标服务器 + mock HTTP CONNECT 代理 / mock SOCKS5 代理做端到端验证：
-// content-length / chunked / gzip / POST / 代理认证 / 主机过滤 各路径全覆盖。
+// 用本地 mock 目标服务器 + mock CONNECT/SOCKS5 代理端到端验证：content-length/chunked/gzip/POST/认证/主机过滤全覆盖。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';

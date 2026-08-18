@@ -1,14 +1,11 @@
 // src/lib/names.js —— 统一名称解析：跨数据源（library/wiki、账号、养成指南、工坊）名称变体 → 标准名
-// library.json 是标准名权威源（对象键 === 条目 name）。本模块集中「类别归一化键 + 手工别名表」，
-// 同步脚本写时固化、消费端统一解析都走这里，避免各处打补丁。
-// 注意：双端共用（Node 与浏览器均可 import），禁止 import 任何 node: 模块。
+// library.json 为权威源；集中「类别归一化键 + 手工别名表」，同步写时固化、消费端解析都走这里。
+// 双端共用，禁止 import 任何 node: 模块。
 import { normalize, normalizeRomanKey } from './util.js';
 
-/** 实体类别 */
 export const CATEGORY = { CHAR: 'char', WENGINE: 'wengine', DISC: 'disc', BANGBOO: 'bangboo' };
 
-/** 各类别归一化键：char/disc/bangboo 用 normalize（只留中文数字）；
- *  wengine 必须用 normalizeRomanKey —— normalize 会剥光罗马数字，使 残响-Ⅰ/Ⅱ/Ⅲ 三个系列键碰撞。 */
+/** 归一化键：char/disc/bangboo 用 normalize；wengine 必须用 normalizeRomanKey —— normalize 会剥光罗马数字，使 残响-Ⅰ/Ⅱ/Ⅲ 系列键碰撞 */
 const CATEGORY_KEY = {
   [CATEGORY.CHAR]: normalize,
   [CATEGORY.WENGINE]: normalizeRomanKey,
@@ -31,21 +28,17 @@ export const ALIASES = {
   [CATEGORY.BANGBOO]: {},
 };
 
-/** 类别别名表便捷引用（CHAR_ALIASES 供 recommend.js 使用；DISC_ALIASES 仅测试使用） */
+/** 类别别名表便捷引用（CHAR_ALIASES 供 statsView.js 使用；DISC_ALIASES 仅测试使用） */
 export const CHAR_ALIASES = ALIASES[CATEGORY.CHAR];
 export const DISC_ALIASES = ALIASES[CATEGORY.DISC];
 
 /**
  * 构建名称索引。
- * @param {object|string[]} names  object: {规范名: 条目}（library 表 / 实例集合）
- *                                  array : [规范名, ...]（纯函数只关心名字集合时用）
+ * @param {object|string[]} names  {规范名:条目}（library 表/实例集合）或 [规范名,…]（纯函数用）
  * @param {string} category  实体类别（CATEGORY.*）
- * @returns {{lib:object|null, category:string, keyFn:Function, names:string[], keys:string[],
- *            byKey:Map, byAlias:Map, byAliasKey:Map}}
- *   keys        各规范名的归一化键（与 names 同序，供子串兜底复用，避免每次重算）
- *   byKey       归一化键(规范名) → 规范名（首见优先）
- *   byAlias     变体原串 → 规范名（仅收录规范名在集合内的，防脏别名）
- *   byAliasKey  归一化键(变体) → 规范名（处理变体带空白/标点）
+ * @returns {{lib, category, keyFn, names, keys, byKey, byAlias, byAliasKey}}
+ *   keys = 各规范名的归一化键（与 names 同序，供子串兜底复用）；byKey/byAlias/byAliasKey 均首见优先，
+ *   byAlias 仅收录规范名在集合内的变体（防脏别名）。
  */
 export function buildNameIndex(names, category) {
   const isArray = Array.isArray(names);
@@ -63,7 +56,7 @@ export function buildNameIndex(names, category) {
     if (!byKey.has(k)) byKey.set(k, name);
   }
   for (const [variant, canonical] of Object.entries(aliases)) {
-    if (!list.includes(canonical)) continue; // 规范名不在集合 → 跳过
+    if (!list.includes(canonical)) continue;
     if (!byAlias.has(variant)) byAlias.set(variant, canonical);
     const k = keyFn(variant);
     if (!byAliasKey.has(k)) byAliasKey.set(k, canonical);
@@ -72,21 +65,15 @@ export function buildNameIndex(names, category) {
 }
 
 /**
- * 解析任意变体名 → 标准名与条目。解析链：精确 → 别名(原串) → 别名(归一化键) → 归一化键 → 子串(char 专属)。
- * 歧义确定性：精确/别名优先于子串（如「比利·奇德」精确命中自己，「星徽·比利」走显式别名），
- * 子串兜底取最短规范名，同长按 zh localeCompare，结果确定。
- * @param {string} category  实体类别
- * @param {object} index     buildNameIndex 的产物
- * @param {string} rawName   变体名
- * @param {{fuzzy?:boolean}} opts  fuzzy=false 关闭子串兜底（默认 char 开、其余关）
- * @returns {{name:string, entry:object|null, matchedBy:string}|null}
+ * 解析变体名 → 标准名。解析链：精确 → 别名(原串) → 别名(归一化键) → 归一化键 → 子串(char 专属)。
+ * 歧义确定性：精确/别名优先于子串；子串兜底取最短规范名、同长按 zh localeCompare（结果确定）。
+ * fuzzy=false 关闭子串兜底（默认 char 开、其余关）。
  */
 export function resolveName(category, index, rawName, opts = {}) {
   if (rawName == null || rawName === '' || !index) return null;
   const keyFn = index.keyFn || CATEGORY_KEY[category] || normalize;
   const fuzzy = opts.fuzzy !== undefined ? opts.fuzzy : category === CATEGORY.CHAR;
-  // 对未构建（空对象/旧格式）索引防御：Map 字段缺失时视为无命中
-  // hasOwnProperty 而非 in：防止 rawName 命中 Object.prototype 成员（如 "constructor"）造成伪命中
+  // 未构建（空/旧格式）索引防御；hasOwnProperty 而非 in：防 rawName 命中 Object.prototype（如 "constructor"）伪命中
   if (index.lib && Object.prototype.hasOwnProperty.call(index.lib, rawName))
     return { name: rawName, entry: index.lib[rawName], matchedBy: 'exact' };
   let canonical = index.byAlias?.get(rawName);
@@ -107,8 +94,7 @@ export function resolveName(category, index, rawName, opts = {}) {
   return null;
 }
 
-/** 子串兜底：归一化键互相包含；确定性 = 最短规范名优先，同长按 zh localeCompare。
- *  归一化键在 buildNameIndex 时已预计算（index.keys），避免每次解析都对全部名字重算 keyFn。 */
+/** 子串兜底：归一化键互相包含，取最短规范名（同长 zh 排序）；index.keys 预计算避免每次重算 keyFn */
 function substringMatch(index, rawKey) {
   if (!rawKey) return null;
   const keys = index.keys || index.names.map(index.keyFn);
@@ -132,8 +118,7 @@ export function canonicalName(category, index, rawName, opts) {
   return resolveName(category, index, rawName, opts)?.name ?? null;
 }
 
-/** 写时固化便捷封装：解析为标准名，未命中保留原名；返回 { name, changed }（changed 表示发生替换）。
- *  同步脚本写前归一（characters/plans/workshop）共用，消除各处「resolve→比对→计数」重复。 */
+/** 写时固化便捷封装：解析为标准名，未命中保留原名；返回 { name, changed }（characters/plans/workshop 写前共用） */
 export function canonicalize(category, index, rawName, opts) {
   if (rawName == null || rawName === '') return { name: rawName, changed: false };
   const name = canonicalName(category, index, rawName, opts);

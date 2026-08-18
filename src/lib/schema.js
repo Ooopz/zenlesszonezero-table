@@ -1,5 +1,4 @@
-// src/lib/schema.js —— 数据 schema：集中定义实体结构，并提供校验
-// sync 脚本在写回 data/*.json 前调用校验，防止键不一致或结构漂移。
+// src/lib/schema.js —— 数据 schema 权威定义 + 校验：sync 脚本写回 data/*.json 前调用，防止键不一致或结构漂移
 // 无 node 依赖，Node 与浏览器均可 import。
 
 /** 数据键名（唯一权威定义，各文件构造/访问数据时以此为准） */
@@ -96,7 +95,6 @@ export function validateCharacter(c) {
   return errors;
 }
 
-/** 校验角色数组 */
 export function validateCharacters(arr) {
   if (!Array.isArray(arr)) return ['角色数据应为数组'];
   const errors = [];
@@ -134,7 +132,7 @@ export function validateLibrary(lib) {
     if (c.corePassiveMax !== undefined && typeof c.corePassiveMax !== 'string')
       err.push(`角色 ${k} corePassiveMax 应为字符串（核心被动满级描述）`);
     if (c.tachie !== undefined && typeof c.tachie !== 'string') err.push(`角色 ${k} tachie 应为字符串（立绘大图 URL）`);
-    // 技能每级数值：skills[].items[].growth 若存在应为数组（null/缺省 = 无每级数值；结构漂移会被同步脚本静默写坏）
+    // skills[].items[].growth 若存在应为数组（null/缺省 = 无每级数值；结构漂移会被同步脚本静默写坏）
     if (Array.isArray(c.skills))
       for (const s of c.skills)
         for (const it of s.items || [])
@@ -167,8 +165,7 @@ export function validatePlans(plans) {
   return errors;
 }
 
-/** 校验失败时打印 warning（不中断写入），供写入前调用。
- *  strict 为 true 时抛错中断——命令行同步可经 STRICT=1 开启（网页同步保持 warn，避免 wiki 解析偶发异常阻断整次同步）。 */
+/** 校验失败打印 warning 不中断写入；strict 时抛错（命令行 STRICT=1 开启，网页同步保持 warn 避免 wiki 解析偶发异常阻断整次同步） */
 export function warnIfInvalid(label, errors, { strict = false } = {}) {
   if (errors && errors.length) {
     console.warn(`[${label}] 结构校验发现 ${errors.length} 处异常:`);

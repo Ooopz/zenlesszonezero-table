@@ -569,16 +569,17 @@ main {
   grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
   gap: var(--sp-5);
 }
-/* 表格容器：body 级滚动后不再纵向限高内滚（表格完整展开，吸顶表头改相对视口）；
-   保留 overflow-x 横向滚动兜底（汇总表/数据库表列多，窄屏下防撑破布局） */
+/* 表格容器：body 级滚动，表格完整展开，吸顶表头相对视口吸在 header 之下（top: var(--head-h)）。
+   ⚠️ 这里不能加 overflow-x/overflow（含 clip）：CSS 规范下只要一个轴非 visible，另一轴的 visible
+   就被强制计算成 auto，包裹层即变成滚动容器 —— sticky 的 th 会改吸这个盒子而非视口，而包裹层没限高
+   永远不滚，表头就被恒定下推 --head-h 压住第一行（2026-11 回归 bug）。
+   宽表的横向滚动交给页面级滚动条兜底；容器内横滚与「吸视口」二者不可兼得。 */
 .wiki-wrap {
   min-width: 0;
-  overflow-x: auto;
 }
-/* 汇总表滚动容器（与 wiki-wrap 同一套：吸顶表头随视口滚动） */
+/* 汇总表容器（与 wiki-wrap 同一套：吸顶表头随视口滚动，同样禁止 overflow-x） */
 .tbl-wrap {
   min-width: 0;
-  overflow-x: auto;
 }
 /* ECharts 挂载容器（高度内联传入；宽度撑满卡片） */
 .chart-init {
@@ -1684,6 +1685,12 @@ main {
 }
 .style-table-wrap .rec-table {
   min-width: 560px;
+}
+/* 这两个统计表列宽有 min-width 硬需求，保留容器内横向滚动 → 它们就是滚动容器，
+   里面的 th 只能吸容器顶（top: 0）；沿用全局的 top: var(--head-h) 会被恒定下推压住第一行。 */
+.coverage-table-wrap .rec-table th,
+.style-table-wrap .rec-table th {
+  top: 0;
 }
 .style-mine {
   color: var(--hazard-lt);

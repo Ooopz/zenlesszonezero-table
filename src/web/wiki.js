@@ -4,7 +4,7 @@ import { renderRichText, escapeHtml, escapeJsAttr, statEntries, formatValue, isE
 import { createSort } from '../lib/sort.js';
 import { maxLevelStats, panelOrder } from '../lib/calc.js';
 import { STAT, SUBSTAT } from '../lib/constants.js';
-import { richItemHtml, skillIcon, registerZZZ } from './shared.js';
+import { richItemHtml, skillIcon, registerZZZ, tableHtml } from './shared.js';
 
 export let wikiTab = 'characters';
 export function setWikiTab(key) {
@@ -46,7 +46,6 @@ const INITIAL_STATS = [
 const MAX_STATS = maxLevelStats;
 // 邦布面板初始属性列：去掉邦布没有的 异常精通/能量自动回复（邦布数据恒为 —，无信息量）
 const BANG_INITIAL_STATS = INITIAL_STATS.filter((s) => s !== STAT.ANOMALY_PROF && s !== STAT.ENERGY);
-// 各子面板可点击排序的表头
 const CHAR_SORTABLE = new Set([
   '名称',
   '稀有度',
@@ -69,8 +68,7 @@ function statCells(obj, keys, merge) {
 }
 /** 穿透率列取值：普通角色取穿透率，命破角色（无穿透率）取贯穿力——展示层合并 */
 const penCell = (o) => o[STAT.PEN_RATE] ?? o[STAT.PIERCE];
-/** 核心技满级提升说明（悬浮在核心技图标上，取自 coreSkillBoost；X% 键为攻击/生命等百分比提升）。
- *  coreSkillBoost 为每档增量数组，满级提升 = 全部档位累计。 */
+/** 核心技满级提升（悬浮用）：coreSkillBoost 为每档增量，满级提升 = 全部档位累计；X% 键为百分比提升 */
 function coreBoostHtml(c) {
   const labels = {
     [STAT.ATK]: '基础攻击力',
@@ -97,8 +95,7 @@ function coreBoostHtml(c) {
   return parts.length ? `<div style="color:var(--green)">核心技满级提升：${parts.join('、')}</div>` : '';
 }
 
-/** 技能 items → HTML（角色/邦布共用）：name + 富文本 desc（条目结构走 shared.richItemHtml）；
- *  wrap 时每条包一层，否则按 sep 连接 */
+/** 技能 items → HTML（角色/邦布共用）；wrap 时每条包一层，否则按 sep 连接 */
 function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } = {}) {
   return s && s.items?.length
     ? s.items
@@ -110,8 +107,8 @@ function skillItemsHtml(s, { wrap = false, sep = '<div class="tip-hr"></div>' } 
     : '';
 }
 
-/** 行标签：与列名相同 → 只显数值；以列名结尾 → 去掉该前缀（一段伤害倍率 + 伤害倍率 → 一段）；否则原样。
- *  组名是通用量词时（邦布「倍率」列，行键是完整属性名「伤害倍率」）截断会变成「伤害」——保留完整行键。 */
+/** 行标签：同列名只显数值；以列名结尾去前缀（一段伤害倍率 → 一段）；否则原样。
+ *  组名是通用量词时（邦布「倍率」列）截断会变「伤害」——保留完整行键。 */
 function lineLabel(k, groupName) {
   if (k == null) return k;
   if (!groupName) return k;
@@ -123,10 +120,8 @@ function lineLabel(k, groupName) {
   return k;
 }
 
-/** 技能条目每级数值表格：等级为行、详细数据分组（伤害倍率/失衡倍率/基础提升/核心被动…）为列。
- *  分组取所有等级出现过的并集（列数不定，靠弹窗滚动）；格内每行「段次 数值」（列名已在上方，行标签去重）、
- *  纯说明只显示原文、rich（核心技被动详情）按富文本渲染并换行；
- *  某列各等级数值完全相同时加「（固定）」标注（如固定倍率的被动攻击），避免误以为是抓取缺失。 */
+/** 技能每级数值表格：等级为行、分组（伤害倍率/失衡倍率/核心被动…）为列，分组取各等级并集；
+ *  某列各等级数值完全相同时标「（固定）」（如固定倍率的被动攻击）——避免误以为是抓取缺失。 */
 function skillGrowthTable(item) {
   const growth = item.growth || [];
   if (!growth.length) return '';
@@ -171,8 +166,7 @@ function skillGrowthTable(item) {
   return `<div class="skill-growth"><table class="skill-table"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-/** 打开技能每级数值弹窗：列出该技能类型下所有条目（名称 + 说明 + 每级数值表格）。
- *  kind='bangboo' 时查邦布技能（角色/邦布 growth 结构一致，表格共用）。 */
+/** 打开技能每级数值弹窗；kind='bangboo' 时查邦布技能（growth 结构一致，表格共用） */
 export function openSkillDetail(name, type, kind) {
   const c =
     kind === 'bangboo'
@@ -196,16 +190,7 @@ export function openSkillDetail(name, type, kind) {
 // 内联 onclick 引用的函数需挂到全局
 registerZZZ({ skill: openSkillDetail });
 /** 渲染表格；sortable 集合内的列头可点击排序（当前列加 data-sort 与 ▲/▼ 指示） */
-function table(headers, rows, sortable = new Set()) {
-  const head = headers
-    .map((h) => {
-      if (!sortable.has(h)) return `<th>${h}</th>`;
-      const on = wikiSort.key === h;
-      return `<th data-sort="${h}"${on ? ' class="sorted"' : ''}>${h}${on ? (wikiSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
-    })
-    .join('');
-  return `<div class="wiki-wrap"><table class="wiki-table"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-}
+const table = (headers, rows, sortable) => tableHtml(headers, rows, sortable, { sort: wikiSort });
 
 function renderCharacters() {
   const headers = [
@@ -227,7 +212,7 @@ function renderCharacters() {
     if (key === '特性') return c.trait;
     if (key === '阵营') return c.faction;
     if (key.startsWith('满级')) return c.maxLevel?.[key.slice(2)] ?? null;
-    if (key === STAT.PEN_RATE) return penCell(c); // 展示层合并：命破角色取贯穿力
+    if (key === STAT.PEN_RATE) return penCell(c);
     return c[key] ?? null;
   };
   const rows = sortRows(Object.entries(library.characters), ([, c], key) => charVal(c, key)).map(([charKey, c]) => {
@@ -355,8 +340,7 @@ function renderBangboos() {
     return b[key] ?? null;
   };
   const rows = sortRows(Object.values(library.bangboos), bangVal).map((b) => {
-    // 技能：主动/连携/被动 三个图标（wiki 邦布页自带的通用技能图标，src/img/bangboo-*.png），
-    // 悬浮看说明、点击打开每级数值弹窗
+    // 技能：主动/连携/被动 三图标（src/img/bangboo-*.png），悬浮看说明、点击开每级数值弹窗
     const skillDefs = [
       { type: '主动技', icon: '/src/img/bangboo-active.png', label: '主动' },
       { type: '被动技', icon: '/src/img/bangboo-passive.png', label: '被动' },

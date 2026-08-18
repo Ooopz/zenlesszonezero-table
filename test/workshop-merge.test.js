@@ -1,7 +1,5 @@
-// test/workshop-merge.test.js —— workshop.json 分块 gzip 合并写出回归
-// 回归旧格式曾把 2.2GB 落盘文件写坏的两类 bug（新格式天然规避）：
-//   ① 数组括号重复（`"entries":[[…`）——分块 gzip 每块是独立完整 JSON 数组，无拼接括号；
-//   ② 跨 1MB 块 toString('utf8') 截断中文成 U+FFFD——gzip 块解压后整块 JSON.parse，无字符级切分。
+// test/workshop-merge.test.js —— workshop.json 分块 gzip 合并写出回归（旧格式曾写坏 2.2GB 落盘文件）
+// ① 数组括号重复 `"entries":[[…` ② 跨块 toString('utf8') 截断中文成 U+FFFD——分块 gzip 天然规避两类。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

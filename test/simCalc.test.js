@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { simulateFrontier, simulateFrontier3D, simulateFixedPanel, axisAvailable } from '../src/lib/simulate.js';
+import { simulateFrontier, simulateFrontier3D, simulateFixedPanel, axisAvailable } from '../src/lib/simCalc.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { loadDataFile } from './helpers.js';
 
@@ -105,4 +105,25 @@ test('simulateFrontier3D 生成三维帕累托点集', () => {
     assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z), '三维点应为有限数');
   }
   assert.deepEqual(r.axes, [REMIEL_OPTS.xAxis, REMIEL_OPTS.yAxis, '暴击率']);
+});
+
+test('副词条单条强化次数上限 6（discOptions 的 ×N 标注）', () => {
+  const r = simulateFrontier(ctx, REMIEL_OPTS);
+  let maxN = 0;
+  for (const slot of r.discOptions || []) {
+    for (const o of slot || []) {
+      for (const part of String(o.detail).split('、')) {
+        const n = Number(part.split('×')[1]);
+        if (Number.isFinite(n)) maxN = Math.max(maxN, n);
+      }
+    }
+  }
+  assert.equal(maxN, 6, `单条最多 6 次强化，实际标注 ${maxN}`);
+});
+
+test('副词条对无乘区属性的总增幅受 6 次上限约束（异常精通）', () => {
+  // 4 号位主词条=异常精通 → 该盘副词条不得重复，剩 5 盘可用；每盘 1 条 × 单次成长 9 × 6 次 = 270
+  const r = simulateFrontier(ctx, REMIEL_OPTS);
+  const maxY = Math.max(...r.points.map((p) => p.y));
+  assert.equal(Math.round(maxY - r.fixed['异常精通']), 270, '异常精通总增幅应为 5盘×6次×9');
 });

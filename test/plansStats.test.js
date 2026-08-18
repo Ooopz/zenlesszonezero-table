@@ -32,9 +32,9 @@ test('每角色 Top 音擎：按方案出现次数 + 占比', () => {
   const w = out['安比'].wengines;
   // 硫磺石 3（主）、德玛拉电池Ⅱ型 2（备）、total 5
   assert.equal(w[0].name, '硫磺石');
-  assert.equal(w[0].percent, 60); // 3/5 = 60%
+  assert.equal(w[0].percent, 60);
   assert.equal(w[1].name, '德玛拉电池Ⅱ型');
-  assert.equal(w[1].percent, 40); // 2/5 = 40%
+  assert.equal(w[1].percent, 40);
 });
 
 test('每角色 Top 套装组合：按组合统计（4 件套在前）+ 占比 + sets', () => {
@@ -73,7 +73,6 @@ test('orderComboSets4First：4 件套在前、2 件套在后，num/cnt 两字段
     pl.sets.map((s) => s.num),
     [4, 2]
   );
-  // 空组合
   assert.deepEqual(orderComboSets4First([]), { name: '', sets: [] });
 });
 

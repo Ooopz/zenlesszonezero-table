@@ -28,7 +28,7 @@ test('writeWorkshopFile + iterWorkshopFile：多块往返一致（含中文）',
   const f = path.join(dir, 'workshop.json');
   const entries = [];
   for (let i = 0; i < 10; i++) entries.push(entryOf('u' + i));
-  const count = writeWorkshopFile(f, entries, { entryCount: 10 }, 3); // perChunk=3 → 4 块
+  const count = writeWorkshopFile(f, entries, { entryCount: 10 }, 3);
   assert.equal(count, 10);
 
   const out = [...iterWorkshopFile(f)];

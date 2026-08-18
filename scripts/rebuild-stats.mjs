@@ -1,17 +1,12 @@
 // scripts/rebuild-stats.mjs —— 重算 workshop-stats.json（不爬配装）
-// 用法:  npm run rebuild:stats   （等价 node scripts/rebuild-stats.mjs）
-//        npm run rebuild:stats -- http://127.0.0.1:7890   （第 1 参 = 代理 URL，IP 被工坊封禁时换 IP；
-//                                                            也认 HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量）
-// 说明: ① 尝试重跑 workshop-grad.json（57 角色，API 风控/IP 封禁时失败则用现有 grad）；
-//       ② 用 grad 的 role_id → 角色名映射 + workshop-weights.json 权重，流式重算 workshop-stats.json。
-// 注意: role_id → 角色名映射只能来自 grad（library 的 id 是另一套体系，不可用）。
+// 用法: npm run rebuild:stats [-- http://127.0.0.1:7890]（第 1 参 = 代理 URL，IP 被封时换 IP；也认 HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量）
+// 说明: 尝试重跑 grad（风控失败则用现有 grad）后流式重算 stats；role_id → 角色名映射只能来自 grad（library 的 id 是另一套体系，不可用）。
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, readWorkshopHeader } from '../src/lib/node.js';
 import { maskProxyUrl } from '../src/sync/proxy.js';
 
-// 代理（可选第 1 参）：workshop-api.js 模块加载时读 argv[5] 与环境变量，这里把代理写进环境变量
-// 后再动态 import workshop-stats.js（其依赖的 workshop-api.js 随模块加载自动启用代理，与 workshop.js 规则一致）。
+// 代理写进环境变量后再动态 import：workshop-api.js 随模块加载自动启用代理（读 argv[5] 与环境变量，与 workshop.js 规则一致）
 if (process.argv[2] && !/^(https?|socks5h?):\/\//.test(process.argv[2])) {
   console.warn(
     `⚠️  第 1 参 "${process.argv[2]}" 不是代理 URL，忽略（用法: npm run rebuild:stats -- http://127.0.0.1:7890）`

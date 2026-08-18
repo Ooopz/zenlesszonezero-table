@@ -1,5 +1,4 @@
-// src/web/charts.js —— ECharts 图表辅助：主题色 / 容器注册 / 渲染挂载 + 各图表 option 构建
-// 依赖 index.html 引入的 window.echarts（本地 vendor）。视觉匹配项目暗色 + 金色 accent 主题。
+// src/web/charts.js —— ECharts 图表辅助（依赖 index.html 引入的本地 vendor window.echarts）：主题色 / 容器注册 / 渲染挂载 + 各图表 option 构建，视觉匹配项目暗色 + 金色主题
 /* global echarts */
 import { formatValue } from '../lib/util.js';
 
@@ -31,23 +30,20 @@ const AXIS_LINE = { lineStyle: { color: CHART_COLORS.line } };
 const AXIS_LABEL = { color: CHART_COLORS.dim, fontSize: 12 };
 const AXIS_LABEL_SMALL = { ...AXIS_LABEL, fontSize: 11 }; // 多子图/紧凑图表
 const SPLIT_LINE = { lineStyle: { color: CHART_COLORS.line } };
-/** 图例统一样式 */
 const CHART_LEGEND = { textStyle: { color: CHART_COLORS.dim }, top: 4 };
 /** 单图标题（整图居中标题） */
 const CHART_TITLE = { textStyle: { color: '#f0ede2', fontSize: 15 } };
 /** 多子图的小标题（每个子图上方） */
 const CHART_SUBTITLE = { textStyle: { color: CHART_COLORS.dim, fontSize: 13 } };
 
-/** 已注册待挂载的图表 option：key → option */
 let pending = {};
-/** 已初始化的 ECharts 实例（供 resize） */
 const instances = new Map();
 
 /** 注册一个图表 option（渲染函数在返回 chartBox 时调用） */
 export function registerChart(key, option) {
   pending[key] = option;
 }
-/** 清空待挂载（每次 renderRecommend 开头调用） */
+/** 清空待挂载（每次 renderStatsView 开头调用） */
 export function clearCharts() {
   pending = {};
 }
@@ -55,7 +51,7 @@ export function clearCharts() {
 export function chartBox(key, height = 380) {
   return `<div class="chart-init" data-chart="${key}" style="height:${height}px"></div>`;
 }
-/** 挂载所有 .chart-init 容器（renderRecommend 后由 render.js 调用） */
+/** 挂载所有 .chart-init 容器（renderStatsView 后由 render.js 调用） */
 export function mountCharts() {
   document.querySelectorAll('.chart-init').forEach((el) => {
     const key = el.dataset.chart;
@@ -71,14 +67,9 @@ export function mountCharts() {
   pruneDetachedCharts();
 }
 
-/** 回收已从文档移除的图表实例。
- *  切子面板/切角色时 render 会整块替换 innerHTML，旧容器连同 canvas 脱离文档，但实例仍留在
- *  instances 里：既不会被 GC（每张图一块 canvas + option 数据），resizeCharts 也会对着
- *  已脱离的 DOM 反复 resize。mountCharts 只 dispose「同 key 重新挂载」的那些，覆盖不到
- *  本次没再出现的图。
- *  ⚠️ 必须由 render() 在清空 grid 后无条件调用，不能只靠 mountCharts 末尾那次：
- *  从「统计」切到「数据库」或「我的角色」时 render 提前 return，根本不会走到 mountCharts，
- *  统计视图那十几张图会永久驻留（来回切视图 = 每次泄漏一整套 canvas）。 */
+/** 回收已从文档移除的图表实例（切视图/切角色时旧容器脱离文档，实例仍驻留 → canvas 泄漏）。
+ *  ⚠️ 必须由 render() 在清空 grid 后无条件调用：从「统计」切到「数据库」等无图视图时
+ *  render 提前 return 走不到 mountCharts，统计视图的图会永久驻留。 */
 export function pruneDetachedCharts() {
   for (const [key, chart] of instances) {
     const dom = chart.getDom();
@@ -90,12 +81,8 @@ export function pruneDetachedCharts() {
 }
 
 /** 灰色读数参考线：随鼠标移动的横虚线 + 数值标签。
- *  图表 option 需带 readLine: {attrs: [各 grid 属性名], densities: [密度系列索引|null], bins: [bins|null]}
- *  与预置 graphic 元素（id: read-line / read-label）。
- *  行为：鼠标在某个子图（grid）内任意位置（含没放在数据条上的空白处）→ 灰线横跨该子图宽度，
- *  数值标签按鼠标所在 y 轴位置换算显示；鼠标在子图外（间隙/标题/容器外）→ 隐藏。
- *  悬浮框：数据元素上由原生 item tooltip 处理（内容随位置更新）；空白处用 showTip 指向
- *  鼠标 y 对应的密度区间（复用 tooltip formatter），实现「y 轴对应时也显示」。
+ *  option 需带 readLine: {attrs, densities, bins} 与预置 graphic（id: read-line / read-label）；
+ *  数据元素上由原生 item tooltip 处理，空白处用 showTip 指向鼠标 y 对应的密度区间。
  *  用原生 DOM mousemove 而非 zrender 事件：canvas 空白处 DOM 事件可靠触发。 */
 function attachReadLine(chart, opt) {
   const attrs = opt.readLine.attrs || [];
@@ -132,7 +119,6 @@ function attachReadLine(chart, opt) {
       if (!comp) continue;
       const rect = comp.coordinateSystem.getRect();
       if (px < rect.x || px > rect.x + rect.width || py < rect.y || py > rect.y + rect.height) continue;
-      // 子图内：灰线横跨该子图宽度，标签 = 鼠标 y 对应的 y 轴数值
       const line = {
         id: 'read-line',
         invisible: false,
@@ -177,7 +163,6 @@ function resizeCharts() {
     if (dom && dom.isConnected) c.resize(); // 跳过已脱离文档的实例（下次 mountCharts 会回收）
   }
 }
-// 页面宽度变化 → 重排所有已挂载图表（模块加载时注册一次）
 if (typeof window !== 'undefined') {
   let resizeTimer = null;
   window.addEventListener('resize', () => {
@@ -194,7 +179,7 @@ export const DARK_TOOLTIP = {
   textStyle: { color: '#f0ede2', fontSize: 14 },
 };
 
-// ---------- 各图表的 option 构建函数（数据由 recommend.js / discstats.js 各面板准备） ----------
+// ---------- 各图表的 option 构建函数（数据由 statsView.js / discstats.js 各面板准备） ----------
 
 /** 共识度散点多子图大图：每属性一个子图（X=玩家 sd、Y=推荐 CV，每角色一点）。
  *  attrs: [{attr, points: [{name, sd, cv}]}] —— 悬浮显示角色名与两项指标 */
@@ -300,8 +285,8 @@ export function violinBoxOption(items) {
     type: 'value',
     scale: true, // 不强制从 0 开始，让箱线占据更多纵向空间
     axisLine: { show: false },
-    axisLabel: { show: false }, // 不显示刻度标签
-    splitLine: { show: false }, // 不显示网格刻度线
+    axisLabel: { show: false },
+    splitLine: { show: false },
   }));
   const series = [];
   // 每子图密度系列的 series 索引与 bins（供 attachReadLine 在空白处 showTip 定位鼠标 y 对应的区间）
@@ -408,7 +393,6 @@ export function violinBoxOption(items) {
         const d = item.dist || {};
         const fmt = (v) => formatValue(attr, v);
         if (type === '密度') {
-          // 悬浮密度矩形：数值区间 + 玩家数 + 累计占比
           const bins = d.hist?.bins;
           const counts = d.hist?.counts;
           if (!bins || !counts) return '';
@@ -531,11 +515,10 @@ export function densityScatterOption(grid, title = '') {
   };
 }
 
-/** 推荐三档 × 玩家分布 增强图：每属性一个子图，y 轴 4 行——
- *  玩家 P10-P90 区间 / 低配·毕业·高配 median±sd 区间，我的值用贯穿全图的金色竖线标记（带玩家百分位标签）。
+/** 推荐三档 × 玩家分布 增强图：每属性一个子图，y 轴 4 行（玩家 P10-P90 / 低配·毕业·高配 median±sd），
+ *  我的值用贯穿全图的金色竖线标记（带百分位标签）。区间用 markArea（兼容性最稳），我的值用 markLine。
  *  items = [{attr, player:{p10,p90}, low:{median,sd}, mid:{median,sd}, high:{median,sd}, mine, minePct}]
- *  区间用 markArea（半透明区域，无需堆叠；兼容性最稳），我的值用 markLine 竖线。
- *  @param {number} [height]  容器高度 px（标题用像素定位，避免百分比 + 像素高度混算把标题压进图内） */
+ *  @param {number} [height]  容器高度 px（标题用像素定位，避免百分比 + 像素混算把标题压进图内） */
 export function tierRichOption(items, height = 380) {
   const n = items.length;
   if (!n) return {};
@@ -1126,8 +1109,7 @@ export function discComboOption(subCombos) {
 }
 
 /** D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关横向条。
- *  r 越接近 1 = 该角色的工坊评分基本就是词条效率的另一种写法（可放心当毕业度代理）；
- *  r 偏低 = 评分掺了词条效率之外的东西，看评分会误判毕业度。
+ *  r 越接近 1 = 评分基本就是词条效率的另一种写法（可放心当毕业度代理）；r 偏低 = 评分掺了别的，看评分会误判。
  *  rows: [{name, r, n}] —— 按 r **降序**传入（类目轴首项画在底部，故最脱节的落在图顶） */
 export function scoreRelicOption(rows) {
   return {

@@ -1,8 +1,6 @@
-// scripts/fetch-fonts.mjs —— 下载 OFL 开源字体到 src/fonts/（供新视觉体系使用）
-// 用法：node scripts/fetch-fonts.mjs [proxyHost] [proxyPort]
-// 默认走本地代理 127.0.0.1:7897（Windows 沙箱里 Schannel 拿不到凭据、undici 不认环境代理，
-// 这里手写 HTTP CONNECT 隧道 + Node OpenSSL 栈，最稳）。
-// 字体：Barlow Condensed（西文展示体，OFL）+ Noto Sans SC（中文可变体，OFL）
+// scripts/fetch-fonts.mjs —— 下载 OFL 开源字体（Barlow Condensed 西文展示体 + Noto Sans SC 中文可变体）到 src/fonts/
+// 用法：node scripts/fetch-fonts.mjs [proxyHost] [proxyPort]；默认走本地代理 127.0.0.1:7897
+// （Windows 沙箱 Schannel 拿不到凭据、undici 不认环境代理，故手写 HTTP CONNECT 隧道 + OpenSSL 栈，最稳）
 import net from 'node:net';
 import tls from 'node:tls';
 import { mkdir, writeFile } from 'node:fs/promises';

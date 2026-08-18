@@ -1,7 +1,7 @@
-// test/discstats.test.js —— 驱动盘统计聚合逻辑
+// test/discAdvisor.test.js —— 驱动盘统计聚合逻辑
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeDiscStats, computeDiscAdvisor } from '../src/lib/discstats.js';
+import { computeDiscStats, computeDiscAdvisor } from '../src/lib/discAdvisor.js';
 import { loadDataFile } from './helpers.js';
 
 // 内联 fixture：两个角色共 3 个方案，覆盖 2 件套/4 件套、同盘多方案、不同副词条组合
@@ -311,13 +311,12 @@ test('真实数据冒烟：plans.json 每套驱动盘都有聚合行且去重/�
   for (const r of rows) {
     assert.ok(Number.isInteger(r.count) && r.count >= 0);
     assert.ok(Array.isArray(r.alternatives));
-    assert.ok(!r.alternatives.includes(r.name)); // 替代不含自己
+    assert.ok(!r.alternatives.includes(r.name));
     assert.ok(Array.isArray(r.characters));
     assert.ok(Array.isArray(r.subCombos));
     // 副词条组合本身无重复
     const keys = new Set(r.subCombos.map((c) => JSON.stringify(c)));
     assert.equal(keys.size, r.subCombos.length);
-    // 频次数组：count 不超过方案数、ratio 在 [0,1]
     for (const f of [...r.subStats, ...r.main4, ...r.main5, ...r.main6]) {
       assert.ok(Number.isInteger(f.count) && f.count >= 1 && f.count <= r.count);
       assert.ok(f.ratio >= 0 && f.ratio <= 1);

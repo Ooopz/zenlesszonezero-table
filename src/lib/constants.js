@@ -1,7 +1,5 @@
-// src/lib/constants.js —— 固定字符串的单一权威枚举
-// 双端共享（Node 与浏览器均可 import，无任何 node 依赖）。
-// 用途：属性名 / 词条类型 / 目标字段 / 主词条候选 / 同步类型 / 视图等固定字符串集中定义，
-// 各处引用枚举而非魔法字符串，防止拼写不一致（拼错会得 undefined 而非静默写错数据）。
+// src/lib/constants.js —— 固定字符串的单一权威枚举（双端共享，无 node 依赖）
+// 各处引用枚举而非魔法字符串，防拼写不一致（拼错得 undefined 而非静默写错数据）。
 
 // ---------- 面板属性名 ----------
 /** 面板属性名枚举（数据层与展示层的属性键，贯穿 wiki / 账号 / 推荐方案三方） */
@@ -41,7 +39,6 @@ export const PERCENT_STATS = new Set([STAT.CR, STAT.CD, STAT.PEN_RATE]);
 export const MULT_STATS = new Set([STAT.ATK, STAT.HP, STAT.DEF, STAT.IMPACT, STAT.ENERGY, STAT.ANOMALY_CTRL]);
 /** 满级行仅含的基础属性（wiki 成长表「满级」只有这三项） */
 export const MAX_LEVEL_STATS = [STAT.HP, STAT.ATK, STAT.DEF];
-/** 伤害加成判定：属性名以「伤害加成」/「伤害提升」结尾 */
 export const isDamageBonus = (name) => name.endsWith('伤害加成') || name.endsWith('伤害提升');
 
 /** 面板属性 → 对应哪些有效副词条类型（用于按有效属性配置高亮面板行） */
@@ -155,23 +152,21 @@ export const SYNC_KINDS = {
 };
 
 // ---------- 视图 ----------
+// 持久化值（URL ?view= 与 user-config 的 view 字段）：2026-11 起仅保留四个当前视图值，
+// 历史值 recommend/discstats/card/table 已由 ui.js 的 migrateViewState 一次性迁移，不再兼容。
 export const VIEWS = {
-  CARD: 'card',
-  TABLE: 'table',
   WIKI: 'wiki',
-  RECOMMEND: 'recommend',
+  STATS: 'stats',
   MY_CHARS: 'mychars',
   SIMULATE: 'simulate',
 };
+/** 合法 view 值集合。⚠️ 校验必须查这里，不能写 `VIEWS[raw]`——VIEWS 的键是 WIKI/STATS/…，
+ *  持久化的值是 wiki/stats/…，用值当键查恒为 undefined，四个视图会全部被判非法回退 mychars。 */
+export const VIEW_VALUES = new Set(Object.values(VIEWS));
 
 // ---------- 技能类型（统一 canonical 编号，双源映射后消费） ----------
-/** 统一技能类型表（canonical，游戏 2.0 技能槽顺序：普攻/闪避/支援/特殊/终结/核心，无独立「连携」——
- *  连携技与终结技同槽共享等级，官方数据 type3 同时含两者）。不同数据源的 type 编号体系不同，**消费前必须映射**：
- *  - 官方（characters.json 账号数据）与工坊 mys 源：0普攻/1特殊技/2闪避/3终结+连携(共享等级)/5核心/6支援技 → OFFICIAL_SKILL_TYPE
- *  - 工坊 2025 源（游戏内嵌原始，1.x 技能 ID）：0普攻/1闪避/2特殊技/3连携/5核心/6终结 → WS2025_SKILL_TYPE
- *  判别：优先读条目 `source` 字段（extractBuild 写时固化）；旧数据回退 skills 数组顺序——
- *  mys 条目按 UI 顺序 [0,2,6,1,3,5]（weapon.main 非空），2025 按 ID 顺序 [0,1,2,3,5,6]（weapon.main 空）。
- *  聚合层 computeSkillStats 已按源归一化；前端匹配「我的等级」时官方 type 必走 OFFICIAL_SKILL_TYPE。 */
+/** 统一技能类型（canonical，游戏 2.0 槽顺序：普攻/闪避/支援/特殊/终结/核心；无独立「连携」——连携与终结同槽共享等级）。
+ *  ⚠️ 双源 type 编号体系不同，消费前必须经 OFFICIAL_SKILL_TYPE / WS2025_SKILL_TYPE 映射；判别优先读 source 字段，旧数据回退 skills 数组顺序。 */
 export const SKILL_TYPES = [
   { key: 0, label: '普攻' },
   { key: 1, label: '闪避' },

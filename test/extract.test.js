@@ -5,10 +5,9 @@ import { isMaxedRole } from '../src/sync/workshop.js';
 import { validateCharacter } from '../src/lib/schema.js';
 import { loadDataFile } from './helpers.js';
 
-// 数据就绪检查：测试依赖 data/ 已同步的原始数据，缺失时提示先更新。
-// extractCharacter 的输入是账号接口响应（data/debug-response.json，不入库），其结构不存在于
-// raw-library.json / library.json 中，因此提取逻辑用下方内联的最小账号响应 fixture（结构对齐真实响应）。
-loadDataFile('raw-library.json', 'npm run sync:library（或网页「更新数据库」）');
+// 数据就绪检查：依赖 data/ 已同步数据；extractCharacter 输入是账号接口响应（曾存 data/debug-response.json，
+// 2026-11 起不再保留，其结构不在 library.json 内），故用下方内联最小 fixture（对齐真实响应）。
+loadDataFile('library.json', 'npm run sync:library（或网页「更新数据库」）');
 const AVATAR_INFO = {
   data: {
     avatar_list: [

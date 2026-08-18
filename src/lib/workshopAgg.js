@@ -1,11 +1,6 @@
-// src/lib/workshopStats.js —— 工坊配装数据（workshop.json）汇总纯函数（Node 与浏览器共用）
-// 输入：workshop.json 的 entries（每条约一个玩家角色的配装：weapon/equips/panel/skills/rank/relic_point）
-// 输出（按角色/盘/玩家聚合）：computeWorkshopStats（音擎/驱动盘条目数 + 面板真实样本统计）、
-//   computePanelCorrelations（属性相关）、computeWorkshopDiscStats（驱动盘单盘统计）、
-//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankDist/skillStats/roleOwnership）、
-//   2026-10 新增（roleCooccurrence）、
-//   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度）、
-//   discStatName、substatRolls、buildRoleSubstatWeights、sourceOf、bin2D。
+// src/lib/workshopAgg.js —— 工坊配装数据（workshop.json）汇总纯函数（Node 与浏览器共用）
+// 输入 workshop.json 的 entries（每条约一个玩家角色的配装），按角色/盘/玩家聚合出全部统计；
+// 正式入口为 computeAllWorkshopStats 单遍历（见下方累加器说明），各公开单函数为测试/复用保留。
 import { computeDist, kmeans, pearson, quantileSorted } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
 import { normalizeStatKey } from './util.js';
@@ -34,26 +29,16 @@ function parsePanelFinal(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** 面板数值统计（玩家真实样本）：分位/离散/形态（见 distStats.computeDist）；空数组返回空统计 */
 function panelStats(arr) {
   return computeDist(arr);
 }
 
 // ---------- 累加器（accumulator）拆分说明（2026-08 性能重构） ----------
-// 每个聚合原本是「自带 for 循环的独立函数」，于是 buildWorkshopStats 里 14 个聚合 = 14 次全量遍历
-// workshop.json（2.13GB，每遍流式解析 ~27s，合计浪费 ~6 分钟）。这里把每个聚合拆成两段：
-//   add(entry) —— 逐条累加（原 for 循环体，一字未改）
-//   finish()   —— 收尾计算（原循环之后的分位/排序/对象化，一字未改）
-// 于是：① 原公开函数 = 建累加器 → 循环 add → finish（签名与输出完全不变，测试与其它调用方无感）；
-//       ② computeAllWorkshopStats = 建 14 个累加器 → **一次** for 循环里全部 add → 各自 finish。
-// 关键不变量（等价性靠它，不是靠浮点容差）：累加器内部的 Map/数组仍严格按「条目出现顺序」写入，
-// 与各自独立遍历时的顺序逐条一致，因此输出的键序、数组元素序、浮点求和/求均值的累加顺序都不变，
-// 结果与重构前**逐位相等**。若哪天有人把 add 挪到共享的中间结果上（比如两个盘聚合共用一次
-// subNames 解析），必须确认它不改变各自 Map 的首次插入顺序，否则键序会漂移。
-// 之所以不共享中间解析：各聚合的过滤/分组口径虽相近但不同，共享会引入耦合且收益有限
-// （瓶颈是 JSON.parse 与磁盘 IO，不是这几次词条归一）。
+// 每个聚合拆成 add(entry)（逐条累加）+ finish()（收尾），原公开函数的签名与输出完全不变；
+// computeAllWorkshopStats 建全部累加器后**一次** for 循环喂完再各自 finish（原 14 次全量流式遍历，每遍 ~27s）。
+// ⚠️ 硬约束：累加器内部 Map/数组必须严格按「条目出现顺序」写入，否则键序/浮点累加顺序漂移，
+// 输出与旧结果不再逐位相等；各聚合口径不同，不共享中间解析。
 
-/** 通用：把累加器套回「一次性函数」形态（原公开函数的循环体） */
 function runAcc(acc, entries) {
   for (const e of entries || []) acc.add(e);
   return acc.finish();
@@ -69,7 +54,6 @@ function makeWorkshopStatsAcc() {
       // 单条脏数据不应中断整轮聚合：computeAllWorkshopStats 把同一条喂给全部累加器，
       // 这里抛异常 = 2.13GB 全量重算（约 4 分钟）零产出。与其余累加器的守卫保持一致。
       if (!e) return;
-      // 音擎：每配装计一次
       if (e.weapon?.name && e.weapon.name !== '其他') {
         if (!wMap.has(e.weapon.name)) wMap.set(e.weapon.name, { name: e.weapon.name, count: 0, chars: new Set() });
         const w = wMap.get(e.weapon.name);
@@ -111,30 +95,13 @@ function makeWorkshopStatsAcc() {
   };
 }
 
-/**
- * 汇总工坊配装数据。
- * @param {object[]} entries  workshop.json 的 entries（{uid, role_id, rank, weapon, equips, panel}）
- * @returns {{wengines:{name:string,count:number,characters:string[]}[],
- *            discs:{name:string,count:number,characters:string[]}[],
- *            panels:{name:string,stats:Object<string,Dist>}[]}}
- *   wengines/discs：按配装条目数聚合（同配装同套装只计一次），characters 为去重角色 id。
- *   panels：每角色每属性的真实样本统计（computeDist：count/min/max/range/mean/median/sd/IQR/p10/p25/p50/p75/p90/p95/p99/skew/kurt/whiskerLow/whiskerHigh/outliers/hist，百分比属性已归一化为小数）。
- */
+/** 汇总工坊配装数据：wengines/discs 按配装条目数聚合（同配装同套装只计一次）、panels 为每角色每属性的真实样本统计（百分比属性已归一化为小数）。 */
 export function computeWorkshopStats(entries) {
   return runAcc(makeWorkshopStatsAcc(), entries);
 }
 
-/**
- * 属性相关性（皮尔逊）：按「同一条配装内属性配对」+「按角色分组」计算（pooled 相关被角色混合主导无意义）。
- * @param {object[]} entries  workshop.json 的 entries
- * @param {string[][]} [pairs]  要计算的属性对（默认 攻击-防御/攻击-生命/防御-生命/暴击率-暴伤/攻击-暴伤/攻击-暴击率/异常精通-异常掌控）
- * @returns {Object<string, Object<string, number>>}  角色 id → {`属性A_属性B`: r}
- */
-/** 逐条目解析 panel → 每角色 / 全体 的属性对配对样本（computePanelCorrelations 与 computePanelScatter 共用同一份采集逻辑）。
- *  每对累加器自带属性名（无需靠 key 反解）。finish() 返回 {perRole:Map<string,Map<string,{x,y,xv,yv}>>, global:Map<string,{x,y,xv,yv}>}
- *  注意：相关性与散点用的是**不同的属性对集合**，故必须各建一个采集器而非合并成 9 对——
- *  合并会改变 perRole/global 的 key 插入顺序，输出对象键序随之漂移（值虽同，deepStrictEqual 之外的
- *  JSON 文本会变），且给不需要的对白白采样。 */
+/** 面板属性对配对样本采集（computePanelCorrelations 与 computePanelScatter 共用）。
+ *  ⚠️ 相关性与散点属性对不同，必须各建采集器：合并会改变 perRole/global 的 key 插入顺序，输出键序漂移。 */
 function makePanelPairsAcc(pairs) {
   const perRole = new Map(); // role -> Map<key, {x,y,xv,yv}>
   const global = new Map(); // key -> {x,y,xv,yv}
@@ -172,7 +139,6 @@ function collectPanelPairs(entries, pairs) {
   return runAcc(makePanelPairsAcc(pairs), entries);
 }
 
-/** 相关性默认属性对（攻击-防御/攻击-生命/防御-生命/暴击率-暴伤/攻击-暴伤/攻击-暴击率/异常精通-异常掌控） */
 const CORR_PAIRS = [
   ['攻击力', '防御力'],
   ['攻击力', '生命值'],
@@ -183,7 +149,6 @@ const CORR_PAIRS = [
   ['异常精通', '异常掌控'],
 ];
 
-/** 相关性收尾：perRole 配对样本 → {role: {`A_B`: r}} */
 function finishPanelCorrelations(perRole) {
   const out = {};
   for (const [role, pairs_] of perRole) {
@@ -193,27 +158,20 @@ function finishPanelCorrelations(perRole) {
   return out;
 }
 
+/** 属性相关性（皮尔逊）：按「同一条配装内属性配对」+「按角色分组」计算（pooled 相关被角色混合主导无意义）。 */
 export function computePanelCorrelations(entries, pairs) {
   const { perRole } = collectPanelPairs(entries, pairs || CORR_PAIRS);
   return finishPanelCorrelations(perRole);
 }
 
 // ---------- 驱动盘单盘统计（工坊真实穿戴：主/副词条、槽位、角色） ----------
-// 供「统计→驱动盘」面板作「工坊真实」对比列（与 plans 方案推荐并列）。workshop.json 的盘有两源，
-// 2026-08 起提取已同构（main=主词条、subs=全部副词条）：2025 源（main[0]=真实主词条，subs=副词条）
-// 与 mys 源（同构）。
+// 供「统计→驱动盘」面板作「工坊真实」对比列；两源提取已同构（main=主词条、subs=全部副词条）。
 
 /** mys 源按值带 % 判定百分比形态的属性（仅这三项有固定/百分比两形态；暴击率/暴击伤害恒为百分比属性不带 %） */
 const MYS_PCT_NAMES = new Set(['攻击力', '生命值', '防御力']);
 
-/**
- * workshop 原始词条名 → 统一名（plans/constants 体系）。词条变体映射已并入 util.js 的 `STAT_ALIASES`（normalizeStatKey 单一权威）。
- * value 仅 mys 源用于判定 攻击/生命/防御 的百分比形态（如 `攻击力`+"6%" → 攻击力%，`攻击力`+"38" → 攻击力）。
- * 未知名原样返回（向前兼容）。
- * @param {string} rawName  workshop 原始词条名
- * @param {string|number} [value]  词条值（mys 源百分比是 "6%" 字符串）
- * @returns {string|null}
- */
+/** workshop 原始词条名 → 统一名（词条变体映射已并入 util.js 的 `STAT_ALIASES`，normalizeStatKey 单一权威）。
+ *  value 仅 mys 源用于判定 攻击/生命/防御 的百分比形态（如 `攻击力`+"6%" → 攻击力%）；未知名原样返回（向前兼容）。 */
 export function discStatName(rawName, value) {
   if (!rawName) return null;
   if (MYS_PCT_NAMES.has(rawName) && String(value ?? '').includes('%')) return `${rawName}%`;
@@ -229,17 +187,10 @@ function slotOf(eq) {
 }
 
 // ---------- 副词条强化次数（roll）还原 + 角色有效词条权重 ----------
-// 驱动盘每条副词条的数值 = 单次强化基数 × 强化次数（1-6）。两源存法不同但基数同源：
-//   2025 源：百分比 ×100 存整数（暴击率 2.4% → 240）、固定值原值（攻击力 19）；value 为 number
-//   mys   源：百分比存去掉 % 的数（2.4）、固定值原值（19）；value 为 string
-// value 的类型本身就是源标记——实测 20 万条目，`typeof eq.rarity`（"S" / 4）与 `typeof sub.value`
-// （string / number）100% 同构，零交叉，故这里按 value 类型自判源，无需外部传参。
-//
-// 为什么要还原次数：旧口径的「有效词条**个数**」上限只有 4，实测 4,979,291 块盘里 99.95% 都等于 4，
-// 完全没有区分度（D4 毕业度因此形同虚设）。而次数口径实测（6 万条目 / 144 万副词条）
-// 1 次 30.97% / 2 次 38.70% / 3 次 22.54% / 4 次 7.03% / 5 次 0.75% / 6 次 0.014%，方差充足；
-// 且 value/base 有 99.9987% 恰为 1-6 的整数（余 19 条为异常值，靠 round + 钳制兜底），可无损还原。
-// 注意「单盘总强化次数」几乎没有信息量（满级盘恒为 8 或 9），有区分度的是**落在角色有效词条上的次数**。
+// 每条副词条数值 = 单次强化基数 × 强化次数（1-6）。两源存法不同但基数同源：2025 源百分比 ×100 存整数、
+// mys 源存去掉 % 的数；value 类型即源标记（实测与 rarity 判源 100% 同构零交叉），故按类型自判源。
+// 为什么还原次数：旧「有效词条个数」99.95% 恒为 4 无区分度；value/base 99.9987% 恰为 1-6 整数（余 19 条异常靠 round+钳制兜底）。
+// 注意「单盘总强化次数」恒为 8/9 无信息量，有区分度的是**落在角色有效词条上的次数**。
 
 /** 副词条单次强化基数（S 级盘，mys 口径：百分比按「去掉 % 的数」计） */
 const SUBSTAT_ROLL_BASE = {
@@ -258,12 +209,7 @@ const SUBSTAT_ROLL_BASE = {
 /** 百分比形态副词条（2025 源存值需 ÷100 才与基数同量纲） */
 const PCT_SUBSTATS = new Set(['暴击率', '暴击伤害', '攻击力%', '生命值%', '防御力%']);
 
-/**
- * 还原一条副词条的强化次数（1-6）。源按 value 类型自判（number=2025 需 ÷100 归一百分比、string=mys）。
- * @param {string} name  已归一的副词条名（discStatName 产物）
- * @param {string|number} value  原始值
- * @returns {number} 强化次数；名不在基数表或值非法返回 0（不计入）
- */
+/** 还原一条副词条的强化次数（1-6）。源按 value 类型自判（number=2025 需 ÷100 归一百分比、string=mys）。 */
 export function substatRolls(name, value) {
   const base = SUBSTAT_ROLL_BASE[name];
   if (!base) return 0;
@@ -289,15 +235,8 @@ const SUBSTAT_WEIGHT_KEY = {
   异常精通: '精通',
 };
 
-/**
- * 工坊角色默认流派权重 → 每角色的「副词条 → 权重」表（权重 >0 即视为该角色的有效副词条）。
- * @param {Object<string, {factions:{name:string, weights:{key:string, weight:number}[]}[]}>} weightJson
- *   workshop-weights.json 的 `weights` 段（system_data 的 weight_json，57 角色各一个「默认流派」）
- * @returns {Map<string, Map<string, number>>}  role_id → Map<副词条名, 权重>；无权重的角色不入表
- *   实测 key 覆盖率：攻击 55/57、穿透值 49/57、暴击 41、暴伤 41、精通 18、生命 7、防御 1
- *   —— 缺 key 即该角色不吃这条属性，正是「按角色区分有效词条」所需的信号。
- *   ⚠️ 权重表不区分百分比与固定值（攻击力% 与 攻击力 共用 key「攻击」），加权分沿用工坊原始口径。
- */
+/** 工坊角色默认流派权重 → 每角色的「副词条 → 权重」表（权重 >0 即有效副词条；缺 key = 该角色不吃这条属性）。
+ *  ⚠️ 权重表不区分百分比与固定值（攻击力% 与 攻击力 共用 key「攻击」），加权分沿用工坊原始口径。 */
 export function buildRoleSubstatWeights(weightJson) {
   const out = new Map();
   if (!weightJson) return out;
@@ -328,31 +267,13 @@ function freqPairs(map) {
   return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 
-/**
- * 按驱动盘套装聚合工坊真实配装（workshop.json entries 的单盘级统计）。
- *
- * @param {object[]} entries  workshop.json 的 entries（[{uid, role_id, weapon, equips:[...]}]）
- * @param {object} discIndex  buildNameIndex(library.discs, CATEGORY.DISC) 的产物（或测试 fixture）
- * @param {{roleNameMap?:Map<string,string>}} [opts]  roleNameMap：role_id 字符串 → 角色规范名（未提供时 characters 落回 role_id）
- * @returns {{name:string, equips:number, characters:string[],
- *            main456:{4:{name,count}[],5:{name,count}[],6:{name,count}[]},
- *            mainDenom:{4:number,5:number,6:number}, subs:{name,count}[],
- *            effDist:Object<string,number>, subCombos:{combo:string[],count:number}[],
- *            mainSubCross:{4:{主词条:{副词条:count}},5:{},6:{}}}[]}
- *   name：library 规范盘名；equips：物理盘数（每块盘计一次，不做条目内去重）；
- *   characters：使用角色（去重）；main456：主词条分布（两源同构，已套 mainStatName 兜底）；
- *   mainDenom：每槽盘数（主词条 ratio 分母）；
- *   subs：合法副词条全量（已按 SUBSTAT_TYPE_SET 白名单过滤非法词条；含对角色无效但类型合法的词条，统一名）。
- *   effDist：**有效强化次数**分布（0-9，非旧的「有效词条个数」）——每块盘落在「佩戴角色有效副词条集合」
- *   上的强化次数之和；有效集合由 opts.weightJson/roleWeights 给出，缺失时退化为「全部合法副词条」。
- *   slotDist：{1..6:盘数} 该套装的槽位分布（D7 套装×槽位交叉）。
- *   仅含工坊中出现的盘；未解析到 library 的套装 / '其他' 跳过。
- */
+/** 按驱动盘套装聚合工坊真实配装（单盘级统计）。
+ *  effDist 为**有效强化次数**分布（0-9，非旧「有效词条个数」），有效集合由 opts.weightJson/roleWeights 给出，
+ *  缺失时退化为「全部合法副词条」；slotDist 为槽位分布（D7）；未解析到 library 的套装 / '其他' 跳过。 */
 export function computeWorkshopDiscStats(entries, discIndex, opts = {}) {
   return runAcc(makeWorkshopDiscStatsAcc(discIndex, opts), entries);
 }
 
-/** computeWorkshopDiscStats 的累加器（add 为原循环体、finish 为原收尾） */
 function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
   const roleNameMap = opts.roleNameMap || null;
   const roleWeights = resolveRoleWeights(opts);
@@ -368,7 +289,7 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
     for (const eq of e.equips) {
       if (!eq || !eq.suit) continue;
       const suit = resolveSuit(eq.suit);
-      if (!suit || suit === '其他') continue; // 未解析/占位跳过
+      if (!suit || suit === '其他') continue;
       let a = acc.get(suit);
       if (!a)
         acc.set(
@@ -389,15 +310,11 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
       a.equips += 1;
       a.chars.add(roleName);
       const slot = slotOf(eq);
-      if (slot >= 1 && slot <= 6) a.slotDist[slot] += 1; // D7 套装×槽位交叉
-      // 词条名清洗：丢弃含 U+FFFD 的坏名（工坊源头数据的属性名被替换符污染，如「生命值百分���」，
-      // 无法归一且会污染图表显示——过滤后这些词的样本少量损失，换来 stats 干净）
+      if (slot >= 1 && slot <= 6) a.slotDist[slot] += 1;
+      // 词条名清洗：丢弃含 U+FFFD 的坏名（工坊源头属性名被替换符污染，无法归一且污染图表显示）
       const cleanName = (n) => (n && !n.includes('\uFFFD') ? n : null);
-      // 两源同构：subs=全部副词条（含无效词条）、main[0]=主词条
-      // 游戏规则白名单清洗：副词条只保留合法副词条（SUBSTAT_TYPE_SET：攻击/生命/防御 固定+%、
-      // 暴击率/暴伤/穿透值/异常精通）——工坊 2025 源偶发异常词条（穿透率/冲击力/异常掌控百分比等，
-      // 实测 180/605k 件），不合法则丢弃，避免脏词条进入分布。
-      // rolls 同时还原（强化次数，见 substatRolls）：effDist 由「词条个数」改为「有效强化次数」口径
+      // 两源同构：subs=全部副词条、main[0]=主词条。白名单清洗：只留合法副词条（SUBSTAT_TYPE_SET）——
+      // 2025 源偶发异常词条（实测 180/605k 件）丢弃；rolls 同步还原，effDist 为「有效强化次数」口径
       const subPairs = (eq.subs || [])
         .map((s) => {
           const n = s && s.name ? cleanName(discStatName(s.name, s.value)) : null;
@@ -405,8 +322,7 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
         })
         .filter(Boolean);
       const subNames = subPairs.map((s) => s.name);
-      // 主词条（main[0]）——mn 只算一次，主词条频次与 ×副词条协同共用；
-      // 仅统计该槽候选内的合法主词条（MAIN_STAT_OPTIONS），异常主词条不计入分布
+      // 主词条 mn 只算一次，频次与 ×副词条协同共用；仅统计该槽候选内的合法主词条（MAIN_STAT_OPTIONS）
       const main = Array.isArray(eq.main) && eq.main[0];
       const mn = main && main.name ? cleanName(mainStatName(discStatName(main.name, main.value))) : null;
       const mnOk = mn && (MAIN_STAT_OPTIONS[slot] || []).includes(mn);
@@ -428,7 +344,6 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
         const comboKey = JSON.stringify(subNames);
         a.combos.set(comboKey, (a.combos.get(comboKey) || 0) + 1);
       }
-      // 副词条频率（跨槽聚合）
       for (const n of subNames) a.subs.set(n, (a.subs.get(n) || 0) + 1);
     }
   };
@@ -467,9 +382,8 @@ function makeWorkshopDiscStatsAcc(discIndex, opts = {}) {
 }
 
 // ---------- 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤 的玩家真实 trade-off） ----------
-// 前端拿不到逐条 panel（workshop.json 2.13GB 不下发），散点必须在聚合时降采样为 2D 密度网格。
-// 网格内 x/y 均为各自 min-max 归一到 [0,1]（攻击与双暴量纲不同，归一后才同轴可比），
-// 原始范围存 xMin/xMax/yMin/yMax 供前端 tooltip 反算实际值。
+// 前端拿不到逐条 panel（workshop.json 2.13GB 不下发），聚合时降采样为 2D 密度网格；x/y 各自 min-max
+// 归一到 [0,1]（量纲不同，归一后才同轴可比），原始范围存 xMin..yMax 供前端 tooltip 反算实际值。
 
 /** 2D 密度网格：x/y 数组 → {min/max, N, data:[[xi,yi,count]]}（xi/yi 为 [0,N-1] 归一网格坐标；
  *  前端按均匀 bin 反算实际值，故只需存 N 而非 bin 边界数组） */
@@ -505,21 +419,11 @@ export function bin2D(xv, yv, N) {
   };
 }
 
-/**
- * 每角色 / 全体 的面板属性对 2D 密度网格（供密度散点图）。
- * @param {object[]} entries  workshop.json 的 entries（panel 为 [{name, base, add, final}]）
- * @param {string[][]} [pairs]  属性对（默认 暴击率×暴击伤害、攻击力×暴击伤害；攻击将按粒度 min-max 归一）
- * @returns {{perRole:Object<string,Object<string,Grid>>, global:Object<string,Grid>}}
- *   Grid = {xName,yName,xMin,xMax,yMin,yMax,N,data:[[xi,yi,count]]}
- *   perRole 按 role_id；攻击归一范围随粒度（该角色 / 全体）。
- */
-/** 散点默认属性对（暴击率×暴伤、攻击×暴伤） */
 const SCATTER_PAIRS = [
   ['暴击率', '暴击伤害'],
   ['攻击力', '暴击伤害'],
 ];
 
-/** 散点收尾：配对样本 → 2D 密度网格（perRole/global 两粒度，攻击归一范围随粒度） */
 function finishPanelScatter(perRoleAcc, globalAcc) {
   const N = 24;
   const toGrid = (g) => {
@@ -543,6 +447,7 @@ function finishPanelScatter(perRoleAcc, globalAcc) {
   return { perRole, global };
 }
 
+/** 每角色 / 全体 的面板属性对 2D 密度网格（供密度散点图）；perRole 按 role_id，攻击归一范围随粒度（该角色/全体）。 */
 export function computePanelScatter(entries, pairs) {
   const { perRole, global } = collectPanelPairs(entries, pairs || SCATTER_PAIRS);
   return finishPanelScatter(perRole, global);
@@ -550,9 +455,8 @@ export function computePanelScatter(entries, pairs) {
 
 // ================= 练度指标聚合（全服总览 / 角色画像） =================
 
-/** 轻量分布（无直方图/箱线，供 rankLayers/skillStats 防 stats 膨胀）：count/min/max/mean/median/p10/p90。
- *  分位数统一走 quantileSorted（线性插值）——此前用最近秩 `s[floor(p*n)]`，
- *  与 computeDist 的定义不一致，同一份 workshop-stats.json 里 median 有两种含义。 */
+/** 轻量分布（无直方图/箱线，防 stats 膨胀）：count/min/max/mean/median/p10/p90。
+ *  分位数统一走 quantileSorted（线性插值）——此前用最近秩，与 computeDist 定义不一致，同一份文件里 median 有两种含义。 */
 function lightDist(vals) {
   const s = (vals || []).filter(Number.isFinite).sort((a, b) => a - b);
   const n = s.length;
@@ -568,9 +472,7 @@ function lightDist(vals) {
   };
 }
 
-/** 每角色工坊装配评分（relic_point）分布（computeDist 全量，含 hist）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, relic_point}）
- *  @returns {Object<string, Dist>}  role_id → 评分分布；0/非法评分排除（0 = 未带驱动盘/2025 源缺失） */
+/** 每角色工坊装配评分（relic_point）分布（computeDist 全量）；0/非法评分排除（0 = 未带驱动盘/2025 源缺失）。 */
 export function computeRelicStats(entries) {
   return runAcc(makeRelicStatsAcc(), entries);
 }
@@ -593,9 +495,7 @@ function makeRelicStatsAcc() {
   };
 }
 
-/** 每角色影画档位（rank 0-6）占比：供影画金字塔。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, rank}）
- *  @returns {Object<string, {0:number,...,6:number}>} role_id → 各档条目数 */
+/** 每角色影画档位（rank 0-6）占比：供影画金字塔。 */
 export function computeRankDist(entries) {
   return runAcc(makeRankDistAcc(), entries);
 }
@@ -617,8 +517,7 @@ function makeRankDistAcc() {
 }
 
 /** 角色拥有率：样本池（全部去重 uid）中拥有该角色（该 uid 有该角色条目）的占比。
- *  workshop.json 的 v3 响应含每 uid 的**全部**角色，故「拥有」= uid 集合包含该角色。
- *  @returns {{ pool:number, roles:Object<string, number> }} pool=池 uid 总数，roles=role_id → 拥有率 */
+ *  workshop.json 的 v3 响应含每 uid 的**全部**角色，故「拥有」= uid 集合包含该角色。 */
 function makeRoleOwnershipAcc() {
   const perRole = new Map();
   const pool = new Set();
@@ -643,10 +542,8 @@ export function computeRoleOwnership(entries) {
   return runAcc(makeRoleOwnershipAcc(), entries);
 }
 
-/**
- * 样本口径：条目、去重 uid、数据源与每角色覆盖情况。
- * 该统计不代表全体玩家；workshop.json 本身是经过练度门槛筛选的样本池。
- */
+/** 样本口径：条目、去重 uid、数据源与每角色覆盖。
+ *  该统计不代表全体玩家——workshop.json 本身是经过练度门槛筛选的样本池。 */
 export function computeSampleCoverage(entries) {
   return runAcc(makeSampleCoverageAcc(), entries);
 }
@@ -764,21 +661,15 @@ function makeChoiceConcentrationAcc() {
   };
 }
 
-/** 每角色 × 技能类型（canonical 编号，见 constants.SKILL_TYPES）的等级分布（轻量分位 + 逐等级计数 dist，供技能分布柱状图）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, source, skills:[{type,level}]}）
- *  @returns {Object<string, Object<string, LightDist & {dist:Object<number,number>}>>} role_id → 技能类型 → 分布
- *  工坊两源 type 语义不同，聚合前按源归一化为 canonical：mys 源（官方语义）用 OFFICIAL_SKILL_TYPE；
- *  2025 源（1.x ID 语义）用 WS2025_SKILL_TYPE（连携/终结并入 canonical 4）。
- *  源判别：优先读条目 `source` 字段（extractBuild 写时固化）；旧数据（无 source）先看 equips[].rarity
- *  的**类型**（mys 写字符串 "S"、2025 写数字 4），再兜底 skills 数组顺序。 */
+/** 每角色 × 技能类型（canonical 编号，见 constants.SKILL_TYPES）的等级分布。
+ *  工坊两源 type 语义不同，聚合前按源归一化：mys 源用 OFFICIAL_SKILL_TYPE、2025 源用 WS2025_SKILL_TYPE（连携/终结并入 canonical 4）。
+ *  源判别：`source` 字段 → equips[].rarity 类型（mys "S"/2025 4）→ skills 数组顺序兜底。 */
 export function computeSkillStats(entries) {
   return runAcc(makeSkillStatsAcc(), entries);
 }
 
 /** equips[].rarity 的**类型**判源：string（"S"）→ mys、number（4）→ 2025；无 rarity 返回 null。
- *  这是结构性差异而非取值差异——extractBuild 的 mys 分支透传工坊格式化后的等级字母，2025 分支透传
- *  游戏原始数值。实测 20 万条目：rarity 形态与 subs[].value 形态（mys 字符串 "7.2%" / 2025 数字 720）
- *  100% 同构、零交叉，且可判率 100%。 */
+ *  结构性差异而非取值差异（mys 分支透传格式化等级字母、2025 透传原始数值）；实测与 subs[].value 形态 100% 同构零交叉。 */
 function is2025ByRarity(e) {
   for (const eq of e.equips || []) {
     if (!eq || eq.rarity == null) continue;
@@ -795,12 +686,10 @@ export function sourceOf(e) {
   // 旧数据（无 source，实测 15 万采样中 100% 都是）：rarity 类型是最可靠的替代信号
   const byRar = is2025ByRarity(e);
   if (byRar != null) return byRar ? '2025' : 'mys';
-  // 末位兜底：连 rarity 都没有时才回退数组顺序（mys 按 UI 顺序第 2 位=2、2025 按 ID 顺序=1）。
-  // 该启发式与 rarity 判别在 20 万样本中分歧 160 条（0.080%），分歧样本全部是 rarity 全 "S"（mys）
-  // 但 skills 恰好呈 ID 升序 [0,1,2,3,5,6] —— 即数组顺序法误判（会把 1↔2、终结/支援全部错位），
-  // 故降为最后兜底而非主路径。
+  // 末位兜底：连 rarity 都没有才回退数组顺序（mys 第 2 位=2、2025=1）。该启发式在 20 万样本中分歧
+  // 160 条（0.080%）——rarity 全 "S" 但 skills 恰呈 ID 升序会误判（1↔2、终结/支援错位），故只作兜底。
   if (e.skills?.length >= 2) return e.skills[1].type !== 2 ? '2025' : 'mys';
-  return null; // 三种信号都拿不到：无法判源
+  return null;
 }
 
 /** 源 → 技能 type 归一表；无法判源返回 null（该条不贡献技能统计）。 */
@@ -842,20 +731,13 @@ function makeSkillStatsAcc() {
 }
 
 // ---------- 加权词条效率分（强化次数 × 工坊角色流派权重） ----------
-// workshop-weights.json 落盘后一直没有任何消费方。它是工坊官方给每个角色的默认流派属性权重（0.2-1），
-// 与还原出的强化次数相乘即得「加权词条效率分」——比 relic_point 更透明（公式公开、前端可用同一张
-// weights 表对「我的盘」复算），能直接回答「我在这个角色的玩家池里排第几、是哪个槽位拖后腿」。
-// 口径：权重表不区分百分比/固定值（攻击力% 与 攻击力 共用 key「攻击」），此处沿用工坊原始口径不折算。
+// workshop-weights.json 是工坊官方给每个角色的默认流派属性权重（0.2-1），与还原的强化次数相乘即
+// 「加权词条效率分」——比 relic_point 透明（公式公开、前端可用同一张 weights 表对「我的盘」复算）。
+// 口径：权重表不区分百分比/固定值（共用 key），沿用工坊原始口径不折算。
 
 /** 每角色「加权词条效率分」分布（按条目 = 一整套驱动盘聚合）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, equips}）
- *  @param {{weightJson?:object, roleWeights?:Map}} [opts]  工坊权重；缺失时返回空对象（本聚合整体跳过）
- *  @returns {Object<string, {weights:Object<string,number>, score:Dist, effRolls:Dist,
- *            slotEff:Object<string,{count:number,mean:number}>,
- *            scoreVsRelic:{n:number, r:number}|null}>}  role_id → 统计
- *    weights：该角色有效副词条→权重（前端复算「我的分」用同一张表，保证口径一致）；
- *    score：加权分分布；effRolls：整套有效强化次数分布；slotEff：每槽有效强化次数均值（找短板槽）；
- *    scoreVsRelic：D9「工坊评分 × 盘毕业度」皮尔逊相关（同条目配对，relic_point 缺失/为 0 不配对）。 */
+ *  weights 供前端复算「我的分」用同一张表；slotEff 为每槽有效强化次数均值（找短板槽）；
+ *  scoreVsRelic 为 D9「工坊评分 × 盘毕业度」皮尔逊相关（同条目配对，relic_point 缺失/为 0 不配对）。 */
 export function computeRollEfficiency(entries, opts = {}) {
   return runAcc(makeRollEfficiencyAcc(opts), entries);
 }
@@ -932,15 +814,13 @@ function makeRollEfficiencyAcc(opts = {}) {
 
 // ---------- 2026-10 新增聚合：配队亲和 ----------
 
-/** 每角色「同 uid 玩家同练角色」共现（真实配队亲和性）：角色 A → 队友 B 出现次数降序。
- *  @param {object[]} entries  workshop.json 的 entries（{uid, role_id}）
- *  @returns {Object<string, [string, number][]>}  role_id → [[队友 role_id, 共现次数], ...]（按次数降序） */
+/** 每角色「同 uid 玩家同练角色」共现（真实配队亲和性）：角色 A → 队友 B 出现次数降序。 */
 export function computeRoleCooccurrence(entries) {
   return runAcc(makeRoleCooccurrenceAcc(), entries);
 }
 
-/** 共现累加器：add 只做「uid → 角色集合」收集，配对全在 finish（原实现也是两段式，顺序天然一致）。
- *  注意内存：这是唯一一个必须驻留「全体 uid × 角色集合」的聚合，与合并遍历无关（原本也如此）。 */
+/** 共现累加器：add 只收集「uid → 角色集合」，配对全在 finish。
+ *  注意内存：这是唯一必须驻留「全体 uid × 角色集合」的聚合。 */
 function makeRoleCooccurrenceAcc() {
   const uidRoles = new Map(); // uid -> Set(role_id)
   return {
@@ -968,37 +848,19 @@ function makeRoleCooccurrenceAcc() {
 }
 
 // 【已移除】computeCompleteness（音擎60/盘满级/评分≥P75 占比）——2026-08 实测三个维度全部退化：
-// 样本池是排行榜上榜 uid（高练度标杆池），音擎 60 级与驱动盘满级是入场券而非差异点，
-// 57 个角色的 w60 与 discMax **无一例外全为 1.0000**；relicTop「评分 ≥ 该角色 P75 的占比」
-// 更是定义上的恒等式，实测 57 个角色全部落在 0.2500-0.2517。三列都测不出任何东西，
-// 连同前端「完成度矩阵」卡一并删除。若将来要做完成度，须选在精英池里真有方差的维度
-// （影画档位 rankDist / 是否专武 / 6 号位主词条是否踩中主流）。
+// 样本池是上榜 uid（高练度标杆池），音擎 60 级与盘满级是入场券（57 角色 w60/discMax 全为 1.0000），
+// relicTop 是定义上的恒等式（全落 0.2500-0.2517），连同前端「完成度矩阵」卡一并删除。
 
 // ---------- 单遍历总入口（2026-08 性能重构） ----------
 
-/**
- * 一次遍历 entries 完成全部 13 项聚合（原 buildWorkshopStats 逐个调用 = 逐项全量流式解析 2.13GB）。
- * 每个 key 的值与对应公开函数**逐位相同**（累加顺序、Map 插入顺序完全一致，见文件顶部累加器说明）。
- * @param {Iterable<object>} entries  workshop.json 的 entries（可为 generator，仅消费一次）
- * @param {object} discIndex  buildNameIndex(library.discs, CATEGORY.DISC)
- * @param {{roleNameMap?:Map<string,string>, weightJson?:object, roleWeights?:Map}} [opts]
- *   weightJson：工坊角色流派权重（workshop-weights.json 的 weights 段）。驱动盘 effDist 的「有效副词条」
- *   与 rollEfficiency 都依赖它；缺失时 effDist 退化为「全部合法副词条」、rollEfficiency 返回空对象。
- * @returns {{stats, panelCorr, discDetails, panelScatter, relicStats, rankDist,
- *            skillStats, roleCooccurrence, rollEfficiency, roleStyles,
- *            roleOwnership, sampleCoverage, choiceConcentration}}
- */
+/** 一次遍历 entries 完成全部 13 项聚合；每个 key 与对应公开函数**逐位相同**（见文件顶部累加器说明）。
+ *  ⚠️ opts.weightJson 必须传入：驱动盘 effDist 与 rollEfficiency 都依赖它，缺失时 effDist 退化为
+ *  「全部合法副词条」、rollEfficiency 返回空对象。entries 仅消费一次（可为 generator）。 */
 // ---------- 角色流派分析（2026-10 新增） ----------
-// 流派 = 玩家在面板上的配置取向分化：同一角色的面板资源零和，玩家在「堆攻击 / 堆双暴 / 堆精通」等
-// 取向间分化，k-means 把这些取向聚成簇（每簇 = 一个流派）。
-// ⚠️ 聚类属性必须按角色定位（trait）选：输出看 攻击/双暴/属性伤害、击破核心是**冲击力**、
-//    异常核心是**精通/掌控**、命破/防护核心是**生命/防御**、支援只有 攻击/生命——固定 6 维会让
-//    击破/异常角色的核心维度缺失、支援角色把无关维度（双暴）当判别信号。
-//    故：候选池按 trait 选 → 样本过滤 → **数据驱动去噪**（归一化 sd 过低的列 = 玩家无分化 =
-//    无流派判别力，剔除；至少保留 3 维）。
-// 试验验证（排行榜全量 uid 池）：星见雅/艾莲 k=3 出「暴伤/暴击率/攻击」三流、苍角出「精通异常/双暴/
-// 攻击」三流，4 号位主词条是强判别信号（簇内 Top1 占比 >50%）；k=4 出现噪声簇，故固定 k=3。
-// 输出体积受控：每簇只存 share/label/面板 mean+median/456 主词条 Top2/套装 Top2/音擎 Top2。
+// 流派 = 玩家在面板上的配置取向分化，k-means 把这些取向聚成簇（每簇 = 一个流派）。
+// ⚠️ 聚类属性必须按角色定位（trait）选：击破核心是**冲击力**、异常是**精通/掌控**、命破/防护是**生命/防御**、
+// 支援只有 攻击/生命——固定 6 维会让核心维度缺失、无关维度（双暴）成判别信号；候选池按 trait 选后
+// 再做**数据驱动去噪**（归一化 sd 过低的列剔除，至少保留 3 维）。试验 k=3 出稳定流派、k=4 出现噪声簇，故固定 k=3。
 const STYLE_K = 3;
 const STYLE_MAX_SAMPLES = 20000; // 每角色样本上限（2 万 × ≤7 维已足够稳定；截断保序无随机性）
 /** 角色定位 → 聚类候选属性池（定位语义：只聚玩家真正会分化的属性） */
@@ -1087,8 +949,7 @@ export function styleMatch(roleStyle, myPanel) {
   return { best: scored[0] ?? null, scored };
 }
 
-/** 流派聚类累加器（挂进 computeAllWorkshopStats 单遍历；见文件头累加器约定）。
- *  @param {Object<string,string>} [traits]  role_id → 定位（强攻/击破/异常/命破/防护/支援）；缺省回退通用属性池 */
+/** 流派聚类累加器（挂进 computeAllWorkshopStats 单遍历）；traits 缺省回退通用属性池。 */
 function makeRoleStylesAcc(traits) {
   const perRole = new Map(); // role_id -> {dmg: Map<键,count>, samples: [{panel,mains,suit,wep,dmg}]}
   return {
@@ -1203,9 +1064,8 @@ function makeRoleStylesAcc(traits) {
               median: +quantileSorted(sorted, 0.5).toFixed(4),
             };
           });
-          // ⚠️ 必须索引 valid 而非 o.samples：idx 来自 assign/P，二者都以过滤后的 valid 为基准。
-          // 索引 o.samples 会让「首个被过滤样本」之后的全部样本整体错位一格（实测 23/57 角色
-          // 有样本被过滤，最坏一例污染该角色 92.8% 的归属，且 label 由 main4[0] 推出 → 簇名也错）。
+          // ⚠️ 必须索引 valid 而非 o.samples：idx 来自 assign/P（以过滤后的 valid 为基准），索引 o.samples
+          // 会让被过滤样本之后的全部样本错位一格（实测 23/57 角色有过滤，最坏污染该角色 92.8% 归属且簇名也错）。
           const main4 = topN(idx, (i) => valid[i].mains[4]);
           const main6 = topN(idx, (i) => valid[i].mains[6]);
           styles.push({
@@ -1247,8 +1107,7 @@ function makeRoleStylesAcc(traits) {
   };
 }
 
-/** 角色流派分析（独立入口，测试用；buildWorkshopStats 走 computeAllWorkshopStats 单遍历）。
- *  @param {Object} [opts]  {traits: {role_id → 定位}} */
+/** 角色流派分析（独立入口，测试用；生产走 computeAllWorkshopStats 单遍历）。 */
 export function computeRoleStyles(entries, opts = {}) {
   const acc = makeRoleStylesAcc(opts.traits);
   for (const e of entries || []) acc.add(e);
@@ -1256,7 +1115,7 @@ export function computeRoleStyles(entries, opts = {}) {
 }
 
 export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
-  // 相关性与散点属性对不同（7 对 vs 2 对），各建一个采集器：合并成 9 对会改 key 插入顺序（见 makePanelPairsAcc 注释）
+  // 相关性与散点属性对不同，各建采集器：合并会改 key 插入顺序（见 makePanelPairsAcc 注释）
   const corrAcc = makePanelPairsAcc(CORR_PAIRS);
   const scatterAcc = makePanelPairsAcc(SCATTER_PAIRS);
   const wsAcc = makeWorkshopStatsAcc();

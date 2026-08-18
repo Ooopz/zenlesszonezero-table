@@ -1,10 +1,10 @@
-// src/web/ui.js —— 交互层：提示条、服务器同步、目标/有效/备注弹窗、事件绑定、初始化
-import { CLIPBOARD_SCRIPT, escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
+// src/web/ui.js —— 交互层：目标/有效/备注/技能弹窗、事件绑定、初始化（URL 状态见 urlState.js，同步中心见 sync.js）
+import { escapeHtml, escapeJsAttr, formatValue } from '../lib/util.js';
 import { createSort } from '../lib/sort.js';
 import { registerZZZ } from './shared.js';
 import { targetStats, targetUnits, validStatOptions } from '../lib/calc.js';
-import { TARGET_KEYS, MAIN_STAT_OPTIONS, SYNC_KINDS, VIEWS, SUBSTAT_TYPE_SET, mainStatName } from '../lib/constants.js';
-import { apiRequest, postJSON, notify } from './util.js';
+import { TARGET_KEYS, MAIN_STAT_OPTIONS, SUBSTAT_TYPE_SET, mainStatName } from '../lib/constants.js';
+import { notify } from './api.js';
 import {
   readCharTarget,
   saveCharTarget,
@@ -17,221 +17,19 @@ import {
   plansByName,
   library,
 } from './data.js';
-import { render, setMyTab, myTab } from './render.js';
-import { setWikiTab, wikiTab } from './wiki.js';
-import { setRecommendTab, setSelectedRole, recommendTab, selectedRole } from './recommend.js';
-import { setSelectedDisc, selectedDisc } from './discstats.js';
+import { render } from './render.js';
+import { setMyTab } from './myChars.js';
+import { setWikiTab } from './wiki.js';
+import { setStatsTab, setSelectedRole } from './statsView.js';
+import { setSelectedDisc } from './discstats.js';
 import { setSimRerender, simSelect, simAxis, simAddChart, simRemoveChart } from './simulate.js';
-
-// ---------- 视图状态 URL 持久化（?view=&tab=&role=&disc=，replaceState 不产生历史记录） ----------
-/** 各一级视图的合法子 tab 键（URL 恢复时白名单校验） */
-const URL_TABS = {
-  [VIEWS.MY_CHARS]: ['card', 'table'],
-  [VIEWS.WIKI]: ['characters', 'wengines', 'discs', 'bangboos'],
-  [VIEWS.RECOMMEND]: ['detail', 'discs', 'overview'],
-};
-/** 当前视图的子 tab 值（URL 写入用） */
-function currentTab(view) {
-  if (view === VIEWS.MY_CHARS) return myTab;
-  if (view === VIEWS.WIKI) return wikiTab;
-  if (view === VIEWS.RECOMMEND) return recommendTab;
-  return null;
-}
-/** legacy 视图值 → 当前视图（与 render.js resolveView 同口径：card/table → mychars、discstats → recommend） */
-function resolveViewFrom(raw) {
-  if (raw === VIEWS.CARD || raw === VIEWS.TABLE) return VIEWS.MY_CHARS;
-  if (raw === 'discstats') return VIEWS.RECOMMEND;
-  return raw;
-}
-/** 把当前 视图/子tab/角色/盘 状态写入 URL。每次状态切换后调用（视图切换/子tab/角色下拉/盘下拉）。
- *  view 缺省时沿用 URL 已有的 view（子 tab 切换场景），否则回退 userConfig.view——避免把
- *  loadUserConfig 之前的默认 'card' 当成当前视图写进 URL。 */
-function syncUrl(view) {
-  if (!view) {
-    const raw = new URLSearchParams(location.search).get('view') || userConfig.view || VIEWS.MY_CHARS;
-    view = resolveViewFrom(raw);
-  }
-  const p = new URLSearchParams();
-  if (view !== VIEWS.MY_CHARS) p.set('view', view);
-  const tab = currentTab(view);
-  if (tab) p.set('tab', tab);
-  if (view === VIEWS.RECOMMEND) {
-    if (selectedRole) p.set('role', selectedRole);
-    if (selectedDisc) p.set('disc', selectedDisc);
-  }
-  const qs = p.toString();
-  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
-}
-/** 首次渲染前从 URL 恢复 子tab/角色/盘 状态（一级 view 由 render.js 的 resolveView 解析）。 */
-function applyUrlState() {
-  const p = new URLSearchParams(location.search);
-  const view = resolveViewFrom(p.get('view') || userConfig.view || VIEWS.MY_CHARS);
-  const tab = p.get('tab');
-  if (tab && (URL_TABS[view] || []).includes(tab)) {
-    if (view === VIEWS.MY_CHARS) setMyTab(tab);
-    else if (view === VIEWS.WIKI) setWikiTab(tab);
-    else if (view === VIEWS.RECOMMEND) setRecommendTab(tab);
-  }
-  if (view === VIEWS.RECOMMEND) {
-    if (p.get('role')) setSelectedRole(p.get('role'));
-    if (p.get('disc')) setSelectedDisc(p.get('disc'));
-  }
-}
-
-// ---------- 提示条 ----------
-// notify 已上移到 util.js（data.js 也需要它，见那里的说明）
-
-// ---------- 服务器一键同步 ----------
-/** 同步进度轮询：同步期间定时查询 /api/sync-progress，更新提示条与同步中心弹窗内进度 */
-let syncPollTimer = null;
-function stopSyncPolling() {
-  if (syncPollTimer) {
-    clearInterval(syncPollTimer);
-    syncPollTimer = null;
-  }
-}
-/** 更新同步中心弹窗内进度区（打开时）；未打开则忽略 */
-function progress(msg) {
-  const el = document.getElementById('syncProgress');
-  if (el) el.textContent = msg;
-}
-function startSyncPolling(kind) {
-  stopSyncPolling();
-  syncPollTimer = setInterval(async () => {
-    const j = await apiRequest('/api/sync-progress', { method: 'GET' });
-    if (!j || !j.ok || !j.progress || j.progress.kind !== kind) return;
-    const p = j.progress;
-    let msg = '正在同步…';
-    if (p.step === SYNC_KINDS.CHARACTERS) msg = `正在同步角色 ${p.done}/${p.total}…`;
-    else if (p.step === 'wengines') msg = `正在同步音擎 ${p.done}/${p.total}…`;
-    else if (p.step === 'discs') msg = `正在同步驱动盘 ${p.done}/${p.total}…`;
-    else if (p.step === 'bangboos') msg = `正在同步邦布 ${p.done}/${p.total}…`;
-    else if (p.step === SYNC_KINDS.PLANS) msg = `正在同步推荐方案 ${p.done}/${p.total}…`;
-    else if (p.step === 'rank') msg = `正在爬取排名 ${p.done}/${p.total}…`;
-    else if (p.step === 'fetch')
-      msg = p.skipped
-        ? `正在拉取工坊配装 ${p.done}/${p.total}（跳过 ${p.skipped} 个已缓存）…`
-        : `正在拉取工坊配装 ${p.done}/${p.total}…`;
-    else if (p.step === 'grad') msg = `正在更新工坊统计 ${p.done}/${p.total}…`;
-    progress(msg);
-  }, 300); // 300ms 轮询：各阶段（尤其较短的驱动盘/邦布）都能可靠捕获
-}
-
-/** 统一同步请求：执行一个同步并返回 {ok, data}（由调用方决定刷新/汇总）。
- *  同步可跑数小时（工坊全量/推荐方案全量），POST 不设超时（timeout: 0），
- *  完成与否以服务器最终响应为准；进度靠 startSyncPolling 轮询展示。 */
-async function runSync(label, kind, url, body) {
-  startSyncPolling(kind);
-  const j = body ? await postJSON(url, body, { timeout: 0 }) : await apiRequest(url, { method: 'POST', timeout: 0 });
-  stopSyncPolling();
-  return { ok: !!(j && j.ok), data: j };
-}
-const syncBase = () => runSync('数据库', SYNC_KINDS.LIBRARY, '/api/sync-base');
-const syncCharacters = (cookie) =>
-  runSync('我的角色', SYNC_KINDS.CHARACTERS, '/api/sync-characters', { cookie: cookie || '' });
-const syncPlans = (cookie) => runSync('推荐方案', SYNC_KINDS.PLANS, '/api/sync-plans', { cookie: cookie || '' });
-const syncWorkshopData = () => runSync('工坊数据', SYNC_KINDS.WORKSHOP, '/api/sync-workshop');
-
-/** 打开同步中心弹窗：填充数据新鲜度 + cookie 缓存状态（不回显明文，服务端已不再下发） */
-async function openSyncCenter() {
-  const j = await apiRequest('/api/sync-status', { method: 'GET' });
-  document.getElementById('syncCookieSnippet').textContent = CLIPBOARD_SCRIPT;
-  const input = document.getElementById('syncCookieInput');
-  input.value = '';
-  input.placeholder = j && j.cached ? '已缓存 cookie（不回显）；需更换时在此粘贴新的' : '尚未缓存 cookie，请粘贴';
-  document.getElementById('syncFreshness').innerHTML =
-    j && j.ok ? renderFreshness(j.files) : '⚠ 未检测到本地服务器：请先运行 npm start';
-  document.getElementById('syncProgress').textContent = '';
-  document.getElementById('syncErrors').innerHTML = '';
-  document.getElementById('syncModal').classList.add('show');
-}
-/** 距现在的时间描述（数据新鲜度） */
-function ago(ms) {
-  if (ms == null) return '未更新';
-  const d = Date.now() - ms;
-  const day = Math.floor(d / 86400000);
-  const h = Math.floor(d / 3600000);
-  const m = Math.floor(d / 60000);
-  if (day > 0) return `${day} 天前`;
-  if (h > 0) return `${h} 小时前`;
-  return m > 0 ? `${m} 分钟前` : '刚刚';
-}
-function renderFreshness(files) {
-  const labels = {
-    library: '数据库',
-    characters: '我的角色',
-    plans: '推荐方案',
-    workshop: '工坊配装',
-    workshopGrad: '工坊统计',
-  };
-  const items = Object.entries(files || {}).map(
-    ([k, v]) => `<span class="fresh-item">${labels[k] || k}：<b>${ago(v)}</b></span>`
-  );
-  return `<div class="fresh-row">${items.join('')}</div>`;
-}
-/** 按勾选同步（可多选）：串行执行、失败隔离，最后汇总并刷新 */
-async function runSelectedSyncs() {
-  const checked = [...document.querySelectorAll('.sync-chk:checked')].map((c) => c.dataset.key);
-  if (!checked.length) return notify('未勾选任何同步', 6);
-  const cookie = document.getElementById('syncCookieInput').value.trim();
-  const labels = { wiki: '数据库', characters: '我的角色', plans: '推荐方案', workshop: '工坊数据' };
-  const results = [];
-  for (const key of checked) {
-    const label = labels[key] || key;
-    progress(`正在更新${label}…`);
-    let r;
-    if (key === 'wiki') r = await syncBase();
-    else if (key === 'characters') r = await syncCharacters(cookie);
-    else if (key === 'plans') r = await syncPlans(cookie);
-    else r = await syncWorkshopData();
-    const error = r.ok ? '' : (r.data && r.data.error) || '网络错误';
-    results.push({ label, ok: r.ok, error });
-    if (!r.ok) progress(`正在更新${label}…失败：${error}`);
-  }
-  const summary = results.map((r) => `${r.label}${r.ok ? '✓' : '✗'}`).join(' ');
-  progress(`同步完成：${summary}`);
-  const failed = results.filter((r) => !r.ok);
-  if (failed.length) {
-    // 有失败项 → 在更新面板内展示失败详情（面板保持打开，便于调整后重试）
-    document.getElementById('syncErrors').innerHTML =
-      `<div class="sync-errors-title">以下数据更新失败，可查看原因后重试：</div>` +
-      failed
-        .map(
-          (f) =>
-            `<div class="sync-errors-item"><b>${escapeHtml(f.label)}</b>：<span>${escapeHtml(f.error)}</span></div>`
-        )
-        .join('');
-  } else {
-    notify(`同步完成：${summary}，即将刷新`);
-    setTimeout(() => location.reload(), 1200);
-  }
-}
-
-/** 保存 cookie 到本地（data/.cookie.json），不触发同步 */
-async function saveCookie() {
-  const cookie = document.getElementById('syncCookieInput').value.trim();
-  if (!cookie) return notify('cookie 为空，粘贴后保存', 6);
-  const j = await postJSON('/api/cookie', { cookie });
-  if (j && j.ok) notify('cookie 已保存');
-  else notify('保存失败：' + ((j && j.error) || '无法连接本地服务器'), 10);
-}
-
-/** 复制代码到剪贴板（指南脚本/命令） */
-function copyText(text, label) {
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => notify(`${label}已复制到剪贴板`))
-      .catch(() => notify('复制失败，请手动框选复制'));
-  } else {
-    notify('当前浏览器不支持一键复制，请手动框选复制');
-  }
-}
+import { migrateViewState, syncUrl, applyUrlState } from './urlState.js';
+import { initSync, syncWorkshopData } from './sync.js';
 
 // ---------- 目标设置弹窗 ----------
 let currentTargetChar = null;
 
-/** 填充「推荐音擎」下拉：只允许选属性库（wiki）中的音擎（候选见 constants.MAIN_STAT_OPTIONS） */
+/** 填充「推荐音擎」下拉：候选仅限属性库（wiki）中的音擎 */
 function fillWengineSelect() {
   const sel = document.getElementById('targetWengine');
   const names = Object.keys(library.wengines || {}).sort((a, b) => a.localeCompare(b, 'zh'));
@@ -239,7 +37,6 @@ function fillWengineSelect() {
     '<option value="">—</option>' +
     names.map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
 }
-/** 填充指定槽位主词条下拉 */
 function fillMainSelect(slot) {
   const sel = document.getElementById('targetMain' + slot);
   sel.innerHTML =
@@ -258,14 +55,13 @@ function openTargetSettings(name) {
         `<div class="titem"><label>${stat}</label><input data-name="${stat}" type="number" step="any" value="${target[stat] ?? ''}" placeholder="—"><span class="unit">${targetUnits[stat] || ''}</span></div>`
     )
     .join('');
-  // 推荐音擎（wiki 音擎下拉）+ 4/5/6 号位主词条（各槽位候选下拉）
   fillWengineSelect();
   for (const slot of [4, 5, 6]) fillMainSelect(slot);
   document.getElementById('targetWengine').value = target[TARGET_KEYS.WENGINE] || '';
   document.getElementById('targetMain4').value = target[TARGET_KEYS.MAIN4] || '';
   document.getElementById('targetMain5').value = target[TARGET_KEYS.MAIN5] || '';
   document.getElementById('targetMain6').value = target[TARGET_KEYS.MAIN6] || '';
-  // 有效副词条勾选（并入目标弹窗，未手动配置时预勾选默认游戏推荐）
+  // 有效副词条勾选（未手动配置时预勾选游戏默认推荐）
   const effSelected = new Set(readValidStats(name));
   document.getElementById('effGrid').innerHTML = validStatOptions
     .map(
@@ -283,7 +79,7 @@ async function saveTargetSettings() {
     const v = inp.value.trim();
     if (v !== '') target[inp.dataset.name] = Number(v);
   });
-  // 音擎/主词条（字符串目标，空值不覆盖）
+  // 音擎/主词条：空值不覆盖
   const w = document.getElementById('targetWengine').value.trim();
   if (w) target[TARGET_KEYS.WENGINE] = w;
   for (const [id, key] of [
@@ -305,12 +101,12 @@ async function saveTargetSettings() {
   if (ok) notify(`${currentTargetChar} 目标已保存`);
 }
 
-/** 推荐方案表格排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js） */
+/** 方案表格排序（三态：升序→降序→恢复默认，走 src/lib/sort.js） */
 const planSort = createSort();
 function togglePlanSort(key) {
   planSort.toggle(key);
 }
-/** 各列排序取值：属性列取 panel.high（数值），发布时间取时间戳，其余按展示文本 */
+/** 排序取值：属性列取 panel.high，发布时间取时间戳，其余按展示文本 */
 function planSortValue(p, key) {
   if (key === '方案') return p.name;
   if (key === '发布时间') return Number(p.releasedAt) || 0;
@@ -337,8 +133,7 @@ function planSortValue(p, key) {
   return a?.high ?? null;
 }
 
-/** 目标弹窗推荐方案表格：动态属性列（该角色所有方案推荐面板属性并集，取 high 档）+ 音擎 / 456 主词条 / 副词条。
- *  表头可点击排序（复用 compareValues 与列表视图三态模式）；排序后「应用」仍按原始下标取对应方案。 */
+/** 推荐方案表格：动态属性列（方案面板属性并集，取 high 档）+ 音擎/456 主词条/副词条；排序后「应用」仍按原始下标取方案。 */
 function renderPlanTable(name) {
   const container = document.getElementById('planTable');
   const entry = plansByName[name];
@@ -348,13 +143,13 @@ function renderPlanTable(name) {
     return;
   }
   const plansList = entry.plans;
-  // 动态列：所有方案出现的推荐属性并集（不同角色/方案属性不同）
+  // 动态列：方案面板属性并集（不同角色/方案属性不同）
   const statNames = [];
   for (const p of plansList) for (const a of p.panel || []) if (!statNames.includes(a.name)) statNames.push(a.name);
 
-  // 排序（未激活时 apply 原样返回；激活时空值行始终排最后，不受升降序影响）
+  // 排序：空值行恒排最后，不受升降序影响
   const list = planSort.apply(plansList, planSortValue);
-  // 方案对象 → 原始下标（「应用」按钮要写回原方案；排序后 indexOf 是 O(n²)，这里一次建表）
+  // 方案 → 原始下标映射（「应用」要写回原方案；排序后 indexOf 是 O(n²)）
   const planIndex = new Map(plansList.map((p, i) => [p, i]));
 
   const heads = [
@@ -373,7 +168,7 @@ function renderPlanTable(name) {
   const rows = list.map((p) => {
     const statMap = {};
     for (const a of p.panel || []) statMap[a.name] = a;
-    // 发布时间：releasedAt 为 Unix 秒
+    // releasedAt 为 Unix 秒
     let released = '—';
     if (p.releasedAt) {
       const d = new Date(Number(p.releasedAt) * 1000);
@@ -382,7 +177,7 @@ function renderPlanTable(name) {
         released = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       }
     }
-    // 二/四件套名（部分方案为 2+2 无四件套，可能同名多套）
+    // 二/四件套名（部分方案 2+2 无四件套，可能同名多套）
     const setName = (cnt) =>
       (p.sets || [])
         .filter((s) => s.cnt === cnt)
@@ -416,7 +211,6 @@ function renderPlanTable(name) {
     .join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
-/** 应用推荐方案：把方案推荐面板（high 档）+ 推荐音擎 + 4/5/6 号位主词条写入该角色目标 */
 async function applyPlan(name, idx) {
   const entry = plansByName[name];
   const p = entry?.plans?.[idx];
@@ -424,15 +218,15 @@ async function applyPlan(name, idx) {
   const target = readCharTarget(name);
   for (const a of p.panel || []) {
     if (a.high == null) continue;
-    // 目标系统：百分比属性填整数（60 = 60%），其余填实际数值
+    // 百分比属性填整数（60 = 60%），其余填实际数值
     target[a.name] = a.percent ? Math.round(a.high * 100) : a.high;
   }
   if (p.weapon?.main) target[TARGET_KEYS.WENGINE] = p.weapon.main;
-  // 456 号位主词条恒为百分比：mainStatName 兜底把旧数据/接口固定值名转百分比（攻击力→攻击力%）
+  // 456 主词条恒为百分比：mainStatName 兜底把固定值名转百分比（攻击力→攻击力%）
   if (p.mainProps?.[4]) target[TARGET_KEYS.MAIN4] = mainStatName(p.mainProps[4]);
   if (p.mainProps?.[5]) target[TARGET_KEYS.MAIN5] = mainStatName(p.mainProps[5]);
   if (p.mainProps?.[6]) target[TARGET_KEYS.MAIN6] = mainStatName(p.mainProps[6]);
-  // 推荐副词条 → 有效副词条（过滤到合法副词条类型，如「攻击力%」「异常精通」）
+  // 推荐副词条 → 有效副词条（仅保留合法类型）
   if (p.subStats?.length) target[TARGET_KEYS.VALID_STATS] = p.subStats.filter((s) => SUBSTAT_TYPE_SET.has(s));
   const ok = await saveCharTarget(name, target);
   openTargetSettings(name); // 重新渲染显示已应用的值
@@ -460,11 +254,13 @@ async function saveNoteModal() {
 window.openNote = openNote;
 window.openTargetSettings = openTargetSettings;
 
-/** 初始化交互：绑定事件并启动加载配置（由 main.js 在数据就绪后调用） */
+/** 初始化交互：绑定事件、加载配置（main.js 数据就绪后调用） */
 export function initUi() {
-  // 从 URL 恢复子 tab/角色/盘状态（在首次 render 之前，见 loadUserConfig().then(render) 在函数末尾）
+  // 视图持久化值一次性迁移（旧书签 ?view=recommend/discstats/card/table），必须先于 applyUrlState
+  migrateViewState();
+  // 从 URL 恢复子 tab/角色/盘状态（在首次 render 之前）
   applyUrlState();
-  // 图片加载失败统一占位：隐藏破图，露出容器背景色块（error 事件不冒泡，需捕获阶段）
+  // 图片加载失败统一隐藏破图（error 事件不冒泡，需捕获阶段）
   document.addEventListener(
     'error',
     (e) => {
@@ -508,24 +304,16 @@ export function initUi() {
   document
     .getElementById('skillClose')
     .addEventListener('click', () => document.getElementById('skillModal').classList.remove('show'));
-  // 推荐方案表格表头点击排序（targetModal 不在 grid 内，需单独委托；排序后按当前角色重渲染）
+  // 方案表格表头点击排序（targetModal 不在 grid 内，需单独委托）
   document.getElementById('planTable').addEventListener('click', (e) => {
     const th = e.target.closest ? e.target.closest('th[data-sort]') : null;
     if (!th) return;
     togglePlanSort(th.dataset.sort);
     renderPlanTable(currentTargetChar);
   });
-  // 同步中心：点「同步数据」打开弹窗；「更新」执行勾选的同步
-  document.getElementById('syncBtn').addEventListener('click', openSyncCenter);
-  document.getElementById('syncRun').addEventListener('click', runSelectedSyncs);
-  document
-    .getElementById('syncClose')
-    .addEventListener('click', () => document.getElementById('syncModal').classList.remove('show'));
-  document
-    .getElementById('syncCopy')
-    .addEventListener('click', () => copyText(document.getElementById('syncCookieSnippet').textContent, '脚本'));
-  document.getElementById('syncCookieSave').addEventListener('click', saveCookie);
-  // 视图切换（我的角色 / 数据库 / 统计）：独立一组，切视图并同步 URL 与配置
+  // 同步中心（initSync 在 sync.js 绑定弹窗与执行）
+  initSync();
+  // 视图切换：切视图并同步 URL 与配置
   document.querySelectorAll('.view-tab').forEach((b) =>
     b.addEventListener('click', () => {
       userConfig.view = b.dataset.view;
@@ -537,15 +325,15 @@ export function initUi() {
   // 模拟视图重渲染回调（simulate.js 不反向依赖 render.js）
   setSimRerender(render);
 
-  // wiki 子面板切换（wiki.js 渲染的 tab 内联引用）
+  // 子面板切换与模拟/同步入口（挂到 ZZZ 供渲染层内联引用）
   registerZZZ({
     wikiTab: (key) => {
       setWikiTab(key);
       syncUrl();
       render();
     },
-    recommendTab: (key) => {
-      setRecommendTab(key);
+    statsTab: (key) => {
+      setStatsTab(key);
       syncUrl();
       render();
     },
@@ -585,6 +373,5 @@ export function initUi() {
     .getElementById('helpClose')
     .addEventListener('click', () => document.getElementById('helpModal').classList.remove('show'));
 
-  // 先加载用户配置（目标/有效词条），再渲染
   loadUserConfig().then(() => render());
 }

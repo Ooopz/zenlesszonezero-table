@@ -45,7 +45,7 @@ test('normalizeRomanKey 罗马数字归一化并保留（工坊音擎名 → wik
   // Ⅰ/Ⅱ/Ⅲ 不互相碰撞（normalize 会把罗马数字全剥掉导致歧义）
   assert.notEqual(normalizeRomanKey('残响-I型'), normalizeRomanKey('残响-II型'));
   assert.notEqual(normalizeRomanKey('残响-II型'), normalizeRomanKey('残响III型'));
-  // 无罗马数字时与 normalize 一致（去 HTML/标点，留中文数字）
+  // 无罗马数字时与 normalize 一致
   assert.equal(normalizeRomanKey('震星迪斯科'), normalize('震星迪斯科'));
 });
 

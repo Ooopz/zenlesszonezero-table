@@ -37,7 +37,6 @@ test('streamJsonArrayElements：块边界落在条目间隙不丢条目（回归
   try {
     const out = [...streamJsonArrayElements(f, 3)];
     assert.equal(out.length, 50, '块边界在间隙时不得丢条目');
-    // 顺序与内容完整
     for (let i = 0; i < 50; i++) assert.equal(JSON.parse(out[i]).uid, 'u' + i);
   } finally {
     fs.rmSync(f, { force: true });

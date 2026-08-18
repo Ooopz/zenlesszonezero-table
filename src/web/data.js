@@ -3,11 +3,10 @@ import { statEntries } from '../lib/util.js';
 import { buildNameIndex, CATEGORY } from '../lib/names.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
-import { apiRequest, postJSON, notify } from './util.js';
+import { apiRequest, postJSON, notify } from './api.js';
 
 // ---------- 数据（由 setData 注入） ----------
-// 注：这些是 export let，ESM 的 import 是活绑定（live binding），
-// setData 重新赋值后，import 方读到的总是最新值。
+// 注：export let 为 ESM 活绑定，setData 重新赋值后 import 方自动读到新值。
 export let library = { characters: {}, wengines: {}, discs: {} };
 export let myCharacters = [];
 /** 角色名 → Character（供 readValidStats 默认路径 O(1) 查找，随 setData 重建） */
@@ -21,20 +20,17 @@ export let plansByName = {};
 /** 工坊全服配装统计：{ roles: [{ item_id, name, weapons, relics }] }（src/sync/workshop.js 的 fetchWorkshopGrad 爬取） */
 export let workshopGrad = { roles: [] };
 
-/** 工坊配装汇总（src/sync/workshop.js 的 buildWorkshopStats 生成，基于 workshop.json）：
- *  { wengines, discs, panels, panelCorr, panelScatter, discDetails, relicStats, rankDist,
- *    skillStats, roleCooccurrence, roleOwnership, sampleCoverage,
- *    choiceConcentration, weightJson }
+/** 工坊配装汇总（src/sync/workshop.js 的 buildWorkshopStats 生成，基于 workshop.json）；
  *  discDetails 为驱动盘单盘真实统计，供「统计→驱动盘」决策卡实况口径 */
 export let workshopStats = { wengines: [], discs: [], panels: [], discDetails: [] };
 
-/** 注入属性库 / 我的角色 / 推荐方案 / 工坊配装统计 / 工坊配装汇总（实例化为基类），并重建索引（main.js 在 fetch /api/data 后调用） */
+/** 注入各数据源（实例化为基类）并重建索引（main.js 在 fetch /api/data 后调用） */
 export function setData(lib, chars, plansData, gradData, statsData) {
   lib = lib || { characters: {}, wengines: {}, discs: {}, bangboos: {} };
   library = {
-    characters: toInstances(lib.characters, Character), // wiki 角色
-    wengines: toInstances(lib.wengines, Wengine), // wiki 音擎
-    discs: toInstances(lib.discs, Disc), // wiki 驱动盘
+    characters: toInstances(lib.characters, Character),
+    wengines: toInstances(lib.wengines, Wengine),
+    discs: toInstances(lib.discs, Disc),
     bangboos: lib.bangboos || {}, // 邦布为普通对象（基类无附加逻辑）
   };
   myCharacters = (chars || []).map((c) => new Character(c)); // 账号角色（含 Wengine/Disc 嵌套）
@@ -71,7 +67,7 @@ export const elementColors = {
 };
 
 // ---------- 用户配置（目标/有效词条/表格顺序/视图），经服务器持久化到 data/user-config.json ----------
-export let userConfig = { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'card' };
+export let userConfig = { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars' };
 export function readCharTarget(name) {
   return userConfig.charTargets[name] || {};
 }
@@ -114,10 +110,8 @@ export function saveColOrder(order) {
   userConfig.colOrder = order;
   saveUserConfig();
 }
-/** 保存用户配置到服务器。
- *  必须 await + 查 ok：postJSON 在服务器不可达/超时/非 JSON 响应时**返回 null 而不抛**，
- *  原先既不 await 也不看返回值 —— 目标值/有效词条/行列序保存失败时页面毫无提示，
- *  用户以为存上了，刷新后全部丢失。 */
+/** 保存用户配置到服务器。必须 await + 查 ok：postJSON 失败时返回 null 而不抛，
+ *  原先不检查导致保存失败无提示、刷新后修改全部丢失。 */
 export async function saveUserConfig() {
   const j = await postJSON('/api/config', { config: userConfig });
   if (j && j.ok) return true;
@@ -130,7 +124,7 @@ export async function loadUserConfig() {
     // 原地修改同一对象（render/ui 持有其引用），而不是重新赋值 let 变量
     Object.assign(
       userConfig,
-      { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'card' },
+      { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars' },
       j.config
     );
   }

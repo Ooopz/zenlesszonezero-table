@@ -1,20 +1,7 @@
-// src/sync/plans.js —— 抓取米游社「养成指南」推荐方案（推荐面板 + 装备 + 词条）
-//
-// 运行:  npm run sync:plans              （默认抓养成指南全部角色）
-//        npm run sync:plans -- --account （只抓账号 characters.json 里已练的角色）
-// 输出:  data/plans.json —— { avatarId: { name, plans: [...] } }
-//
-// 数据源: act.mihoyo.com 的「养成指南」H5（character-builder）背后接口
-//   nap_cultivate_tool 的 user/feed（「切换方案」长列表，分页）+ avatar_simple_info /
-//   plan_detail（补齐非列表方案）。feed 翻页直到 end 全量爬取（防死循环上限 MAX_PLANS=5000）。
-//   每个方案含：推荐面板(low/mid/high 三档)、推荐音擎(主+备)、驱动盘套装、
-//   4/5/6 号位主词条、副词条推荐、技能等级、配队。
-//
-// ⚠️ 请求头必须带 x-rpc-device_id / x-rpc-device_fp 指纹头，否则 plan_detail /
-//   search_plan 等端点会触发 Geetest 验证码风控（retcode 10035）。
-//   设备头优先取 cookie 里的真实指纹（DEVICEFP / _MHYUUID，从养成指南页面导出）——
-//   写死的伪造指纹会被风控以 retcode 10041 直接拒绝（实测），务必用真实值。
-//   feed 端点域为 act-api-takumi.mihoyo.com，参数用下划线（page_size/next_id/follow_end）。
+// src/sync/plans.js —— 抓取米游社「养成指南」推荐方案 → data/plans.json（{ avatarId: { name, plans: [...] } }）
+// 运行: npm run sync:plans（--account 只抓账号已练角色）；数据源 nap_cultivate_tool 的 user/feed（翻页到 end 全量爬取，MAX_PLANS=5000 防死循环）+ avatar_simple_info/plan_detail 补齐
+// ⚠️ 请求头必须带 x-rpc-device_id / x-rpc-device_fp 指纹头，否则触发 Geetest 风控（retcode 10035）；
+//   设备头优先取 cookie 真实指纹（DEVICEFP / _MHYUUID），伪造指纹会被 retcode 10041 拒绝（实测）。feed 端点域 act-api-takumi.mihoyo.com，参数用下划线
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +11,7 @@ import { normalizeStatKey, substatName, parseNum } from '../lib/util.js';
 import { canonicalize, CATEGORY } from '../lib/names.js';
 import { PERCENT_STATS, mainStatName } from '../lib/constants.js';
 import { validatePlans } from '../lib/schema.js';
-import { requestJson, retry, fetchUid } from './http.js';
+import { requestJson, retry, fetchUid } from './mihoyo-api.js';
 import { loadNameIndexes } from './name-index.js';
 
 const ACCOUNT_FILE = path.join(DATA_DIR, 'characters.json');
@@ -33,8 +20,7 @@ const ACCOUNT_FILE = path.join(DATA_DIR, 'characters.json');
 // library.json 为标准名权威源；缺失/损坏时降级为不归一（名称保持接口原样），并在同步时提示。
 const libNameIndex = loadNameIndexes('推荐方案名称');
 
-/** 方案写时归一：角色名 / 音擎主备 / 套装名 / 配队成员统一解析为 library 标准名。
- *  extractPlan 保持纯函数，此层只在写 data/plans.json 前对已提取方案做名称固化。 */
+/** 方案写时归一：角色/音擎主备/套装/配队成员统一解析为 library 标准名（extractPlan 保持纯函数，此层在写文件前固化名称） */
 function normalizePlansOutput(entry) {
   if (!libNameIndex) return entry;
   // 写时归一一律关 fuzzy（plans 名是全名，精确/别名/归一化键已足够，避免子串误匹配）
@@ -57,9 +43,8 @@ function normalizePlansOutput(entry) {
 const UA =
   'Mozilla/5.0 (Linux; Android 9; 23113RKC6C Build/PQ3A.190605.06200901; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 miHoYoBBS/2.75.2';
 
-// 请求头：nap_cultivate_tool 接口的鉴权组合。
-// x-rpc-device_*（设备指纹）是关键——缺了会触发 Geetest 风控；device_id / device_fp
-// 由 deviceHeaders() 按 cookie 里的真实指纹动态注入（见下），这里不写死。
+// 请求头：nap_cultivate_tool 接口的鉴权组合。x-rpc-device_*（设备指纹）是关键——缺了触发 Geetest 风控；
+// device_id/device_fp 由 deviceHeaders() 按 cookie 真实指纹动态注入，这里不写死。
 const planHeaders = {
   Host: 'api-takumi.mihoyo.com',
   'User-Agent': UA,
@@ -82,9 +67,8 @@ const API_USER = 'https://act-api-takumi.mihoyo.com/event/nap_cultivate_tool/use
 const MAX_PLANS = 5000; // 每角色方案安全上限（feed 正常以 end 标记自然终止；仅防接口异常时死循环，实际爬取全部）
 const FEED_PAGE = 10; // feed 每页数量（与 H5 一致）
 
-/** 设备指纹头：优先取 cookie 里养成指南会话的真实指纹（DEVICEFP / _MHYUUID，随 cookie 一起导出），
- *  缺失才回退到内置值。写死的伪造指纹会被风控以 retcode 10041 拒绝（实测 avatar_basic_list），
- *  务必用 cookie 里的真实值。 */
+/** 设备指纹头：优先取 cookie 里的真实指纹（DEVICEFP / _MHYUUID，随 cookie 导出），缺失才回退内置值；
+ *  伪造指纹会被风控 retcode 10041 拒绝（实测），务必用真实值 */
 function deviceHeaders(cookies) {
   return {
     'x-rpc-device_id': cookies?._MHYUUID || '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
@@ -102,24 +86,21 @@ const req = (url, cookies) =>
 
 // ---------------- 数据提取 ----------------
 
-/** 按属性名判定百分比：暴击/暴伤/穿透率恒为百分比（方案数据的 show_percent 字段不可靠，
- *  同一角色不同方案对暴击率有的标 1 有的标 0，但值都是「45」这种百分比数值）。集合见 constants.PERCENT_STATS */
+/** 按属性名判定百分比：暴击/暴伤/穿透率恒为百分比（方案 show_percent 字段不可靠，同角色不同方案标 1/0 不一，值都是「45」式百分比） */
 const isPercentPanel = (name) => PERCENT_STATS.has(normalizeStatKey(name));
 
-/** 解析方案面板数值：百分比属性（如暴击率 45）转内部小数（/100）；无效返回 null。
- *  基础解析统一走 util.parseNum（值通常为整数如 "45"，不带 % 符号）。 */
+/** 解析方案面板数值：百分比属性转内部小数（/100），无效返回 null；解析统一走 util.parseNum */
 function parseValue(v, percent) {
   const n = parseNum(v);
   return n == null ? null : percent ? n / 100 : n;
 }
 
-/** 副词条推荐名 → 项目词条名体系：「攻击力百分比」→「攻击力%」，其余归一化。
- *  百分比→% 规则统一走 util.substatName，再按属性别名归一化。 */
+/** 副词条推荐名 → 项目词条名体系：「攻击力百分比」→「攻击力%」（走 util.substatName），再按属性别名归一化 */
 function substatKey(name) {
   return normalizeStatKey(substatName(name));
 }
 
-/** 单个方案 → 精简结构。item 结构在 feed 与 plan_detail 返回中一致。 */
+/** 单个方案 → 精简结构（item 结构在 feed 与 plan_detail 中一致） */
 export function extractPlan(p) {
   const item = p.item || {};
   const mainProps = item.equip || {};
@@ -145,18 +126,14 @@ export function extractPlan(p) {
       main: item.weapon?.main?.name || null,
       backup: item.weapon?.backup?.name || null,
     },
-    // 驱动盘套装
     sets: (item.equip?.equip || []).map((e) => ({ name: e.name, cnt: e.cnt })),
-    // 4/5/6 号位主词条推荐（部分方案可能缺某项）；456 号位恒为百分比，
-    // 接口可能返回固定值名（攻击力/防御力/生命值），用 mainStatName 统一转百分比
+    // 4/5/6 号位主词条（部分方案缺项）；456 恒为百分比，接口可能返回固定值名，用 mainStatName 统一转百分比
     mainProps: {
       4: mainStatName(mainProps.main_properties_4?.[0]?.property_name) || null,
       5: mainStatName(mainProps.main_properties_5?.[0]?.property_name) || null,
       6: mainStatName(mainProps.main_properties_6?.[0]?.property_name) || null,
     },
-    // 副词条推荐
     subStats: (item.equip?.sub_properties || []).map((s) => substatKey(s.property_name)),
-    // 技能等级推荐
     skills: (item.skill || []).map((s) => ({ type: s.skill_type, level: s.level })),
     // 配队推荐（成员全名）
     team: (item.team?.main?.avatar_list || []).map((t) => t.full_name_mi18n || t.name_mi18n || ''),
@@ -168,8 +145,7 @@ export function extractPlan(p) {
 /** 单个角色的方案：user/feed 长列表分页爬取全部（直到 end）+ avatar_simple_info 的 plan_id 兜底补齐。 */
 async function fetchPlansFor(cookies, uid, avatarId) {
   const R = `uid=${uid}&region=prod_gf_cn`;
-  // 「切换方案」长列表：user/feed 分页（参数用下划线，order=0 综合排序），
-  // 翻页直到 end（全量爬取，不再截断前 500 个；MAX_PLANS 仅作防死循环上限）
+  // user/feed 分页（参数用下划线，order=0 综合排序），翻页直到 end（全量爬取不截断；MAX_PLANS 仅防死循环）
   const plans = [];
   let nextId = 0;
   while (plans.length < MAX_PLANS) {
@@ -182,8 +158,7 @@ async function fetchPlansFor(cookies, uid, avatarId) {
     nextId = next_id;
   }
 
-  // avatar_simple_info 返回该角色在养成指南里关联的 plan_id（官方/使用中方案），
-  // 未出现在 feed 列表时用 plan_detail 补上
+  // avatar_simple_info 返回关联 plan_id（官方/使用中方案），未出现在 feed 时用 plan_detail 补上
   const info = await req(`${API}/avatar_simple_info?avatar_id=${avatarId}&${R}`, cookies);
   const pid = info.data?.plan_id;
   if (pid && pid !== '0' && !plans.some((p) => String(p.id) === String(pid))) {
@@ -197,9 +172,7 @@ async function fetchPlansFor(cookies, uid, avatarId) {
   return plans.slice(0, MAX_PLANS);
 }
 
-/** 拉取全部角色的推荐方案并写入 data/plans.json。
- *  onlyAccount 为 true 时只抓 data/characters.json 里的账号角色；否则抓养成指南全部角色。
- *  strict 为 true 时校验异常抛错（命令行 STRICT=1 开启，网页同步保持 warn）。 */
+/** 拉取全部角色推荐方案写入 data/plans.json；onlyAccount 只抓账号角色，strict 时校验异常抛错（STRICT=1） */
 export async function fetchAllPlans(cookies, { onlyAccount = false, strict = false } = {}, onProgress) {
   const uid = await fetchUid(cookies, { ...planHeaders, ...deviceHeaders(cookies) }, { retry: retry.backoff() });
   console.log(`uid: ${uid}`);
@@ -246,7 +219,7 @@ export async function fetchAllPlans(cookies, { onlyAccount = false, strict = fal
   const stats = { characters: Object.keys(out).length, plans: 0 };
   for (const r of Object.values(out)) stats.plans += r.plans.length;
 
-  // 校验 + 写入 data/plans.json（与 characters.js 的 fetchMyCharacters 同模式，供 server 端复用）
+  // 校验 + 写入 data/plans.json（与 fetchMyCharacters 同模式，供 server 端复用）
   writeDataFile('plans.json', out, { label: '推荐方案', validate: validatePlans, strict });
 
   return { data: out, uid, stats };

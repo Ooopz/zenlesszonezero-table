@@ -1,14 +1,13 @@
-// src/web/recommend.js —— 统计视图：三个二级子面板（角色面板 / 驱动盘 / 全服总览）
-// 数据源：plans.json（方案推荐）+ workshop-grad.json（全服真实占比，工坊 grad_stat 接口）
-//       + workshop-stats.json（玩家样本聚合）+ characters.json（我的角色）。
-// 供「角色面板」/「全服总览」作玩家样本对标（高练度标杆池，不当作全服分布）。
+// src/web/statsView.js —— 统计视图：三个二级子面板（角色面板 / 驱动盘 / 全服总览）
+// 数据源：plans.json + workshop-grad.json + workshop-stats.json + characters.json；样本对标为高练度标杆池（不当作全服分布）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序。
 import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex } from './data.js';
 import { computeRecTierStats } from '../lib/panelBench.js';
 import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
-import { styleMatch } from '../lib/workshopStats.js';
+import { styleMatch } from '../lib/workshopAgg.js';
 import { renderDiscStats } from './discstats.js';
+import { tableHtml } from './shared.js';
 import {
   escapeHtml,
   escapeJsAttr,
@@ -37,16 +36,16 @@ import {
   attainmentOption,
   slotEfficiencyOption,
 } from './charts.js';
-export let recommendTab = 'detail';
-export function setRecommendTab(key) {
-  recommendTab = key;
-  recSort.reset(); // 切子面板清空统计视图排序
+export let statsTab = 'detail';
+export function setStatsTab(key) {
+  statsTab = key;
+  statsSort.reset(); // 切子面板清空统计视图排序
 }
 
 // 排序状态（三态：升序 → 降序 → 恢复默认，统一走 src/lib/sort.js；各面板共用）
-const recSort = createSort();
-export function toggleRecommendSort(key) {
-  recSort.toggle(key);
+const statsSort = createSort();
+export function toggleStatsSort(key) {
+  statsSort.toggle(key);
 }
 
 const TABS = [
@@ -54,7 +53,7 @@ const TABS = [
   { key: 'discs', label: '驱动盘' },
   { key: 'overview', label: '全服总览' },
 ];
-/** 子面板 key → 渲染函数（renderRecommend 键控分发，驱动盘复用 discstats） */
+/** 子面板 key → 渲染函数（renderStatsView 键控分发，驱动盘复用 discstats） */
 const PANEL_RENDERERS = {
   detail: renderRoleDetail,
   discs: renderDiscStats,
@@ -66,16 +65,8 @@ function emptyState(msg, hint = '') {
   return `<div class="empty">${msg}${hint ? `<br>${hint}` : ''}</div>`;
 }
 /** 渲染可排序表格（rec-table 骨架；内容列复用 .ds-main/.ds-dim/.ds-rolecnt 等类） */
-function table(headers, rows, sortable = new Set(), className = '') {
-  const head = headers
-    .map((h) => {
-      if (!sortable.has(h)) return `<th>${h}</th>`;
-      const on = recSort.key === h;
-      return `<th data-sort="${h}"${on ? ' class="sorted"' : ''}>${h}${on ? (recSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
-    })
-    .join('');
-  return `<div class="wiki-wrap"><table class="rec-table${className ? ' ' + className : ''}"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
-}
+const table = (headers, rows, sortable, className = '') =>
+  tableHtml(headers, rows, sortable, { cls: 'rec-table', sort: statsSort, className });
 /** 音擎悬浮：稀有度/特性/基础攻击/副属性/特效（键查 library.wengines，key 即音擎名） */
 function wengineTip(name) {
   const w = library.wengines?.[name];
@@ -140,8 +131,7 @@ function roleIdFor(name) {
   return _roleIdByName?.get(name) ?? null;
 }
 /** 推荐三档统计（plans → 每角色每属性 low/mid/high 的 mean/median/sd/cv），按 plans 引用缓存。
- *  实测在真实 plans.json 上约 51ms/次，而「角色面板」「全服总览」各调一次、每次切角色都重渲染，
- *  等于每次交互白烧 ~100ms。plans 由 setData 整体换新，引用变化即失效。 */
+ *  实测 ~51ms/次而每次切角色都重渲染（两面板各调一次，等于每次交互白烧 ~100ms）。 */
 let _tierPlans = null;
 let _tierCache = null;
 function recTierStats() {
@@ -153,9 +143,7 @@ function recTierStats() {
 }
 
 /** grad/工坊名 → plans 标准角色名（resolver 优先；落空 CHAR_ALIASES + plans 子串）。
- *  结果按名字缓存：本函数被 roleKeyedMap/wsPanelMap 的建表循环逐角色调用（57 角色 × 8 个源），
- *  而每次调用都要 Object.values(plans).map 重建 planNames 数组并做子串扫描。
- *  plans 换新（setData）时 _alignPlans 引用变化 → 整表失效重建。 */
+ *  按名字缓存：建表循环逐角色调用（57 角色 × 8 个源），每次调用都重建 planNames 并做子串扫描。 */
 let _alignPlans = null;
 let _alignCache = new Map();
 function alignRoleName(name) {
@@ -177,8 +165,7 @@ function alignRoleName(name) {
   _alignCache.set(name, out);
   return out;
 }
-/** 角色名 → 玩家真实样本面板统计（workshop-stats.panels；{count,min,max,mean,median}）。
- *  key 对齐到 plans 角色名（grad 名可能是简称/缇提差异，需匹配到账号/plans 一致的名字）。 */
+/** 角色名 → 玩家真实样本面板统计（workshop-stats.panels）；key 对齐 plans 角色名（grad 名可能为简称/缇提差异） */
 function wsPanelMap() {
   const panels = workshopStats.panels;
   if (_wsPanelRoles !== panels) {
@@ -193,10 +180,7 @@ function wsPanelMap() {
   return _wsPanelCache;
 }
 /** 通用缓存：role_id 键的 stats 对象（relicStats/rankDist/skillStats 等）→ 角色名键 Map。
- *  用 WeakMap 按「源对象」缓存，而非单槽 `_roleKeyedSource !== source`：本函数有多个不同源的调用方
- *  （roleCooccurrence/relicStats/rankDist/skillStats 等），
- *  单槽缓存被轮流打穿，每次调用都全量重建（命中率 0）。WeakMap 让每个源各自命中，
- *  且源对象随 setData 换新后旧表自动可回收。 */
+ *  用 WeakMap 按源对象缓存而非单槽：多个源的调用方会轮流打穿单槽（命中率 0），WeakMap 各源各自命中且旧表可回收。 */
 const _roleKeyedCache = new WeakMap();
 function roleKeyedMap(source) {
   if (!source || typeof source !== 'object') return new Map();
@@ -286,7 +270,7 @@ function gradBenchHtml(name) {
   );
 }
 
-// ---------- 全服总览（全局总览层：提升清单 / 达标热力图 / 毕业度矩阵 / 共识度） ----------
+// ---------- 全服总览辅助（近似百分位 / 直方图达标率 / 槽位短板 / 样本口径 / 集中度） ----------
 /** 我的值在玩家分布中的近似百分位（分位插值，处理零宽区间/零分位避免 NaN；无分布返回 null） */
 function approxPercentile(v, dist) {
   if (v == null || !dist || dist.p10 == null || dist.p99 == null) return null;
@@ -454,8 +438,7 @@ function concentrationCardHtml() {
   const tip = `<b>配装选择集中度</b><br><span style="color:var(--dim)">Top1 = 该角色最常见选择的覆盖率。悬浮单元格可看 HHI 与等效选择数（1/HHI）；等效选择数越小，玩家共识越强。套装按整套 6 件盘的组合统计，主词条按槽位统计。</span>`;
   return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">配装选择集中度</h3><div class="coverage-table-wrap"><table class="rec-table"><thead><tr><th>角色</th><th>样本</th><th>音擎 Top1</th><th>套装组合 Top1</th><th>4号位</th><th>5号位</th><th>6号位</th></tr></thead><tbody>${tableRows}</tbody></table></div></div>`;
 }
-/** 密度散点卡片：对每个属性对网格注册一张密度散点图并返回卡片 HTML（角色面板 perRole 用，卡片占整行）。
- *  标题只留属性对（短名），详细说明放悬浮。 */
+/** 密度散点卡片：每个属性对网格注册一张密度散点图（perRole 用，占整行；标题只留短名，说明放悬浮） */
 function scatterCardsHtml(prefix, grid, subtitle) {
   return Object.entries(grid)
     .map(([key, g]) => {
@@ -506,7 +489,7 @@ function renderOverview() {
 
   // 4. D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关
   //    r 高 = 工坊评分基本就是词条效率的另一种写法，可放心当毕业度代理；r 低 = 评分掺了别的东西
-  const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency); // 角色名 → {weights,...}
+  const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency);
   const srRows = [];
   for (const [name, d] of rollEffMap) {
     const sv = d?.scoreVsRelic;
@@ -548,7 +531,6 @@ export let selectedRole = '';
 export function setSelectedRole(name) {
   selectedRole = name;
 }
-/** 图表面板顶部角色下拉 */
 function roleSelectHtml(current) {
   const roleNames = Object.values(plans).map((v) => v.name);
   if (!current || !roleNames.includes(current)) current = roleNames[0];
@@ -559,11 +541,8 @@ function roleSelectHtml(current) {
 }
 
 // ---------- 角色面板（单角色详情层：流派分析 / 小提琴+箱线 / 推荐三档增强图 / 技能对标与组合 / 配装对标 / 配队亲和 / 密度散点） ----------
-/** 流派分析卡：该角色玩家池的配置取向聚类（k-means，高练度标杆池）+ 我的联动。
- *  流派 = 面板（攻击/暴击率/暴伤/属性伤害）聚类簇，4 号位主词条是强判别信号；
- *  典型面板 = 簇内 mean/median；456 主词条/套装/音擎 = 簇内 Top2 偏好。
- *  我的角色：面板对各流派典型面板（mean）算相对距离（styleMatch），标注最贴近流派。
- *  ⚠️ 暴伤等百分比属性聚合侧已归一小数（mys "165.2%"→1.652），这里按值 ≤3 判百分比显示（1.65→165%）。 */
+/** 流派分析卡：该角色玩家池面板（攻击/暴击率/暴伤/属性伤害）k-means 聚类出的配置取向流派 + 我的联动（styleMatch 相对距离）。
+ *  ⚠️ 暴伤等百分比属性聚合侧已归一小数（mys "165.2%"→1.652），这里按值 ≤3 判百分比显示。 */
 function styleCardHtml(name) {
   const style = workshopStats.roleStyles?.[roleIdFor(name)];
   if (!style || !style.styles?.length) return '';
@@ -746,21 +725,20 @@ function matesCardsHtml(name) {
   )}</div>`;
 }
 
-/** 渲染整个统计视图（tab + 当前子面板）；渲染前清空图表注册，render 后由 render.js 调 mountRecommendCharts */
-export function renderRecommend() {
+/** 渲染整个统计视图（tab + 当前子面板）；渲染前清空图表注册，render 后由 render.js 调 mountStatsCharts */
+export function renderStatsView() {
   clearCharts();
   const tabs = TABS.map(
     (t) =>
-      `<button class="wiki-tab ${t.key === recommendTab ? 'on' : ''}" data-tab="${t.key}" onclick="ZZZ.recommendTab('${t.key}')">${t.label}</button>`
+      `<button class="wiki-tab ${t.key === statsTab ? 'on' : ''}" data-tab="${t.key}" onclick="ZZZ.statsTab('${t.key}')">${t.label}</button>`
   ).join('');
-  const body = PANEL_RENDERERS[recommendTab] ? PANEL_RENDERERS[recommendTab]() : '';
+  const body = PANEL_RENDERERS[statsTab] ? PANEL_RENDERERS[statsTab]() : '';
   return `<div class="wiki"><div class="wiki-tabs">${tabs}</div>${body}</div>`;
 }
 
 // ================= 练度图（并入「全服总览」）：评分 / 影画 / trade-off =================
 
-/** 属性相关（panelCorr）→ HTML 表格（角色 × 属性对，色标正负）。
- *  列序固定（不依赖数据键序，数据缺列时显示 —）。 */
+/** 属性相关（panelCorr）→ HTML 表格（角色 × 属性对，色标正负；列序固定，缺列显示 —） */
 const PANEL_CORR_COLS = [
   ['攻击力_防御力', '攻击×防御'],
   ['攻击力_生命值', '攻击×生命'],
@@ -790,8 +768,7 @@ function panelCorrTableHtml() {
   return `<table class="rec-table"><thead><tr>${heads}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
-/** 练度总览内容（并入「全服总览」）：评分分布 / 影画金字塔 / 属性 trade-off。
- *  返回 chart-card 片段（由 renderOverview 统一包 chart-grid）。 */
+/** 练度总览内容（并入「全服总览」）：评分分布 / 影画金字塔 / 属性 trade-off（返回 chart-card 片段，由 renderOverview 包 chart-grid） */
 function progressCardsHtml() {
   if (!Object.keys(plans || {}).length) return '';
   const R = workshopStats;
@@ -862,8 +839,7 @@ function progressCardsHtml() {
 // 已按源把工坊 type 归一化为 canonical（mys=官方语义、2025=1.x ID 语义）；官方（账号）type 匹配我的等级时
 // 经 OFFICIAL_SKILL_TYPE 映射（官方 1特殊技→3、2闪避→1、3终结/连携→4、6支援→2）。
 
-/** 我的技能 vs 玩家池技能等级分布（skillStats.dist）：每技能一个柱状子图，我的等级柱高亮金色。
- *  我的等级匹配：官方（账号）type 经 OFFICIAL_SKILL_TYPE 映射到 canonical 再对子图键（工坊已归一化）。 */
+/** 我的技能 vs 玩家池技能等级分布（skillStats.dist）：每技能一个柱状子图，我的等级柱高亮金色（官方 type 经 OFFICIAL_SKILL_TYPE 映射到 canonical） */
 function skillBenchHtml(name) {
   const skillMap = roleKeyedMap(workshopStats.skillStats);
   const dist = skillMap.get(name);
@@ -883,12 +859,11 @@ function skillBenchHtml(name) {
   if (!items.length) return '';
   const H = Math.max(300, Math.ceil(items.length / 3) * 240);
   registerChart('detail-skill-dist', skillDistOption(items));
-  // 只返回图表容器本身：卡片包裹由调用方按统一结构处理（chart-card + grid-column:1/-1），
-  // 避免再套 .chart-grid 形成嵌套网格——嵌套网格会按 520px 自动分列，窗口越宽图反而越窄
+  // 只返回图表容器：卡片由调用方包裹，避免再套 .chart-grid 形成嵌套网格（嵌套会按 520px 自动分列，窗口越宽图越窄）
   return chartBox('detail-skill-dist', H);
 }
 
 /** render 后挂载本视图的 ECharts 图表（render.js 调用） */
-export function mountRecommendCharts() {
+export function mountStatsCharts() {
   mountCharts();
 }

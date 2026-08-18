@@ -1,12 +1,8 @@
-// src/web/discstats.js —— 「统计→驱动盘」面板：盘为中心的「决策卡」
-// 使命：选一个驱动盘，回答 适配哪些角色 / 456 号位保留哪些主词条 / 副词条保留哪些组合 / 哪些主词条可抛弃。
-// 两口径独立产出同一套维度，经 computeDiscAdvisor 对齐并判定：
-//   keep  = 官方推荐 + 实况占比 ≥3%（共识 → 保留，绿）
-//   split = 仅一方出现（官方推荐玩家不用 / 玩家在用官方没推 → 分歧，橙）
-//   drop  = 两口径都未出现（仅 456 候选主词条 → 可抛弃，灰删除线）
-// 对比条：金=官方推荐占比（方案数）、蓝=玩家实况占比（盘数/槽分母），数值显示在条右侧。
+// src/web/discstats.js —— 「统计→驱动盘」面板：盘为中心的「决策卡」（适配角色 / 456 主词条保留 / 副词条组合 / 可抛弃主词条）。
+// 两口径经 computeDiscAdvisor 对齐判定：keep=官方+实况占比≥3%（保留）、split=单边（分歧）、drop=两口径都未用（仅 456 候选，删除线）。
+// 对比条：金=官方推荐占比、蓝=玩家实况占比，数值在条右侧。
 import { plans, library, workshopStats } from './data.js';
-import { computeDiscStats, computeDiscAdvisor } from '../lib/discstats.js';
+import { computeDiscStats, computeDiscAdvisor } from '../lib/discAdvisor.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
 import { discSetEffectsHtml } from './shared.js';
@@ -50,7 +46,7 @@ function discSelectHtml(current, cards) {
   return `<div class="chart-select"><label>驱动盘</label><select onchange="ZZZ.selectDisc(this.value)">${opts}</select></div>`;
 }
 
-/** 对比条：词条名 + 判定标签 + 双条（金=官方、蓝=实况）+ 右侧数值（官方% / 实况%） */
+/** 对比条：词条名 + 判定标签 + 双条（金=官方、蓝=实况）+ 右侧数值 */
 function barHtml(name, official, live, verdict) {
   const tag =
     verdict === 'keep' ? '<span class="ad-tag ad-keep">保留</span>' : '<span class="ad-tag ad-drop">可抛弃</span>';
@@ -86,7 +82,7 @@ function rolesHtml(card) {
   </div>`;
 }
 
-/** ② 可抛弃主词条（两口径都未使用的 456 候选） */
+/** ② 可抛弃主词条 */
 function dropsHtml(card) {
   const drops = [4, 5, 6].flatMap((s) =>
     card.mains[s].filter((m) => m.verdict === 'drop').map((m) => `${s}号 ${m.name}`)
@@ -98,7 +94,7 @@ function dropsHtml(card) {
   </div>`;
 }
 
-/** ③ 456 号位 + 副词条：一行 4 列对比条（每列 = 槽位或副词条，数值在条右方） */
+/** ③ 456 号位 + 副词条：一行 4 列对比条 */
 function statGridHtml(card) {
   const cols = [4, 5, 6]
     .map(
@@ -138,8 +134,7 @@ function chartCardsHtml(selectedDetail) {
 }
 
 /** ④ 槽位分布（D7 套装×槽位交叉，单盘视角）：柱状图 + 16.7% 均匀基准线。
- *  柱子不从 0 起画（Y 轴按实际值域截断），放大幅值差，肉眼可辨槽位偏好；
- *  基准线恒在范围内（范围 = [min(值,基准)−1, max(值,基准)+1]）。 */
+ *  柱子按实际值域截断起画（不从 0 起）以放大幅值差；基准线恒在范围内。 */
 function slotRowHtml(detail) {
   const dist = detail?.slotDist;
   if (!dist) return '';
@@ -168,7 +163,6 @@ function slotRowHtml(detail) {
   </div>`;
 }
 
-/** 渲染驱动盘决策卡页面 */
 export function renderDiscStats() {
   if (!Object.keys(plans || {}).length) {
     return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
