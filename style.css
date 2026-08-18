@@ -1316,6 +1316,7 @@ main {
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
   text-align: left;
+  vertical-align: top;
 }
 .rec-table .ds-dim {
   color: var(--dim);
@@ -1686,8 +1687,7 @@ main {
 .style-table-wrap .rec-table {
   min-width: 560px;
 }
-/* 这两个统计表列宽有 min-width 硬需求，保留容器内横向滚动 → 它们就是滚动容器，
-   里面的 th 只能吸容器顶（top: 0）；沿用全局的 top: var(--head-h) 会被恒定下推压住第一行。 */
+.chart-card .rec-table th,
 .coverage-table-wrap .rec-table th,
 .style-table-wrap .rec-table th {
   top: 0;
