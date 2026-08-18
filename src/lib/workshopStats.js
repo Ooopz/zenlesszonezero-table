@@ -3,7 +3,7 @@
 // 输出（按角色/盘/玩家聚合）：computeWorkshopStats（音擎/驱动盘条目数 + 面板真实样本统计）、
 //   computePanelCorrelations（属性相关）、computeWorkshopDiscStats（驱动盘单盘统计）、
 //   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankDist/skillStats/roleDiscStats/roleOwnership）、
-//   2026-10 新增（roleCooccurrence/rankRelic/skillCombos）、
+//   2026-10 新增（roleCooccurrence）、
 //   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度、sourceAudit 两源一致性 D10）、
 //   discStatName、substatRolls、buildRoleSubstatWeights、sourceOf、bin2D。
 import { computeDist, kmeans, pearson, quantileSorted } from './distStats.js';
@@ -40,12 +40,12 @@ function panelStats(arr) {
 }
 
 // ---------- 累加器（accumulator）拆分说明（2026-08 性能重构） ----------
-// 每个聚合原本是「自带 for 循环的独立函数」，于是 buildWorkshopStats 里 13 个聚合 = 13 次全量遍历
+// 每个聚合原本是「自带 for 循环的独立函数」，于是 buildWorkshopStats 里 14 个聚合 = 14 次全量遍历
 // workshop.json（2.13GB，每遍流式解析 ~27s，合计浪费 ~6 分钟）。这里把每个聚合拆成两段：
 //   add(entry) —— 逐条累加（原 for 循环体，一字未改）
 //   finish()   —— 收尾计算（原循环之后的分位/排序/对象化，一字未改）
 // 于是：① 原公开函数 = 建累加器 → 循环 add → finish（签名与输出完全不变，测试与其它调用方无感）；
-//       ② computeAllWorkshopStats = 建 13 个累加器 → **一次** for 循环里全部 add → 各自 finish。
+//       ② computeAllWorkshopStats = 建 14 个累加器 → **一次** for 循环里全部 add → 各自 finish。
 // 关键不变量（等价性靠它，不是靠浮点容差）：累加器内部的 Map/数组仍严格按「条目出现顺序」写入，
 // 与各自独立遍历时的顺序逐条一致，因此输出的键序、数组元素序、浮点求和/求均值的累加顺序都不变，
 // 结果与重构前**逐位相等**。若哪天有人把 add 挪到共享的中间结果上（比如两个盘聚合共用一次
@@ -643,6 +643,127 @@ export function computeRoleOwnership(entries) {
   return runAcc(makeRoleOwnershipAcc(), entries);
 }
 
+/**
+ * 样本口径：条目、去重 uid、数据源与每角色覆盖情况。
+ * 该统计不代表全体玩家；workshop.json 本身是经过练度门槛筛选的样本池。
+ */
+export function computeSampleCoverage(entries) {
+  return runAcc(makeSampleCoverageAcc(), entries);
+}
+
+function makeSampleCoverageAcc() {
+  const uidSet = new Set();
+  const sources = { mys: 0, '2025': 0, unknown: 0 };
+  const roles = new Map();
+  return {
+    add(e) {
+      if (!e || e.role_id == null) return;
+      const rid = String(e.role_id);
+      const src = sourceOf(e) || 'unknown';
+      const r = roles.get(rid) || { entries: 0, uids: new Set(), sources: { mys: 0, '2025': 0, unknown: 0 } };
+      r.entries++;
+      r.sources[src] = (r.sources[src] || 0) + 1;
+      if (e.uid != null) {
+        const uid = String(e.uid);
+        uidSet.add(uid);
+        r.uids.add(uid);
+      }
+      sources[src]++;
+      roles.set(rid, r);
+    },
+    finish() {
+      const outRoles = {};
+      for (const [rid, r] of roles) {
+        outRoles[rid] = { entries: r.entries, uids: r.uids.size, sources: { ...r.sources } };
+      }
+      return { entries: Object.values(outRoles).reduce((s, r) => s + r.entries, 0), uidCount: uidSet.size, sources, roles: outRoles };
+    },
+  };
+}
+
+/** 选择集中度：按角色统计音擎、套装组合与 4/5/6 号位主词条的 Top1/Top3、HHI、熵。
+ *  HHI 越高表示玩家选择越集中；effectiveChoices = 1 / HHI 是更直观的等效选择数。
+ */
+export function computeChoiceConcentration(entries) {
+  return runAcc(makeChoiceConcentrationAcc(), entries);
+}
+
+function choiceDist(map) {
+  const total = [...map.values()].reduce((s, n) => s + n, 0);
+  if (!total) return { total: 0, top: [], top1: null, top3: null, hhi: null, entropy: null, effectiveChoices: null };
+  const top = [...map.entries()]
+    .map(([name, count]) => ({ name, count, share: count / total }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh'))
+    .slice(0, 5);
+  const probs = [...map.values()].map((count) => count / total);
+  const hhi = probs.reduce((s, p) => s + p * p, 0);
+  const entropy = -probs.reduce((s, p) => s + p * Math.log2(p), 0);
+  return {
+    total,
+    top,
+    top1: top[0]?.share ?? null,
+    top3: top.slice(0, 3).reduce((s, x) => s + x.share, 0),
+    hhi,
+    entropy,
+    effectiveChoices: hhi ? 1 / hhi : null,
+  };
+}
+
+function makeChoiceConcentrationAcc() {
+  const roles = new Map();
+  return {
+    add(e) {
+      if (!e || e.role_id == null) return;
+      let r = roles.get(String(e.role_id));
+      if (!r)
+        roles.set(
+          String(e.role_id),
+          (r = {
+            entries: 0,
+            weapons: new Map(),
+            suits: new Map(),
+            main456: { 4: new Map(), 5: new Map(), 6: new Map() },
+          })
+        );
+      r.entries++;
+      const weapon = e.weapon?.name;
+      if (weapon && weapon !== '其他') r.weapons.set(weapon, (r.weapons.get(weapon) || 0) + 1);
+
+      const suitCounts = new Map();
+      for (const eq of e.equips || []) {
+        if (!eq?.suit || eq.suit === '其他') continue;
+        suitCounts.set(eq.suit, (suitCounts.get(eq.suit) || 0) + 1);
+        const slot = slotOf(eq);
+        if (slot < 4 || slot > 6) continue;
+        const main = Array.isArray(eq.main) ? eq.main[0] : null;
+        const name = main?.name ? mainStatName(discStatName(main.name, main.value)) : null;
+        if (name && (MAIN_STAT_OPTIONS[slot] || []).includes(name)) {
+          r.main456[slot].set(name, (r.main456[slot].get(name) || 0) + 1);
+        }
+      }
+      if (suitCounts.size) {
+        const combo = [...suitCounts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
+          .map(([name, count]) => `${name}${count}`)
+          .join('+');
+        r.suits.set(combo, (r.suits.get(combo) || 0) + 1);
+      }
+    },
+    finish() {
+      const out = {};
+      for (const [rid, r] of roles) {
+        out[rid] = {
+          entries: r.entries,
+          weapons: choiceDist(r.weapons),
+          suits: choiceDist(r.suits),
+          main456: { 4: choiceDist(r.main456[4]), 5: choiceDist(r.main456[5]), 6: choiceDist(r.main456[6]) },
+        };
+      }
+      return out;
+    },
+  };
+}
+
 /** 每角色 × 技能类型（canonical 编号，见 constants.SKILL_TYPES）的等级分布（轻量分位 + 逐等级计数 dist，供技能分布柱状图）。
  *  @param {object[]} entries  workshop.json 的 entries（{role_id, source, skills:[{type,level}]}）
  *  @returns {Object<string, Object<string, LightDist & {dist:Object<number,number>}>>} role_id → 技能类型 → 分布
@@ -934,7 +1055,7 @@ function makeSourceAuditAcc() {
   };
 }
 
-// ---------- 2026-10 新增聚合：配队亲和 / 影画×评分 / 技能组合 ----------
+// ---------- 2026-10 新增聚合：配队亲和 ----------
 
 /** 每角色「同 uid 玩家同练角色」共现（真实配队亲和性）：角色 A → 队友 B 出现次数降序。
  *  @param {object[]} entries  workshop.json 的 entries（{uid, role_id}）
@@ -978,98 +1099,6 @@ function makeRoleCooccurrenceAcc() {
 // 连同前端「完成度矩阵」卡一并删除。若将来要做完成度，须选在精英池里真有方差的维度
 // （影画档位 rankDist / 是否专武 / 6 号位主词条是否踩中主流）。
 
-/** 每角色 × 影画档（rank 0-6）的装配评分分布（轻量 count/mean/median，无 hist）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, rank, relic_point}）
- *  @returns {Object<string, Object<string, {count:number, mean:number, median:number}>>} role_id → rank → 评分统计 */
-export function computeRankRelic(entries) {
-  return runAcc(makeRankRelicAcc(), entries);
-}
-
-function makeRankRelicAcc() {
-  const acc = new Map(); // rid -> Map(rank -> number[])
-  return {
-    add(e) {
-      if (!e || e.role_id == null || e.rank == null) return;
-      const rp = Number(e.relic_point);
-      if (!Number.isFinite(rp) || rp <= 0) return;
-      let m = acc.get(e.role_id);
-      if (!m) acc.set(e.role_id, (m = new Map()));
-      if (!m.has(e.rank)) m.set(e.rank, []);
-      m.get(e.rank).push(rp);
-    },
-    finish() {
-      const out = {};
-      for (const [rid, m] of acc) {
-        out[rid] = {};
-        for (const [rank, vals] of m) {
-          vals.sort((x, y) => x - y); // 就地排序 + quantileSorted，避免 quantile 内部再复制排序一次
-          out[rid][rank] = {
-            count: vals.length,
-            mean: +(vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(1),
-            median: quantileSorted(vals, 0.5),
-          };
-        }
-      }
-      return out;
-    },
-  };
-}
-
-/** 每角色技能组合模式：按源归一 canonical 后统计「哪些技能拉满」的组合 Top + 全拉满率。
- *  拉满定义：普攻/闪避/支援/特殊/终结 ≥12 级，核心 =7 级。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, source, skills:[{type,level}]}）
- *  @returns {Object<string, {count:number, fullPct:number, top:{pattern:string, count:number}[]}>}
- *  源判别与 computeSkillStats 相同（source 字段 → rarity 类型 → skills 顺序，见 sourceOf）。 */
-export function computeSkillComboStats(entries) {
-  return runAcc(makeSkillComboStatsAcc(), entries);
-}
-
-function makeSkillComboStatsAcc() {
-  const FULL = { 0: 12, 1: 12, 2: 12, 3: 12, 4: 12, 5: 7 };
-  const LABEL = ['普攻', '闪避', '支援', '特殊', '终结', '核心'];
-  const acc = new Map(); // rid -> {n, full, combos: Map(pattern -> count)}
-  return {
-    add(e) {
-      if (!e || e.role_id == null) return;
-      const map = skillTypeMapOf(e);
-      if (!map) return; // 无 source 且数组不足 2 个：无法判源，不贡献
-      const levels = {};
-      for (const s of e.skills || []) {
-        if (s.type == null || s.level == null) continue;
-        const t = map[s.type] ?? s.type;
-        if (FULL[t] != null) levels[t] = s.level;
-      }
-      if (!Object.keys(levels).length) return;
-      // 全拉满 = 条目包含的所有技能都达阈值（真实数据 6 技能齐全时即全部拉满）
-      const allFull = Object.keys(levels).every((t) => levels[t] >= FULL[t]);
-      const names = Object.keys(levels)
-        .filter((t) => levels[t] >= FULL[t])
-        .map((t) => LABEL[t])
-        .join('+');
-      const pattern = allFull ? '全拉满' : names || '无满级';
-      let a = acc.get(e.role_id);
-      if (!a) acc.set(e.role_id, (a = { n: 0, full: 0, combos: new Map() }));
-      a.n++;
-      if (allFull) a.full++;
-      a.combos.set(pattern, (a.combos.get(pattern) || 0) + 1);
-    },
-    finish() {
-      const out = {};
-      for (const [rid, a] of acc) {
-        out[rid] = {
-          count: a.n,
-          fullPct: +(a.full / a.n).toFixed(4),
-          top: [...a.combos.entries()]
-            .sort((x, y) => y[1] - x[1])
-            .slice(0, 5)
-            .map(([pattern, count]) => ({ pattern, count })),
-        };
-      }
-      return out;
-    },
-  };
-}
-
 // ---------- 单遍历总入口（2026-08 性能重构） ----------
 
 /**
@@ -1081,7 +1110,7 @@ function makeSkillComboStatsAcc() {
  *   weightJson：工坊角色流派权重（workshop-weights.json 的 weights 段）。驱动盘 effDist 的「有效副词条」
  *   与 rollEfficiency 都依赖它；缺失时 effDist 退化为「全部合法副词条」、rollEfficiency 返回空对象。
  * @returns {{stats, panelCorr, discDetails, panelScatter, relicStats, rankLayers, rankDist,
- *            skillStats, roleDiscStats, roleCooccurrence, rankRelic, skillCombos,
+ *            skillStats, roleDiscStats, roleCooccurrence,
  *            rollEfficiency, sourceAudit}}
  */
 // ---------- 角色流派分析（2026-10 新增） ----------
@@ -1364,12 +1393,12 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   const skillAcc = makeSkillStatsAcc();
   const roleDiscAcc = makeRoleDiscStatsAcc(accOpts);
   const coAcc = makeRoleCooccurrenceAcc();
-  const rankRelicAcc = makeRankRelicAcc();
-  const comboAcc = makeSkillComboStatsAcc();
   const rollEffAcc = makeRollEfficiencyAcc(accOpts);
   const auditAcc = makeSourceAuditAcc();
   const styleAcc = makeRoleStylesAcc(opts.traits);
   const ownAcc = makeRoleOwnershipAcc();
+  const coverageAcc = makeSampleCoverageAcc();
+  const concentrationAcc = makeChoiceConcentrationAcc();
 
   // 唯一一次遍历：每条目喂给全部累加器。add 之间互不共享中间态，故顺序无副作用
   for (const e of entries || []) {
@@ -1382,12 +1411,12 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     skillAcc.add(e);
     roleDiscAcc.add(e);
     coAcc.add(e);
-    rankRelicAcc.add(e);
-    comboAcc.add(e);
     rollEffAcc.add(e);
     auditAcc.add(e);
     styleAcc.add(e);
     ownAcc.add(e);
+    coverageAcc.add(e);
+    concentrationAcc.add(e);
   }
 
   const scatter = scatterAcc.finish();
@@ -1401,11 +1430,11 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     skillStats: skillAcc.finish(),
     roleDiscStats: roleDiscAcc.finish(),
     roleCooccurrence: coAcc.finish(),
-    rankRelic: rankRelicAcc.finish(),
-    skillCombos: comboAcc.finish(),
     rollEfficiency: rollEffAcc.finish(),
     sourceAudit: auditAcc.finish(),
     roleStyles: styleAcc.finish(),
     roleOwnership: ownAcc.finish(),
+    sampleCoverage: coverageAcc.finish(),
+    choiceConcentration: concentrationAcc.finish(),
   };
 }

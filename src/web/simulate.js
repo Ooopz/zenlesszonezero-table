@@ -1,8 +1,8 @@
 // src/web/simulate.js —— 成长极限模拟视图：选择角色/音擎/套装/456 主词条后，
 // 生成任意两个或三个面板属性之间的帕累托有效前沿，并支持临时叠加多张图。
-import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget, readValidStats } from './data.js';
+import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget } from './data.js';
 import { PANEL_ORDER, MAIN_STAT_OPTIONS, TARGET_KEYS } from '../lib/constants.js';
-import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable } from '../lib/simulate.js';
+import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable, axisSubstatTypes, axisRollCap } from '../lib/simulate.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
 import { clearCharts, registerChart, chartBox, CHART_COLORS } from './charts.js';
 
@@ -240,13 +240,6 @@ function scalePointCloud(points, fixedPoint, level) {
   }));
 }
 
-function effectiveRollCap(roleName) {
-  const valid = readValidStats(roleName) || [];
-  if (valid.length >= 3) return 45;
-  if (valid.length === 2) return 39;
-  return 36;
-}
-
 function clampPct(v) {
   return Math.max(0, Math.min(100, v));
 }
@@ -332,7 +325,16 @@ function chartCard(chart, canRemove) {
   let note = '';
   try {
     const my = (myCharacters || []).find((c) => c.name === state.charName);
-    const effRolls = my ? (my.hitCount() ?? 0) : 0;
+    const axes = is3d ? [chart.x, chart.y, chart.z] : [chart.x, chart.y];
+    const axisTypes = axisSubstatTypes(axes);
+    const effRolls = my
+      ? (my.discs || []).reduce((sum, d) => sum + (d.getHitCount(axisTypes) ?? 0), 0)
+      : 0;
+    const maxRolls = axisRollCap(
+      { charIndex, wengineIndex, discIndex },
+      { ...state, xAxis: axes[0], yAxis: axes[1], zAxis: axes[2] },
+      axes
+    );
     let myPoint = null;
     if (my) {
       const R = my.calculate();
@@ -341,7 +343,6 @@ function chartCard(chart, canRemove) {
       if (Number.isFinite(mx) && Number.isFinite(myy)) myPoint = { x: mx, y: myy };
     }
     if (is3d) {
-      const maxRolls = effectiveRollCap(state.charName);
       const ck3 = simCacheKey('3d', chart, maxRolls);
       let result = simCache.get(ck3);
       if (!result) {
@@ -370,7 +371,6 @@ function chartCard(chart, canRemove) {
           grads;
       }
     } else {
-      const maxRolls = effectiveRollCap(state.charName);
       const ck2 = simCacheKey('2d', chart, maxRolls);
       let result = simCache.get(ck2);
       if (!result) {

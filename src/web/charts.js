@@ -891,31 +891,6 @@ export function relicBarOption(rows) {
   };
 }
 
-/** 影画 × 装配评分：每角色 6 影 median − 0 影 median 的横向条（正=氪影画玩家配装评分更高）。
- *  rows: [{name, gap, r0, r6}] —— 按 gap 排序传入 */
-export function rankRelicGapOption(rows) {
-  return {
-    grid: { left: 90, right: 50, top: 16, bottom: 24, containLabel: true },
-    tooltip: {
-      ...DARK_TOOLTIP,
-      formatter: (p) => {
-        const d = p.data?.d || p.data;
-        return `<b>${d.name}</b><br>0 影评分 <b>${d.r0}</b><br>6 影评分 <b>${d.r6}</b><br>差距 <b>${d.gap >= 0 ? '+' : ''}${d.gap}</b>`;
-      },
-    },
-    xAxis: { type: 'value', axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
-    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
-    series: [
-      {
-        type: 'bar',
-        barWidth: 10,
-        data: rows.map((r) => ({ value: r.gap, d: r })),
-        itemStyle: { color: (p) => (p.value >= 0 ? CHART_COLORS.acc : CHART_COLORS.dim) },
-      },
-    ],
-  };
-}
-
 /** 技能等级分布：每技能一个柱状子图（x=等级、y=玩家数），我的等级所在柱高亮金色。
  *  items: [{label, dist:{level:count}, mine, min?, max?}] —— dist 来自 skillStats 的逐等级计数；
  *  min/max 指定该技能的等级范围（如核心技固定 1-7），缺省用 dist 实际范围。 */
@@ -1272,6 +1247,85 @@ export function roleOwnershipOption(rows) {
           color: (p) => (p.value >= 50 ? CHART_COLORS.green : p.value >= 20 ? CHART_COLORS.acc : CHART_COLORS.orange),
         },
         label: { show: true, position: 'right', color: CHART_COLORS.dim, fontSize: 11, formatter: '{c}%' },
+      },
+    ],
+  };
+}
+
+/** 方案目标达成率：同一属性的低/中/高档目标达到比例。 */
+export function attainmentOption(rows) {
+  return {
+    animation: false,
+    grid: { left: 100, right: 54, top: 28, bottom: 30, containLabel: true },
+    legend: { ...CHART_LEGEND, data: ['低档', '中档', '高档'] },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (items) => {
+        const d = items[0]?.data?.d;
+        if (!d) return '';
+        return `<b>${d.name}</b><br>${items
+          .filter((p) => p.value != null)
+          .map((p) => `${p.marker}${p.seriesName}：<b>${Number(p.value).toFixed(1)}%</b>`)
+          .join('<br>')}<br><span style="color:${CHART_COLORS.dim}">玩家样本 ${d.n.toLocaleString()}</span>`;
+      },
+    },
+    xAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: '{value}%' },
+      splitLine: SPLIT_LINE,
+    },
+    yAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL_SMALL },
+    series: [
+      { name: '低档', type: 'bar', barGap: 0, barWidth: 8, data: rows.map((r) => ({ value: r.low, d: r })), itemStyle: { color: CHART_COLORS.blue } },
+      { name: '中档', type: 'bar', barWidth: 8, data: rows.map((r) => ({ value: r.mid, d: r })), itemStyle: { color: CHART_COLORS.acc } },
+      { name: '高档', type: 'bar', barWidth: 8, data: rows.map((r) => ({ value: r.high, d: r })), itemStyle: { color: CHART_COLORS.orange } },
+    ],
+  };
+}
+
+/** 驱动盘槽位短板：玩家池有效强化次数均值，可选叠加当前账号的六个槽位。 */
+export function slotEfficiencyOption(rows) {
+  return {
+    animation: false,
+    grid: { left: 62, right: 54, top: 32, bottom: 30, containLabel: true },
+    legend: { ...CHART_LEGEND, data: ['玩家均值', '我的盘'] },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (items) => {
+        const d = items[0]?.data?.d;
+        if (!d) return '';
+        return `<b>${d.name}</b><br>${items
+          .filter((p) => p.value != null)
+          .map((p) => `${p.marker}${p.seriesName}：<b>${Number(p.value).toFixed(2)}</b>`)
+          .join('<br>')}${d.gap != null ? `<br><span style="color:${CHART_COLORS.dim}">我的盘 − 玩家均值：${d.gap >= 0 ? '+' : ''}${d.gap.toFixed(2)}</span>` : ''}`;
+      },
+    },
+    xAxis: { type: 'category', data: rows.map((r) => r.name), axisLine: AXIS_LINE, axisLabel: AXIS_LABEL },
+    yAxis: { type: 'value', min: 0, axisLine: { show: false }, axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE },
+    series: [
+      {
+        name: '玩家均值',
+        type: 'bar',
+        barWidth: 24,
+        data: rows.map((r) => ({ value: r.population, d: r })),
+        itemStyle: { color: SOFT.blueBar70 },
+        label: { show: true, position: 'top', color: CHART_COLORS.dim, fontSize: 10, formatter: (p) => Number(p.value).toFixed(1) },
+      },
+      {
+        name: '我的盘',
+        type: 'line',
+        symbol: 'circle',
+        symbolSize: 9,
+        data: rows.map((r) => ({ value: r.mine, d: r })),
+        itemStyle: { color: CHART_COLORS.acc },
+        lineStyle: { color: CHART_COLORS.acc, width: 2 },
       },
     ],
   };
