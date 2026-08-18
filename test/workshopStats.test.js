@@ -12,8 +12,6 @@ import {
   computeSkillStats,
   computeRoleDiscStats,
   computeRoleCooccurrence,
-  computeRankRelic,
-  computeSkillComboStats,
   substatRolls,
   buildRoleSubstatWeights,
   sourceOf,
@@ -22,6 +20,8 @@ import {
   computeRoleStyles,
   computeAllWorkshopStats,
   computeRoleOwnership,
+  computeSampleCoverage,
+  computeChoiceConcentration,
   styleLabel,
   styleAttrShort,
   styleMatch,
@@ -624,7 +624,7 @@ test('computeWorkshopDiscStats / computeRoleDiscStats：游戏规则白名单清
     );
 });
 
-// ---------- 2026-10 新增聚合：配队亲和 / 影画×评分 / 技能组合 ----------
+// ---------- 2026-10 新增聚合：配队亲和 ----------
 
 test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
   const out = computeRoleCooccurrence([
@@ -640,28 +640,6 @@ test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
   const pair2 = out['1011'].find(([rid]) => rid === '1051');
   assert.deepEqual(pair2, ['1051', 1]);
   assert.ok(out['1011'][0][1] >= out['1011'][1][1], '按次数降序');
-});
-
-test('computeRankRelic：每角色×影画档评分统计', () => {
-  const out = computeRankRelic(NEW_META_ENTRIES);
-  assert.ok(out['1011']);
-  assert.equal(out['1011'][0].median, 150);
-  assert.equal(out['1011'][6].median, 300);
-  assert.equal(out['1011'][6].count, 1);
-  assert.equal(out['1031'], undefined, '评分 0 的角色无档位分布');
-});
-
-test('computeSkillComboStats：技能拉满组合（源归一 + 全拉满率）', () => {
-  const out = computeSkillComboStats(NEW_META_ENTRIES);
-  const r = out['1011'];
-  assert.ok(r);
-  assert.equal(r.count, 2, '两条目均可判源');
-  assert.equal(r.fullPct, 0.5, 'u1 第二条全拉满（普攻/闪避 12 级）');
-  assert.ok(r.top.some((t) => t.pattern === '全拉满' && t.count === 1));
-  assert.ok(
-    r.top.some((t) => t.count === 1),
-    '另一条为部分拉满组合'
-  );
 });
 
 // ---------- computeWorkshopStats（顶层聚合，统计视图全部数据的入口） ----------
@@ -1172,12 +1150,12 @@ test('computeAllWorkshopStats：单遍历结果与逐个公开函数逐位相等
   eq(all.skillStats, computeSkillStats(entries), 'skillStats');
   eq(all.roleDiscStats, computeRoleDiscStats(entries), 'roleDiscStats');
   eq(all.roleCooccurrence, computeRoleCooccurrence(entries), 'roleCooccurrence');
-  eq(all.rankRelic, computeRankRelic(entries), 'rankRelic');
-  eq(all.skillCombos, computeSkillComboStats(entries), 'skillCombos');
   eq(all.rollEfficiency, computeRollEfficiency(entries), 'rollEfficiency');
   eq(all.sourceAudit, computeSourceAudit(entries), 'sourceAudit');
   eq(all.roleStyles, computeRoleStyles(entries), 'roleStyles');
   eq(all.roleOwnership, computeRoleOwnership(entries), 'roleOwnership');
+  eq(all.sampleCoverage, computeSampleCoverage(entries), 'sampleCoverage');
+  eq(all.choiceConcentration, computeChoiceConcentration(entries), 'choiceConcentration');
 });
 
 test('computeRoleOwnership：拥有率 = 拥有该角色的去重 uid 数 / 样本池去重 uid 总数', () => {
@@ -1196,4 +1174,58 @@ test('computeRoleOwnership：拥有率 = 拥有该角色的去重 uid 数 / 样�
   assert.equal(roles['1011'], 2 / 3, 'a/b 拥有 1011 → 2/3');
   assert.equal(roles['1022'], 1, 'a/b/c 都拥有 1022 → 100%');
   assert.equal(roles['1033'], 1 / 3, '仅 a 拥有 1033 → 1/3');
+});
+
+test('computeSampleCoverage：统计条目、去重 uid 与数据源覆盖', () => {
+  const c = computeSampleCoverage([
+    { role_id: '1011', uid: 'u1', source: 'mys' },
+    { role_id: '1011', uid: 'u1', source: '2025' },
+    { role_id: '1021', uid: 'u2', source: 'mys' },
+    { role_id: '1021', source: 'unknown' },
+    null,
+  ]);
+  assert.equal(c.entries, 4);
+  assert.equal(c.uidCount, 2);
+  assert.deepEqual(c.sources, { mys: 2, '2025': 1, unknown: 1 });
+  assert.deepEqual(c.roles['1011'], { entries: 2, uids: 1, sources: { mys: 1, '2025': 1, unknown: 0 } });
+  assert.deepEqual(c.roles['1021'], { entries: 2, uids: 1, sources: { mys: 1, '2025': 0, unknown: 1 } });
+});
+
+test('computeChoiceConcentration：输出选择占比、HHI 与等效选择数', () => {
+  const entries = [
+    {
+      role_id: '1011',
+      weapon: { name: 'A' },
+      equips: [
+        { name: '[4]', suit: '套A', main: [{ name: '暴击率', value: '24%' }] },
+        { name: '[5]', suit: '套A', main: [{ name: '攻击力', value: '30%' }] },
+        { name: '[6]', suit: '套B', main: [{ name: '攻击力', value: '30%' }] },
+      ],
+    },
+    {
+      role_id: '1011',
+      weapon: { name: 'A' },
+      equips: [
+        { name: '[4]', suit: '套A', main: [{ name: '暴击率', value: '24%' }] },
+        { name: '[5]', suit: '套A', main: [{ name: '攻击力', value: '30%' }] },
+        { name: '[6]', suit: '套B', main: [{ name: '攻击力', value: '30%' }] },
+      ],
+    },
+    {
+      role_id: '1011',
+      weapon: { name: 'B' },
+      equips: [
+        { name: '[4]', suit: '套C', main: [{ name: '暴击伤害', value: '48%' }] },
+        { name: '[5]', suit: '套C', main: [{ name: '穿透率', value: '24%' }] },
+        { name: '[6]', suit: '套C', main: [{ name: '能量自动回复', value: '20%' }] },
+      ],
+    },
+  ];
+  const d = computeChoiceConcentration(entries)['1011'];
+  assert.equal(d.entries, 3);
+  assert.equal(d.weapons.top[0].name, 'A');
+  assert.equal(d.weapons.top1, 2 / 3);
+  assert.ok(d.weapons.hhi > 0.5 && d.weapons.hhi < 0.6);
+  assert.equal(d.main456[4].top[0].name, '暴击率');
+  assert.equal(d.suits.top[0].name, '套A2+套B1');
 });

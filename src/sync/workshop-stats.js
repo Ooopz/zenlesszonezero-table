@@ -69,10 +69,8 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     rankDist,
     skillStats,
     roleDiscStats,
-    // 2026-10 新增：配队亲和 / 影画×评分 / 技能组合
+    // 2026-10 新增：配队亲和
     roleCooccurrence,
-    rankRelic,
-    skillCombos,
     // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）/ 两源一致性审计（D10）
     rollEfficiency,
     sourceAudit,
@@ -80,13 +78,15 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     roleStyles,
     // 角色拥有率（样本池口径）：{pool, roles}，pool=去重 uid 总数
     roleOwnership,
+    sampleCoverage,
+    choiceConcentration,
     // weightJson 同时供 effDist 的「按角色区分有效副词条」与 rollEfficiency 使用，必须在聚合前传入
   } = computeAllWorkshopStats(iterWorkshopEntries(), libDiscs, { roleNameMap, weightJson, traits });
   const data = {
     meta: {
       scrapedAt: new Date().toISOString(),
-      entries: totalEntries ?? -1,
-      poolUids: roleOwnership?.pool ?? 0,
+      entries: totalEntries ?? sampleCoverage?.entries ?? -1,
+      poolUids: sampleCoverage?.uidCount ?? roleOwnership?.pool ?? 0,
     },
     ...stats,
     discDetails,
@@ -97,12 +97,12 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     skillStats,
     roleDiscStats,
     roleCooccurrence,
-    rankRelic,
-    skillCombos,
     rollEfficiency,
     sourceAudit,
     roleStyles,
     roleOwnership: roleOwnership?.roles || {},
+    sampleCoverage,
+    choiceConcentration,
   };
   // 工坊有效词条权重（system_data 的角色默认流派权重，供有效词条/评分口径复现；正常非空）
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;

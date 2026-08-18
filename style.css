@@ -1613,6 +1613,48 @@ main::-webkit-scrollbar {
   box-shadow: 0 0 0 1px rgba(var(--hazard-rgb), 0.35);
 }
 
+.stats-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: var(--sp-3);
+}
+.stats-kpis > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--card2);
+  border-left: 2px solid var(--line2);
+}
+.stats-kpis span {
+  color: var(--dim2);
+  font-size: var(--fs-xs);
+}
+.stats-kpis b {
+  color: var(--hazard-lt);
+  font-family: var(--font-disp);
+  font-size: var(--fs-lg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coverage-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--line);
+}
+.coverage-table-wrap .rec-table {
+  min-width: 620px;
+}
+@media (max-width: 900px) {
+  .stats-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ============================================================
    流派分析卡（统计 → 角色面板）
    ============================================================ */

@@ -508,6 +508,27 @@ export function simulateFrontier3D(ctx, opts) {
   return { fixed: withSets.final, base: withSets.base, points, sourceDefs, discOptions: optionsBySlot, axes };
 }
 
+/** 坐标轴属性 -> 可提供收益的副词条类型集合。 */
+export function axisSubstatTypes(axes) {
+  const set = new Set();
+  for (const stat of axes || []) {
+    for (const def of SUBSTAT_SOURCES[stat] || []) set.add(def.type);
+  }
+  return set;
+}
+
+/** 给定配装与坐标轴属性，计算这套轴的理论最大有效强化次数。 */
+export function axisRollCap(ctx, opts, axes) {
+  const { withSets, mains } = resolveBuild(ctx, opts);
+  const sourceDefs = buildSourceDefs(axes, withSets.base);
+  let total = 0;
+  for (let slot = 1; slot <= 6; slot++) {
+    const allowed = sourceDefs.filter((s) => s.type !== mainTypeForSlot(slot, mains)).length;
+    if (allowed) total += 5 + Math.min(4, allowed);
+  }
+  return total;
+}
+
 /** 供 UI 使用：某面板属性能否作为前沿坐标轴（至少存在一个副词条来源）。 */
 export function axisAvailable(stat) {
   return !!SUBSTAT_SOURCES[stat];
