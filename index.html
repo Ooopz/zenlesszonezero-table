@@ -68,6 +68,13 @@
           「技能数值」弹窗，展示该技能每级的伤害倍率、失衡倍率等详细数值（悬浮仍显示说明）。
         </p>
         <p>
+          <b>统计视图：</b>基于推荐方案与工坊配装数据的跨角色分析，三个子面板——「角色面板」（该角色
+          玩家池分布对标：流派分析/箱线/技能/配队）、「驱动盘」（每块盘的决策卡：官方推荐 vs 玩家实况共识，
+          可抛弃主词条一目了然）、「全服总览」（样本口径/共识度/评分×毕业度/选择集中度）。对标池是排行榜上榜玩家的
+          <b>高练度标杆池</b>，比全服平均更强，不是全服分布。角色面板需先同步「推荐方案」，驱动盘/全服总览还需
+          「更新工坊数据」。
+        </p>
+        <p>
           <b>模拟视图：</b>选择角色 / 音擎 / 二件套 / 四件套 / 456 号位主词条后，可生成任意两个面板属性之间的
           <b>成长极限有效前沿</b>。每枚盘按 S 级满级、总强化次数 9 计算；副词条只在 X/Y 两轴上分配，其余槽位视为废词条。
           可点「添加二维图 / 添加三维图」临时叠加多张不同属性对的前沿图；三维图可拖拽旋转视角。
@@ -98,10 +105,10 @@
         <p style="color: var(--dim); font-size: 14px">勾选要更新的数据，点「更新」开始；可多选。</p>
         <div id="syncFreshness" class="sync-fresh"></div>
         <div class="sync-opts">
-          <label><input type="checkbox" class="sync-chk" data-key="wiki" checked /> 更新数据库</label>
           <label><input type="checkbox" class="sync-chk" data-key="characters" checked /> 更新我的角色</label>
-          <label><input type="checkbox" class="sync-chk" data-key="plans" checked /> 更新推荐方案</label>
-          <label><input type="checkbox" class="sync-chk" data-key="workshop" checked /> 更新工坊数据</label>
+          <label><input type="checkbox" class="sync-chk" data-key="wiki" /> 更新数据库</label>
+          <label><input type="checkbox" class="sync-chk" data-key="plans" /> 更新推荐方案</label>
+          <label class="sync-ws"><span class="sync-ws-title"><input type="checkbox" class="sync-chk" data-key="workshop" /> 更新工坊数据</span><span class="sync-ws-note">（全量爬取，耗时数小时，慎勾）</span></label>
         </div>
         <div class="row">
           <button id="syncRun" class="primary">更新</button>
@@ -110,15 +117,19 @@
         <div id="syncErrors" class="sync-errors"></div>
         <h3 style="margin-top: 14px">获取cookie</h3>
         <p style="color: var(--dim); font-size: 13px">
-          打开 <a href="https://act.mihoyo.com/zzz/event/character-builder/index.html?game_biz=nap_cn&mhy_auth_required=1" target="_blank" rel="noopener">米游社养成指南</a>
-          （需已登录）后输入 F12，在弹出的开发者面板下方可以看到控制台输入框，之后点击本页面复制脚本按钮，将复制的命令粘贴到控制台并回车，随后将弹出的 cookie 粘贴到本页面下方的文本框中。「更新我的角色」与「更新推荐方案」需要；养成指南登录态
-          <code>e_nap_token</code> 有效期较短，过期需重新导出。
+          ① 打开 <a href="https://act.mihoyo.com/zzz/event/character-builder/index.html?game_biz=nap_cn&mhy_auth_required=1" target="_blank" rel="noopener">米游社养成指南</a>
+          （需已登录，页面含 <code>e_nap_token</code> 登录态）。<br />
+          ② 把下面的 <a id="syncBookmarklet" href="#" title="拖到浏览器书签栏，以后一键收集">米游社 Cookie 书签</a> <b>拖到书签栏</b>（只需一次）。<br />
+          ③ 之后在养成指南页<b>点一下书签</b>，自动把关键 cookie 复制到剪贴板；回本页粘贴到下方文本框保存。<br />
+          「更新我的角色」与「更新推荐方案」需要；<code>e_nap_token</code> 有效期较短，过期需重新导出。
         </p>
         <pre id="syncCookieSnippet" class="snippet"></pre>
         <div class="row">
           <button id="syncCopy" class="ghost">复制脚本</button>
+          <span style="font-size: 12px; color: var(--dim)">（备选：F12 → 控制台粘贴运行，效果与书签相同）</span>
         </div>
-        <textarea id="syncCookieInput" rows="3" placeholder="粘贴 cookie（出于安全，已缓存的 cookie 不会回显）"></textarea>
+        <div id="syncCookieState" class="sync-cookie-state"></div>
+        <textarea id="syncCookieInput" rows="3" placeholder="粘贴 cookie（已缓存的 cookie 不回显，需更换时直接覆盖粘贴）"></textarea>
         <div class="row">
           <button id="syncCookieSave" class="primary">保存 cookie</button>
         </div>

@@ -1,7 +1,7 @@
 // src/web/discstats.js —— 「统计→驱动盘」面板：盘为中心的「决策卡」（适配角色 / 456 主词条保留 / 副词条组合 / 可抛弃主词条）。
 // 两口径经 computeDiscAdvisor 对齐判定：keep=官方+实况占比≥3%（保留）、split=单边（分歧）、drop=两口径都未用（仅 456 候选，删除线）。
 // 对比条：金=官方推荐占比、蓝=玩家实况占比，数值在条右侧。
-import { plans, library, workshopStats } from './data.js';
+import { plans, library, workshopStats, statsMissingData } from './data.js';
 import { computeDiscStats, computeDiscAdvisor } from '../lib/discAdvisor.js';
 import { MAIN_STAT_OPTIONS } from '../lib/constants.js';
 import { escapeHtml } from '../lib/util.js';
@@ -164,8 +164,15 @@ function slotRowHtml(detail) {
 }
 
 export function renderDiscStats() {
-  if (!Object.keys(plans || {}).length) {
-    return '<div class="empty">暂无推荐方案数据。<br>请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。</div>';
+  const miss = statsMissingData();
+  if (miss.length) {
+    return `<div class="empty">暂无${miss.join('、')}数据。<br>${
+      miss.length === 2
+        ? '请在右上角 <b>同步数据 → 更新推荐方案</b>，以及 <b>更新工坊数据</b>（全量爬取，耗时数小时）后刷新查看。'
+        : miss[0] === '推荐方案'
+          ? '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。'
+          : '请在右上角 <b>同步数据 → 更新工坊数据</b>（全量爬取，耗时数小时）后刷新查看。'
+    }</div>`;
   }
   const cards = allCards();
   // cards 以 library.discs 为键：方案数据在、属性库缺失时它是空的，

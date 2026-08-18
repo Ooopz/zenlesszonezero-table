@@ -12,31 +12,56 @@ import { myTab, myCharsShell, renderTable, characterCard, toggleTableSort, setMy
 const tipEl = document.createElement('div');
 tipEl.className = 'tip';
 document.body.appendChild(tipEl);
+let tipPinned = false; // 触屏/点击固定模式：不随鼠标移动
+let tipAnchor = null; // 当前显示的 data-detail 元素
+function positionTip(x, y) {
+  const r = tipEl.getBoundingClientRect();
+  if (x + r.width > innerWidth) x -= r.width + 24;
+  if (y + r.height > innerHeight) y -= r.height + 24;
+  tipEl.style.left = x + 'px';
+  tipEl.style.top = y + 'px';
+}
 document.addEventListener('mouseover', (e) => {
   const t = e.target.closest ? e.target.closest('[data-detail]') : null;
   if (t) {
     tipEl.innerHTML = t.dataset.detail;
     tipEl.style.display = 'block';
+    tipPinned = false; // hover 显示 → 跟随鼠标
+    tipAnchor = t;
   }
 });
 document.addEventListener('mousemove', (e) => {
-  if (tipEl.style.display === 'none') return;
-  const r = tipEl.getBoundingClientRect();
-  let x = e.clientX + 14,
-    y = e.clientY + 14;
-  if (x + r.width > innerWidth) x = e.clientX - r.width - 12;
-  if (y + r.height > innerHeight) y = e.clientY - r.height - 12;
-  tipEl.style.left = x + 'px';
-  tipEl.style.top = y + 'px';
+  if (tipEl.style.display === 'none' || tipPinned) return;
+  positionTip(e.clientX + 14, e.clientY + 14);
 });
 document.addEventListener('mouseout', (e) => {
   const from = e.target.closest ? e.target.closest('[data-detail]') : null;
   const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('[data-detail]') : null;
-  if (from && from !== to) hideTip();
+  if (from && from !== to && !tipPinned) hideTip();
+});
+// 触屏/点击：点 data-detail 切换显示（固定在元素下方，不随鼠标），点空白隐藏
+document.addEventListener('click', (e) => {
+  const t = e.target.closest ? e.target.closest('[data-detail]') : null;
+  if (t) {
+    if (tipAnchor === t && tipEl.style.display !== 'none') {
+      hideTip();
+    } else {
+      tipEl.innerHTML = t.dataset.detail;
+      tipEl.style.display = 'block';
+      tipPinned = true;
+      tipAnchor = t;
+      const r = t.getBoundingClientRect();
+      positionTip(r.left, r.bottom + 6);
+    }
+  } else if (!e.target.closest || !e.target.closest('.tip')) {
+    hideTip();
+  }
 });
 /** 强制隐藏悬浮框：render() 整块替换 innerHTML 时元素被直接移除，不再派发 mouseout，提示框会残留 */
 export function hideTip() {
   tipEl.style.display = 'none';
+  tipPinned = false;
+  tipAnchor = null;
 }
 
 // ---------- 表头点击排序（wiki/汇总/统计表格共用，经 data-sort 委托） ----------
@@ -58,6 +83,11 @@ function resolveView() {
 }
 
 // ---------- 渲染调度 ----------
+/** 二级 tab 栏高度写入 --tabs-h：表格吸顶表头需让开「header + 二级 tab」两层高度（tab 栏随 body 滚动吸顶） */
+function measureTabs() {
+  const tabs = grid.querySelector('.wiki-tabs');
+  document.documentElement.style.setProperty('--tabs-h', (tabs ? tabs.offsetHeight : 0) + 'px');
+}
 export function render() {
   const { view } = resolveView();
   hideTip();
@@ -67,15 +97,18 @@ export function render() {
   pruneDetachedCharts();
   if (view === VIEWS.WIKI) {
     grid.innerHTML = renderWiki();
+    measureTabs();
     return;
   }
   if (view === VIEWS.STATS) {
     grid.innerHTML = renderStatsView();
+    measureTabs();
     mountStatsCharts();
     return;
   }
   if (view === VIEWS.SIMULATE) {
     grid.innerHTML = renderSimulate();
+    measureTabs();
     // 先让浏览器完成首帧绘制，再挂载图表，避免图表初始化阻塞面板加载。
     setTimeout(() => mountCharts(), 0);
     return;
@@ -85,10 +118,12 @@ export function render() {
     grid.innerHTML = myCharsShell(
       '<div class="empty">还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。</div>'
     );
+    measureTabs();
     return;
   }
   const list = myCharacters;
   grid.innerHTML = myCharsShell();
+  measureTabs();
   const body = grid.querySelector('.mychars-body');
   body.className = myTab === 'card' ? 'mychars-body cards' : 'mychars-body';
   if (myTab === 'table') renderTable(list, body);

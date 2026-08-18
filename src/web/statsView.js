@@ -1,7 +1,7 @@
 // src/web/statsView.js —— 统计视图：三个二级子面板（角色面板 / 驱动盘 / 全服总览）
 // 数据源：plans.json + workshop-grad.json + workshop-stats.json + characters.json；样本对标为高练度标杆池（不当作全服分布）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序。
-import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex } from './data.js';
+import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex, statsMissingData } from './data.js';
 import { computeRecTierStats } from '../lib/panelBench.js';
 import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
@@ -64,6 +64,21 @@ const PANEL_RENDERERS = {
 function emptyState(msg, hint = '') {
   return `<div class="empty">${msg}${hint ? `<br>${hint}` : ''}</div>`;
 }
+/** 统计视图数据就绪检查：按缺失数据源给对应同步指引（plans / workshop 分开提示）。
+ *  缺 plans → 推荐方案；缺 workshop 聚合（panels 为空）→ 工坊数据（数小时）。有数据返回 null。 */
+function statsNotReady() {
+  const miss = statsMissingData();
+  if (!miss.length) return null;
+  const hint =
+    miss.length === 2
+      ? '请在右上角 <b>同步数据 → 更新推荐方案</b>，以及 <b>更新工坊数据</b>（全量爬取，耗时数小时）后刷新查看。'
+      : miss[0] === '推荐方案'
+        ? '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。'
+        : '请在右上角 <b>同步数据 → 更新工坊数据</b>（全量爬取，耗时数小时）后刷新查看。';
+  return emptyState(`暂无${miss.join('、')}数据。`, hint);
+}
+/** 供 discstats.js 复用（驱动盘子面板同款空态） */
+export { statsNotReady };
 /** 渲染可排序表格（rec-table 骨架；内容列复用 .ds-main/.ds-dim/.ds-rolecnt 等类） */
 const table = (headers, rows, sortable, className = '') =>
   tableHtml(headers, rows, sortable, { cls: 'rec-table', sort: statsSort, className });
@@ -452,8 +467,8 @@ function scatterCardsHtml(prefix, grid, subtitle) {
 // ---------- 全服总览（全局总览层：共识度 / 评分×盘毕业度 / 练度总览） ----------
 
 function renderOverview() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
+  const notReady = statsNotReady();
+  if (notReady) return notReady;
   const wsPanel = wsPanelMap();
   const tiers = recTierStats();
   const roleNames = Object.values(plans).map((v) => v.name);
@@ -603,8 +618,8 @@ function styleCardHtml(name) {
   </div>`;
 }
 function renderRoleDetail() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
+  const notReady = statsNotReady();
+  if (notReady) return notReady;
   const roleNames = Object.values(plans).map((v) => v.name);
   if (!selectedRole || !roleNames.includes(selectedRole)) selectedRole = roleNames[0];
   const name = selectedRole;
