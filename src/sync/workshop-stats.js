@@ -1,29 +1,24 @@
-// src/sync/workshop-stats.js —— 工坊数据聚合（从 workshop.js 拆出的聚合职责，2026-10）
-// ① buildWorkshopStats：workshop.json → workshop-stats.json（单遍历 13 项聚合，纯逻辑在 lib/workshopStats.js）
-// ② fetchWorkshopGrad：grad_stat 接口全服占比 → workshop-grad.json（下载 + 聚合）
-// 下载/提取（爬取配装、extractBuild）留在 workshop.js；本模块只依赖 workshop-api.js 的网络层，
-// 不与 workshop.js 互相 import（workshop.js 从这里 re-export，scripts/rebuild-stats.mjs 直接从这里取）。
+// src/sync/workshop-stats.js —— 工坊数据聚合（2026-10 从 workshop.js 拆出）：
+// ① buildWorkshopStats（workshop.json → workshop-stats.json，单遍历 13 项聚合，纯逻辑在 lib/workshopAgg.js）
+// ② fetchWorkshopGrad（grad_stat 接口全服占比 → workshop-grad.json）。不 import workshop.js——workshop.js 从这里 re-export，rebuild-stats.mjs 直接取
 import fs from 'node:fs';
 import path from 'node:path';
-import { computeAllWorkshopStats } from '../lib/workshopStats.js';
+import { computeAllWorkshopStats } from '../lib/workshopAgg.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
 import { iterWorkshopFile, DATA_DIR, pool, writeJsonAtomic } from '../lib/node.js';
 import { apiGet } from './workshop-api.js';
-import { loadNameIndexes } from './name-index.js';
+import { loadNameIndexes, resolveWengineName } from './name-index.js';
 
 export const OUT_FILE = path.join(DATA_DIR, 'workshop.json'); // 聚合输入（配装条目，workshop.js 合并写出）
 const STATS_FILE = path.join(DATA_DIR, 'workshop-stats.json');
 const GRAD_FILE = path.join(DATA_DIR, 'workshop-grad.json');
 
-// 名称索引（统一 resolver，library.json 为权威源）：工坊 nick_name 的 ASCII 罗马数字/括号差异、角色简称
-// （维琳娜/星徽·比利）等一律在写时解析回 wiki 标准名，保证三个工坊数据文件与 library/plans 一致。
-// ⚠️ 索引**不建在模块顶层**：server.js 用 `?v=mtime` 爆破的只有 workshop.js 的模块缓存，本模块的
-// import 路径无 query、相对解析会命中同一缓存 URL——顶层索引会冻结在首次加载，同步完 library 后
-// 新角色名解析不出来（正是 ?v= 爆破要防的 bug）。改为每次聚合调用时现读 library.json（一次解析
-// 约几毫秒，相对数小时爬取/数分钟聚合可忽略），保证长驻 server 进程始终用最新索引。
-// library.json 缺失/损坏时降级为空索引（名称归一退化为原样，不崩——测试可直接 import 本模块）
+// 名称索引（统一 resolver，library.json 为权威源）：nick_name 差异在写时解析回 wiki 标准名，保证与 library/plans 一致。
+// ⚠️ 索引**不建在模块顶层**：server.js 用 `?v=mtime` 爆破的只有 workshop.js 的模块缓存，本模块顶层索引会冻结在
+// 首次加载，同步完 library 后新角色名解析不出来——改为每次聚合调用现读 library.json（一次解析几毫秒可忽略）。
+// library.json 缺失/损坏时降级为空索引（不归一、不崩——测试可直接 import 本模块）
 function loadIndexes() {
   return (
     loadNameIndexes('工坊') ?? {
@@ -34,17 +29,12 @@ function loadIndexes() {
   );
 }
 
-/** 工坊音擎 nick_name → wiki 规范音擎条目（统一 resolver；找不到返回 null） */
-function resolveWengine(rawName, libWengines) {
-  return resolveEntry(CATEGORY.WENGINE, libWengines, rawName);
-}
-
-/** 流式遍历 workshop.json 的 entries（generator）：分块 gzip 按块解压，聚合函数 for...of 天然兼容，不把大数组放内存 */
+/** 流式遍历 workshop.json 的 entries（generator，分块 gzip 按块解压）：聚合 for...of 天然兼容，不把大数组放内存 */
 function* iterWorkshopEntries() {
   yield* iterWorkshopFile(OUT_FILE);
 }
 
-// ---------- 汇总生成（原 workshop-stats.js）：workshop.json → workshop-stats.json ----------
+// ---------- 汇总生成：workshop.json → workshop-stats.json ----------
 export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   if (!fs.existsSync(OUT_FILE)) return null;
   const { char: libChars, disc: libDiscs } = loadIndexes(); // 现读 library.json（见 loadIndexes 注释）
@@ -56,26 +46,20 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
       if (libChar?.trait) traits[rid] = libChar.trait;
     }
   }
-  // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：generator 逐条产出，峰值内存只留聚合 Map。
-  // 13 项聚合合并为**一次**遍历（computeAllWorkshopStats）：此前每项各调一次 iterWorkshopEntries，
-  // 等于把 2.13GB 文件流式解析 13 遍（每遍 ~27s，白白多花 ~6 分钟）。合并后输出逐位不变（见 workshopStats.js 累加器说明）
+  // 流式遍历（90 万+ 条全量进数组 ≈7GB 会 OOM）：13 项聚合合并为一次遍历（此前每项各流式解析 2.13GB 一遍，每遍 ~27s）
+  // 合并后输出逐位不变（见 lib/workshopAgg.js 累加器说明）
   const {
     stats,
     panelCorr, // 属性相关（按角色，同条目配对）
-    discDetails, // 驱动盘单盘真实统计（含 D7 套装×槽位 slotDist、有效强化次数 effDist）
+    discDetails, // 驱动盘单盘真实统计（含 D7 槽位 slotDist、有效强化次数 effDist）
     panelScatter, // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-    // 练度指标：评分分布 / 影画占比 / 技能练度
     relicStats,
     rankDist,
     skillStats,
-    // 2026-10 新增：配队亲和
     roleCooccurrence,
-    // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）
-    rollEfficiency,
-    // 2026-10 新增：角色流派分析（面板 k-means，每角色 3 流派 + 典型面板）
-    roleStyles,
-    // 角色拥有率（样本池口径）：{pool, roles}，pool=去重 uid 总数
-    roleOwnership,
+    rollEfficiency, // 加权词条效率分（含 D9 评分×毕业度）
+    roleStyles, // 角色流派分析（面板 k-means，每角色 3 流派 + 典型面板）
+    roleOwnership, // 角色拥有率（样本池口径）：{pool, roles}，pool=去重 uid 总数
     sampleCoverage,
     choiceConcentration,
     // weightJson 同时供 effDist 的「按角色区分有效副词条」与 rollEfficiency 使用，必须在聚合前传入
@@ -106,7 +90,7 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   return data;
 }
 
-// ---------- 全服配装统计（原 workshop-grad.js）：每角色最常用音擎 + 驱动盘套装 ----------
+// ---------- 全服配装统计：每角色最常用音擎 + 驱动盘套装（workshop-grad.json） ----------
 /** 解析驱动盘 set_info（"32800_4__33100_2" → 组合名），返回 {name, sets:[{set_id,num,name}]} 或 null
  *  libDiscs 由调用方传入（fetchWorkshopGrad 现读的索引，避免模块顶层缓存冻结）。 */
 function parseSetInfo(setInfo, artifacts, libDiscs) {
@@ -125,8 +109,7 @@ function parseSetInfo(setInfo, artifacts, libDiscs) {
   return { name, sets: orderedSets };
 }
 
-/** 爬取工坊全服配装统计并写入 data/workshop-grad.json。onProgress({step, done, total}) 供进度轮询。
- *  concurrency 为角色级并发（默认 6，与 workshop.js 爬取并发同源；rebuild-stats.mjs 调用时不传用默认）。 */
+/** 爬取全服配装统计并写入 data/workshop-grad.json；onProgress({step,done,total}) 供进度轮询，concurrency 为角色级并发（默认 6，与 workshop.js 同源） */
 export async function fetchWorkshopGrad(onProgress, concurrency = 6) {
   const { char: libChars, wengine: libWengines, disc: libDiscs } = loadIndexes(); // 现读 library.json（见 loadIndexes 注释）
   const sys = await apiGet('/api/v1/system_data/public', {});
@@ -146,8 +129,7 @@ export async function fetchWorkshopGrad(onProgress, concurrency = 6) {
       const ws = d.weapon_stat || [];
       const rs = d.relic_stat || [];
 
-      // 角色名解析为 wiki 标准名（维琳娜→维琳娜·艾嘉德、11号→「11号」、星徽·比利→星徽·比利·奇德）；
-      // 图标用解析到的标准条目（官方 wiki 大图 portrait 优先）
+      // 角色名解析为 wiki 标准名（维琳娜→维琳娜·艾嘉德等）；图标取解析到的标准条目（portrait 优先）
       const roleName = canonicalName(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true }) || nick_name;
       const libChar = resolveEntry(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true });
       const roleIcon = libChar?.portrait || libChar?.icon || '';
@@ -158,7 +140,7 @@ export async function fetchWorkshopGrad(onProgress, concurrency = 6) {
       for (const w of ws) {
         const sysW = weapons.find((x) => String(x.item_id) === String(w.weapon_id));
         const rawName = sysW ? sysW.nick_name : '';
-        const libW = sysW ? resolveWengine(rawName, libWengines) : null;
+        const libW = sysW ? resolveWengineName(libWengines, rawName) : null;
         const name =
           w.weapon_id === 'other'
             ? '其他'
@@ -206,10 +188,8 @@ export async function fetchWorkshopGrad(onProgress, concurrency = 6) {
     onProgress?.({ step: 'grad', done, total: roles.length });
   });
 
-  // 全量失败保护：每角色的 catch 只打日志，风控/断网时 out 会是空数组。
-  // 若照写就会把上一份好的 workshop-grad.json 覆盖成 {roles: []}，而 rebuild-stats.mjs 的
-  // role_id → 角色名映射**只能**来自 grad —— 一次限流会连累其后所有重算。宁可不写，保留旧文件。
-  // 注意条件只判 out 空：system_data 返回空角色表（roles.length===0）时同样不能写，否则一样静默清空。
+  // 全量失败保护：out 为空时照写会把好数据覆盖成 {roles: []}，而 rebuild-stats.mjs 的 role_id→角色名映射只能来自 grad，
+  // 一次限流会连累其后所有重算——宁可不写保留旧文件；条件只判 out 空，system_data 返回空角色表时同样不能写
   if (!out.length) {
     const hint = roles.length
       ? `全部 ${roles.length} 个角色抓取失败（可能被风控或网络不通）；已保留现有 workshop-grad.json 不覆盖`

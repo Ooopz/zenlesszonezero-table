@@ -3,18 +3,13 @@ import { setData, dataCtx } from './data.js';
 import { setCalcContext } from '../lib/calc.js';
 import { initUi } from './ui.js';
 
-// 记录页面头部高度，供主区域表格吸顶表头（sticky）定位：body 级滚动下表头需吸在 header 之下，
-// 偏移量 = header 高度（--head-h）。header 是 flex-wrap: wrap，窄屏换行后会变高——只在加载时算一次
-// 会让 sticky 常年失准，所以用 ResizeObserver 实时跟踪（charts.js 的 resize 监听只负责 ECharts 重排，两者不相干）。
+// header 高度供表格吸顶表头定位（--head-h）：flex-wrap 窄屏换行后会变高，只在加载时算一次会失准，故用 ResizeObserver 实时跟踪（charts.js 的 resize 只负责 ECharts，两者不相干）。
 const header = document.querySelector('header');
 const syncHeadHeight = () => document.documentElement.style.setProperty('--head-h', header.offsetHeight + 'px');
 syncHeadHeight();
 new ResizeObserver(syncHeadHeight).observe(header);
 
-// 数据源为 server 提供的 /api/data（读取 data/*.json）
-// 整段包 try：fetch 只在 HTTP 层出错时 reject，而 !res.ok 只覆盖「服务器答了但状态码非 2xx」。
-// 服务器没起、连接被拒、离线、JSON 截断都会直接抛，顶层 await 的异常无人捕获 =
-// 页面永久空白且控制台之外没有任何提示。
+// fetch 只在 HTTP 层出错时 reject；服务器没起/连接被拒/离线/JSON 截断都会直接抛——顶层 await 异常无人捕获 = 页面永久空白，故整段包 try
 const fail = (msg) => {
   document.getElementById('grid').innerHTML = `<div class="empty">${msg}</div>`;
 };

@@ -1,15 +1,9 @@
-// src/sync/name-index.js —— 读取 library.json（标准名权威源）并构建三类名称索引（char/wengine/disc）
-// 供同步脚本写时归一（characters / plans）复用；library 缺失/损坏时返回 null（调用方降级为不归一）。
+// src/sync/name-index.js —— 读 library.json（标准名权威源）建 char/wengine/disc 三类名称索引，供同步脚本写时归一复用；library 缺失/损坏返回 null（调用方降级为不归一）
 import fs from 'node:fs';
 import path from 'node:path';
-import { buildNameIndex, CATEGORY } from '../lib/names.js';
+import { buildNameIndex, resolveEntry, CATEGORY } from '../lib/names.js';
 import { DATA_DIR } from '../lib/node.js';
 
-/**
- * 加载并构建 char / wengine / disc 三类名称索引。
- * @param {string} [what] 用于 warning 文案的实体描述（如「账号音擎/驱动盘名」「推荐方案名称」）
- * @returns {{char:object, wengine:object, disc:object}|null}  失败返回 null
- */
 export function loadNameIndexes(what = '名称') {
   try {
     const lib = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'library.json'), 'utf8'));
@@ -22,4 +16,9 @@ export function loadNameIndexes(what = '名称') {
     console.warn(`⚠️ library.json 缺失/损坏，${what}跳过归一（建议先 npm run sync:library）`);
     return null;
   }
+}
+
+/** 音擎名解析：工坊名 → library 标准名（workshop/workshop-stats 共用；libWengines 为 loadNameIndexes 的 wengine 索引） */
+export function resolveWengineName(libWengines, rawName) {
+  return resolveEntry(CATEGORY.WENGINE, libWengines, rawName);
 }

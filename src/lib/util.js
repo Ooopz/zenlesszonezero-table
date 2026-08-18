@@ -1,6 +1,5 @@
 // src/lib/util.js —— 环境无关的纯工具函数（Node 与浏览器共用）
-// 注意：本文件不能 import 任何 node: 模块（浏览器会直接 import 它）。
-// Node 专属函数（如 openBrowser）放在 ./node.js。
+// ⚠️ 禁止 import 任何 node: 模块（浏览器会直接 import 它）；Node 专属函数（如 openBrowser）放 ./node.js
 import { STAT } from './constants.js';
 
 /** 去 HTML 标签，折叠空白 */
@@ -22,9 +21,8 @@ const ROMAN_ASCII = { VIII: 'Ⅷ', III: 'Ⅲ', VII: 'Ⅶ', IV: 'Ⅳ', II: 'Ⅱ',
 export function romanNumeralUnicode(s) {
   return String(s || '').replace(/VIII|III|VII|IV|II|VI|IX|V|I|X/g, (m) => ROMAN_ASCII[m] || m);
 }
-/** 名字匹配键：在 normalize 基础上把罗马数字统一为 Unicode 并保留（Unicode 罗马数字不在 [一-鿿] 区，需显式保留）。
- *  用于把工坊源音擎名（ASCII 罗马数字 / 括号差异，如「残响-II型」）解析到 wiki 规范名（「残响」-Ⅱ型），
- *  同时区分 Ⅰ/Ⅱ/Ⅲ 不互相碰撞（normalize 会全部剥掉罗马数字导致 Ⅰ/Ⅱ/Ⅲ 歧义）。 */
+/** 名字匹配键：罗马数字统一为 Unicode 并保留——normalize 会剥掉罗马数字导致 Ⅰ/Ⅱ/Ⅲ 歧义，
+ *  工坊源音擎名（如「残响-II型」）需靠它解析到 wiki 规范名 */
 export function normalizeRomanKey(s) {
   return romanNumeralUnicode(s).replace(/[^一-鿿0-9ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]/g, '');
 }
@@ -59,9 +57,8 @@ export function escapeHtml(s) {
     .replace(/</g, '&lt;');
 }
 
-/** 把用户数据安全嵌入 HTML 属性内的 JS 字符串（onclick="fn('...')"）。
- *  先 JS 转义 \ 与 '（防止提前终止字符串），再 HTML 转义 & " <（防止闭合属性或实体注入）；
- *  HTML 解码发生在 JS 执行前，故两层缺一不可。 */
+/** 安全嵌入 HTML 属性内的 JS 字符串（onclick="fn('...')"）。
+ *  先 JS 转义 \ 与 '，再 HTML 转义 & " <——HTML 解码在 JS 执行前，两层缺一不可。 */
 export function escapeJsAttr(s) {
   return String(s ?? '')
     .replace(/\\/g, '\\\\')
@@ -113,9 +110,7 @@ export function isEmptyVal(v) {
 }
 
 // ---------- 属性名归一化 ----------
-/** 属性名别名 → 规范名（wiki 来源页面对不同角色用词不一：生命/生命力→生命值、攻击→攻击力、防御→防御力；
- *  部分页面用短名：暴击→暴击率、暴伤→暴击伤害；
- *  命破角色把标准面板后两项换成专属名：穿透率→贯穿力（或贯穿率）、能量自动回复→闪能自动积累/累积/累计） */
+/** 属性名别名 → 规范名（wiki 各角色用词不一；命破角色的专属名映射见下） */
 const STAT_ALIASES = {
   生命: STAT.HP,
   生命力: STAT.HP,
@@ -129,8 +124,7 @@ const STAT_ALIASES = {
   闪能自动积累: STAT.ENERGY,
   闪能自动累积: STAT.ENERGY,
   闪能自动累计: STAT.ENERGY,
-  // 元素/属性「X伤害」→「X伤害加成」（并入原 library.js damageMapping，单一权威；
-  // 不加泛化「伤害→伤害加成」以免误伤技能文本）。修呼啸沙龙 set2 的「风属性伤害」泄漏。
+  // 「X伤害」→「X伤害加成」：不加泛化「伤害→伤害加成」以免误伤技能文本（修呼啸沙龙 set2「风属性伤害」泄漏）
   物理伤害: '物理伤害加成',
   物理属性伤害: '物理伤害加成',
   火属性伤害: '火属性伤害加成',
@@ -141,8 +135,8 @@ const STAT_ALIASES = {
   以太伤害: '以太伤害加成',
   流明伤害: '流明伤害加成',
   虚属性伤害: '虚属性伤害加成',
-  // workshop 词条名变体（工坊 2025 源带「百分比」后缀、伤害加成用简写；统一到 plans/constants 体系，
-  // 供 workshopStats.discStatName 复用。mys 源的 攻击/生命/防御 百分比形态按值带 % 判定，不在此表）
+  // workshop 词条名变体（2025 源带「百分比」后缀、伤害加成用简写；统一到 plans/constants 体系供 discStatName 复用；
+  // mys 源的百分比形态按值带 % 判定，不在此表）
   攻击力百分比: '攻击力%',
   生命值百分比: '生命值%',
   防御力百分比: '防御力%',
@@ -201,4 +195,9 @@ export function decodeHtmlEntities(s) {
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
+}
+
+/** 命破角色贯穿力 = 0.3×攻击 + 0.1×生命（calc/simCalc 共用；任一缺失返回 null） */
+export function pierceStat(a, h) {
+  return a != null && h != null ? Math.round(0.3 * a + 0.1 * h) : null;
 }

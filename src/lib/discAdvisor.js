@@ -1,10 +1,7 @@
-// src/lib/discstats.js —— 驱动盘推荐统计（纯逻辑，Node 与浏览器共用）
-// 数据源：data/plans.json（养成指南推荐方案，见 src/sync/plans.js 的 extractPlan）。
-// 按驱动盘名聚合全部角色的推荐方案，统计「推荐方案里用到该盘（2件套或4件套）的角色」、
-// 这些方案推荐的主/副词条出现频次（出现得越多的词条越通用、越值得留）、以及 4/5/6 号位主属性频次。
-// 二件套按「效果」替代：同一 set2 效果的盘可互相替代（如 荆棘玫瑰/灵魂摇滚 都是 防御力0.16），
-// 方案推荐二件套效果 X 时计入所有 set2 为 X 的盘（传 discSet2 时启用）。四件套效果无结构化数值，保持按套装名。
-// 套装名解析统一走 src/lib/names.js 的 resolver（normalize + 别名，如 棘刺玫瑰→荆棘玫瑰 旧名兼容、尾随空格）。
+// src/lib/discAdvisor.js —— 驱动盘推荐统计（纯逻辑，Node 与浏览器共用）
+// 按盘名聚合 data/plans.json（见 src/sync/plans.js）全部推荐方案：推荐用到该盘（2/4 件套）的角色、
+// 主/副词条出现频次与 456 主属性。二件套按「效果」替代（同 set2 效果的盘互替，如 荆棘玫瑰/灵魂摇滚 都是 防御力0.16），
+// 四件套效果无结构化数值保持按套装名；套装名解析走 src/lib/names.js 的 resolver。
 import { buildNameIndex, resolveName, CATEGORY } from './names.js';
 import { SUBSTAT_TYPE_SET } from './constants.js';
 
@@ -24,24 +21,9 @@ function freqList(freq, total) {
 }
 
 /**
- * 计算驱动盘统计表。
- *
- * @param {object} plans  { avatarId: { name, plans: [...] } }
- *   plan.sets = [{ name, cnt }]（cnt 为件数，2 或 4；2+2+2 / 4+2 组合就是多条）
- *   plan.subStats = [副词条名]
- *   plan.mainProps = { '4': 主属性名, '5': 名, '6': 名 }（键为字符串，值已百分比归一化）
- * @param {string[]} discNames  驱动盘全名单（library.discs 键），决定返回的行集合与顺序
- * @param {object} [discSet2]  { 规范盘名: set2效果对象 }（可选）。提供时启用二件套效果替代：
- *   方案推荐 2 件套盘时，同 set2 效果的所有盘都计入（该方案作为效果组的替代品）；不传则仅按套装名计入。
- * @returns {{name:string, count:number, alternatives:string[], characters:string[], subCombos:string[][],
- *            subStats:{name:string,count:number,ratio:number}[],
- *            main4:同上, main5:同上, main6:同上}[]}
- *   count：采用该盘（2 件套或其同效替代 / 4 件套）的方案总数，也是各频次的计数分母。
- *   alternatives：与该盘二件套效果相同的其他盘名（不含自己；set2 为 null 或无 discSet2 时为 []）。
- *   characters：匹配角色（去重）。
- *   subCombos：副词条组合（按方案去重，保留每组组合，供悬浮明细）。
- *   subStats / main4..6：词条/主属性出现频次，按出现次数降序（同频按首次出现顺序）。
- *   驱动盘未被任何方案采用时 count 为 0、各数组为空。
+ * 计算驱动盘统计表：按盘聚合全部方案 → 采用角色（去重）、副词条组合（按方案去重）、
+ * 词条/456 主属性频次（降序；ratio = 次数/count）。count = 采用该盘的方案总数（含 2 件套同效替代），
+ * 作频次分母；传 discSet2 时 2 件套按同效果组扩展，alternatives 为同效果其他盘；未被采用时 count=0、数组为空。
  */
 export function computeDiscStats(plans, discNames, discSet2) {
   const index = buildNameIndex(discNames || [], CATEGORY.DISC);
@@ -70,16 +52,14 @@ export function computeDiscStats(plans, discNames, discSet2) {
     if (!v || !v.name || !Array.isArray(v.plans)) continue;
     for (const p of v.plans) {
       if (!p || !Array.isArray(p.sets)) continue;
-      // 一个方案推荐的副词条/主属性属于整套配装，对方案里的每个套装都计入
-      // 副词条组合去重：先排序再序列化，忽略组内顺序（如 暴击率/暴击伤害/攻击力% 与 暴击伤害/暴击率/攻击力% 视为同一组合）
+      // 副词条/主属性属整套配装，对方案里每个套装都计入；组合去重 = 排序后序列化（忽略组内顺序）
       const comboKey = Array.isArray(p.subStats) && p.subStats.length ? JSON.stringify([...p.subStats].sort()) : null;
-      // 收集本方案「计入口盘」（规范名，Set 去重）：4 件套按套装名；
-      // 2 件套按 set2 效果扩展到同效果组。方案级去重避免重复计数：
-      // 方案内两个同效果 2 件套只计一次；同一盘被 4 件套 + 2 件套替代同时命中只计一次。
+      // 计入口盘（Set 去重）：4 件套按套装名、2 件套按 set2 效果组扩展；
+      // 同方案内两个同效果 2 件套或 4+2 双命中只计一次（方案级去重防重复计数）
       const hit = new Set();
       for (const s of p.sets) {
-        if (!s || typeof s.name !== 'string' || (s.cnt !== 2 && s.cnt !== 4)) continue; // 只统计 2/4 件套
-        // 套装名经 resolver 解析为标准盘名（别名/尾随空格/标点差异）；未命中跳过
+        if (!s || typeof s.name !== 'string' || (s.cnt !== 2 && s.cnt !== 4)) continue;
+        // 套装名经 resolver 解析为标准盘名（别名/尾随空格）；未命中跳过
         const name = resolveName(CATEGORY.DISC, index, s.name)?.name;
         if (!name || !acc.has(name)) continue;
         if (s.cnt === 4 || !groupByKey) {
@@ -115,7 +95,7 @@ export function computeDiscStats(plans, discNames, discSet2) {
       if (k != null) alternatives = (groupByKey.get(k) || []).filter((nm) => nm !== a.name);
     }
     return {
-      name: a.name, // library 规范名
+      name: a.name,
       alternatives,
       count: a.count,
       characters: [...a.chars],
@@ -129,27 +109,11 @@ export function computeDiscStats(plans, discNames, discSet2) {
 }
 
 /**
- * 驱动盘「决策卡」合并层：官方推荐口径（computeDiscStats 行）与工坊实况口径（discDetails 行）
- * 对齐为统一结构——两个口径独立产出同一套维度（角色/456 主词条/副词条），再按共识判定（二分类）：
- *   keep = 官方占比 ≥ threshold **或** 实况占比 ≥ threshold → 保留（任一口径值得留）
- *   drop = 官方与实况都 < threshold → 可抛弃（仅 456 候选主词条；副词条 drop 直接过滤不返回）
- * 副词条按 wiki 规则过滤：只保留合法副词条（SUBSTAT_TYPE_SET：攻击/生命/防御 固定+%、
- * 暴击率/暴击伤害/穿透值/异常精通）——伤害加成类、能量自动回复、穿透率、冲击力、异常掌控等
- * 出现在数据里的脏词条一律排除。
- * 占比口径：官方 = count/方案数（computeDiscStats 自带 ratio）；实况 = count/分母（副词条用盘数、
- * 456 用该槽 mainDenom）。角色交集 = 两口径都出现（最适配）。
- * @param {object|null} official  computeDiscStats 行 {characters, main4, main5, main6, subStats}；null=无官方数据
- * @param {object|null} live      discDetails 行 {equips, characters, main456, mainDenom, subs}；null=无实况数据
- * @param {object} mainOptions    456 主词条候选（MAIN_STAT_OPTIONS）
- * @param {number} [threshold=0.03] 占比保留阈值（官方/实况任一 ≥ 阈值即保留）
- * @returns {{roles:{official:string[],live:string[],both:string[]},
- *            mains:{4,5,6:{name,official,live,verdict:'keep'|'split'|'drop'}[]},
- *            subs:{name,official,live,verdict:'keep'|'drop'}[], combos, effDist,
- *            equips:number, alternatives:string[]}}
- *   equips：实况盘数（live.equips）；alternatives：同效果二件套盘（official.alternatives）。
- *   ⚠️ combos / effDist 目前只做透传，web/discstats.js 的决策卡尚未渲染这两项。
- *   effDist 自 2026-08 起是「有效**强化次数**」分布（0-9，见 workshopStats.substatRolls），
- *   不再是旧的「有效词条个数」（上限 4 且 99.95% 恒为 4，无区分度）。
+ * 驱动盘「决策卡」合并层：官方（computeDiscStats 行）与工坊实况（discDetails 行）两口径对齐后按共识判定——
+ * keep = 官方或实况任一占比 ≥ threshold（默认 0.03）；drop = 双口径都 < threshold（仅 456 候选主词条，副词条 drop 直接过滤不返回）。
+ * 副词条先按 SUBSTAT_TYPE_SET 过滤脏词条；占比口径：官方 = count/方案数，实况 = 副词条用盘数、456 用该槽 mainDenom。
+ * 角色交集 = 两口径都出现（最适配）。
+ * ⚠️ combos/effDist 目前只透传（web/discstats.js 尚未渲染）；effDist 自 2026-08 起是有效**强化次数**分布（0-9），非旧「有效词条个数」（上限 4 无区分度）。
  */
 export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03) {
   const t = threshold;
@@ -175,13 +139,13 @@ export function computeDiscAdvisor(official, live, mainOptions, threshold = 0.03
     items.sort((a, b) => (a.verdict === b.verdict ? b.live - a.live : a.verdict === 'keep' ? -1 : 1));
     mains[slot] = items;
   }
-  // ---- 副词条：仅合法副词条（SUBSTAT_TYPE_SET），任一 ≥ 阈值为 keep；drop 不返回 ----
+  // ---- 副词条：SUBSTAT_TYPE_SET 过滤后判定，drop 不返回 ----
   const oSub = new Map((official?.subStats || []).map((f) => [f.name, f.ratio || 0]));
   const lDenomS = live?.equips || 0;
   const lSub = new Map((live?.subs || []).map((f) => [f.name, lDenomS ? f.count / lDenomS : 0]));
   const subNames = new Set([...oSub.keys(), ...lSub.keys()]);
   const subs = [...subNames]
-    .filter((n) => SUBSTAT_TYPE_SET.has(n)) // wiki 规则：合法副词条全集
+    .filter((n) => SUBSTAT_TYPE_SET.has(n))
     .map((n) => {
       const or = oSub.get(n) || 0;
       const lr = lSub.get(n) || 0;

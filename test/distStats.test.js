@@ -1,8 +1,8 @@
 // test/distStats.test.js —— 分布统计纯函数 + 属性相关
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { quantile, median, computeDist, pearson, kmeans } from '../src/lib/distStats.js';
-import { computePanelCorrelations } from '../src/lib/workshopStats.js';
+import { quantile, median, computeDist, pearson, kmeans, sd } from '../src/lib/distStats.js';
+import { computePanelCorrelations } from '../src/lib/workshopAgg.js';
 import { loadDataFile } from './helpers.js';
 
 test('quantile/median：线性插值', () => {
@@ -49,6 +49,13 @@ test('pearson：完全正/负相关、零方差返回 null', () => {
   assert.ok(Math.abs(pearson([1, 2, 3], [6, 4, 2]) + 1) < 1e-9);
   assert.equal(pearson([1, 1, 1], [2, 3, 4]), null);
   assert.equal(pearson([1], [2]), null);
+});
+
+test('sd：总体标准差（除以 n，非样本 n-1）', () => {
+  // [2,4,4,4,5,5,7,9] 均值 5，方差 = 32/8 = 4 → sd = 2（样本式 32/7≈2.138 会不同）
+  assert.equal(sd([2, 4, 4, 4, 5, 5, 7, 9], 5), 2);
+  assert.equal(sd([5, 5], 5), 0); // 零方差
+  assert.equal(sd([1], 1), null); // 样本不足
 });
 
 test('computePanelCorrelations：同条目配对 + 按角色分组', () => {

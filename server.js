@@ -1,10 +1,6 @@
 // server.js —— 本地服务器
-// 作用：① 提供服务页面 index.html 与前端模块；② 提供「数据库/我的角色/推荐方案/工坊配装」四个同步接口，
-//       供网页一键更新（账号接口 CORS 受限，浏览器直连不了，必须经本地服务器代理）；
-//       ③ 提供 /api/data 让前端读取 data/*.json 数据；
-//       ④ cookie 缓存到本地文件，更新时无需反复粘贴。
-//
-// 运行:  npm start   或   node server.js   →  浏览器打开 http://localhost:8719
+// 服务页面与前端模块 + 四个同步接口（账号接口 CORS 受限，浏览器直连不了，必须经本地服务器代理）
+// + /api/data 读取 data/*.json + cookie 缓存到本地文件。运行：npm start → http://localhost:8719
 
 import http from 'node:http';
 import fs from 'node:fs';
@@ -17,9 +13,8 @@ import { parseCookies } from './src/lib/util.js';
 import { SYNC_KINDS } from './src/lib/constants.js';
 
 const PORT = process.env.PORT || 8719;
-// 仅监听回环地址：data/ 下有明文 cookie 与个人配置，绝不能暴露到局域网。
-// 如确需局域网/公网访问，显式设 HOST=0.0.0.0 —— 此时必须同时设 AUTH_TOKEN（见下方 requireAuth），
-// 否则进程直接拒绝启动。「暴露」与「无鉴权」这两件事不允许同时发生。
+// 仅监听回环地址：data/ 下有明文 cookie 与个人配置，绝不能暴露到局域网；
+// 对外绑定（HOST=0.0.0.0）时必须设 AUTH_TOKEN，否则拒绝启动（见文末校验）
 const HOST = process.env.HOST || '127.0.0.1';
 /** 绑定地址是否为回环（决定是否强制鉴权 / 是否自动开浏览器） */
 const IS_LOOPBACK = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
@@ -32,7 +27,6 @@ const ALLOWED_ORIGINS = new Set(
     .map((s) => s.trim())
     .filter(Boolean)
 );
-// 项目根目录（server.js 位于根目录）
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 // 请求体上限：/api/config 会把请求体原样落盘，不设限等于开放磁盘写入
 const MAX_BODY = 4 << 20; // 4 MB
@@ -49,8 +43,7 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-/** 静态资源 gzip 压缩：只压文本类（字体/图片本身已压缩，压了白费 CPU）。
- *  压缩结果按「真实路径:mtime」缓存，文件未变则复用，避免每个请求重复 gzipSync。 */
+/** 静态资源 gzip：只压文本类（字体/图片已压缩，压了白费 CPU）；结果按「路径:mtime」缓存复用 */
 const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.json', '.css', '.svg', '.md', '.txt']);
 const gzipCache = new Map();
 function gzipFor(realPath, mtimeMs, data) {
@@ -58,7 +51,7 @@ function gzipFor(realPath, mtimeMs, data) {
   let gz = gzipCache.get(key);
   if (!gz) {
     gz = zlib.gzipSync(data, { level: 6 });
-    // 防缓存无限增长（正常场景只有几十个静态文件；文件更新时按 mtime 换键，旧键顺手清掉）
+    // 防缓存无限增长（文件更新时按 mtime 换键，旧键顺手清掉）
     if (gzipCache.size > 200) gzipCache.clear();
     gzipCache.set(key, gz);
   }
@@ -75,10 +68,8 @@ const BUSY_MAX_MS = 6 * 60 * 60 * 1000;
 let syncState = null;
 
 // ---------------- 同步模块懒加载 ----------------
-// 这四个模块在**模块加载时**就读 library.json 建名称索引（characters.js / plans.js / workshop.js 顶层
-// loadNameIndexes()）。若在启动时静态 import，索引会被永久冻结在「服务器启动那一刻的 library.json」——
-// 网页点「更新数据库」写入新 library.json 后，同进程内后续的角色/方案/工坊同步仍用旧索引解析名称，
-// 新角色一律解析失败，必须重启进程才生效。改为每次同步时动态 import 并按 mtime 失效缓存。
+// 同步模块在**模块加载时**就读 library.json 建名称索引；启动时静态 import 会把索引冻结在那一刻，
+// 更新 library 后新角色名解析不出来，必须重启。故改为每次同步时动态 import 并按 mtime 失效缓存。
 let syncModsCache = null;
 function libraryMtime() {
   try {
@@ -107,13 +98,11 @@ const charactersMod = () => loadSyncMods().then((m) => m.characters);
 
 // ---------------- 静态文件 ----------------
 
-/** 是否允许作为静态资源对外提供。
- *  data/ 下只放行 data/img/（library.json 里的图标路径），其余一律拒绝——
- *  data/.cookie.json 是明文米游社登录态，data/*.json 是个人账号数据，
- *  它们与 index.html 同在 ROOT 下，若只做「路径在 ROOT 内」检查就会被直接下载。 */
+/** 静态资源白名单：data/ 下只放行 data/img/——data/.cookie.json 是明文登录态、data/*.json 是个人数据，
+ *  同在 ROOT 下，只查「路径在 ROOT 内」就会被直接下载。 */
 function isServable(relPath) {
   const parts = relPath.split(path.sep).filter(Boolean);
-  // 任意一段以 . 开头的隐藏文件/目录（.cookie.json / .git / .claude 等）
+  // 任意一段以 . 开头的隐藏文件/目录（.cookie.json / .git 等）
   if (parts.some((p) => p.startsWith('.'))) return false;
   if (parts[0] === 'data') return parts[1] === 'img' && parts.length > 2;
   return true;
@@ -149,9 +138,8 @@ function serveStatic(req, res) {
       res.writeHead(403);
       return res.end('Forbidden');
     }
-    // 协商缓存：no-cache（仍需每次向服务器确认）+ Last-Modified 条件请求。
-    // 与 no-store 同等新鲜度（文件一变 Last-Modified 就变 → 200 全量），但未变时回 304 空响应——
-    // 字体/echarts 等静态资源合计 ~19MB，no-store 下每次刷新都全量重下（页面加载慢的主因）。
+    // 协商缓存：no-cache + Last-Modified 条件请求——未变时回 304 空响应；
+    // 字体/echarts 等静态资源合计 ~19MB，no-store 下每次刷新都全量重下
     fs.stat(realPath, (sErr, st) => {
       if (sErr) {
         res.writeHead(404);
@@ -172,7 +160,7 @@ function serveStatic(req, res) {
           'Cache-Control': 'no-cache',
           'Last-Modified': lastMod,
         };
-        // 文本类静态资源（echarts/JS/CSS/HTML）按 Accept-Encoding gzip 下发，大幅减少首屏传输
+        // 文本类静态资源按 Accept-Encoding gzip 下发，减少首屏传输
         // Content-Encoding/Length 必须在 writeHead 之前设好（writeHead 发送的是调用时刻的快照）
         const wantsGzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
         if (wantsGzip && COMPRESSIBLE.has(path.extname(realPath))) {
@@ -192,9 +180,8 @@ function serveStatic(req, res) {
 
 // ---------------- API ----------------
 
-/** 客户端错误：带 status 标记，由顶层 catch 映射成 4xx 而非 500。
- *  非法 JSON / 请求体过大是调用方的问题，回 500 会误导排查方向，
- *  还会给每个畸形请求打一条带栈的 console.error（日志噪音，且可被外部触发）。 */
+/** 客户端错误：带 status 标记，顶层 catch 映射成 4xx——回 500 会误导排查方向，
+ *  且每个畸形请求都会打带栈日志（可被外部触发刷屏）。 */
 function badRequest(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -209,8 +196,7 @@ function readBody(req) {
     req.on('data', (c) => {
       size += c.length;
       if (size > MAX_BODY) {
-        // 只停止读取（pause）而不 destroy：destroy 会立刻拆掉 socket，413 响应根本发不出去，
-        // 客户端看到的是连接重置而非「体过大」。响应写完后由 respond 的 end 收尾。
+        // 只 pause 不 destroy：destroy 会拆掉 socket，413 响应发不出去，客户端看到的是连接重置
         req.pause();
         return reject(badRequest(413, '请求体过大'));
       }
@@ -228,9 +214,8 @@ function readBody(req) {
   });
 }
 
-/** 拒绝跨站发起的写请求。
- *  简单请求（text/plain）无需预检，恶意页面可静默 POST 覆盖 user-config.json 或写入 cookie；
- *  攻击者读不到响应，但写入已经发生。同源请求的 Origin 要么缺失，要么是本机地址。 */
+/** 拒绝跨站写请求：简单请求（text/plain）无预检，恶意页面可静默 POST 覆盖 user-config.json 或写入 cookie；
+ *  攻击者读不到响应，但写入已经发生。 */
 function isCrossSite(req) {
   const origin = req.headers.origin;
   if (!origin) return false; // 非浏览器发起（curl / 同源导航）
@@ -240,8 +225,7 @@ function isCrossSite(req) {
     // 本机开发：回环地址一律放行（端口任意）
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1')
       return false;
-    // 部署形态：Origin 与请求的 Host 头一致即为同源（此时浏览器带的是真实域名，
-    // 原实现把它一律判成跨站 → 部署后所有 POST 全部 403）
+    // 部署形态：Origin 与 Host 头一致即为同源（原实现一律判跨站 → 部署后所有 POST 全 403）
     return host !== req.headers.host;
   } catch {
     return true;
@@ -273,7 +257,7 @@ function respond(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-/** 数据文件最后修改时间（ms；不存在返回 null），供同步中心展示数据新鲜度 */
+/** 数据文件最后修改时间（ms；不存在返回 null） */
 function mtimeOf(name) {
   try {
     return fs.statSync(path.join(ROOT, 'data', name)).mtimeMs;
@@ -301,8 +285,7 @@ const DATA_FILES = {
   workshopStats: ['workshop-stats.json', { wengines: [], discs: [], panels: [], discDetails: [] }],
 };
 
-/** plans.json 里前端从不读取的字段——desc 是大段攻略正文，占 plans 体积的一多半。
- *  剥离后 /api/data 负载显著变小，前端消费点（ui.js 方案表 / plansStats / panelBench）不受影响。 */
+/** 前端不读的 plans 字段：desc 是大段攻略正文，占体积一多半，剥离后 /api/data 负载显著变小 */
 const PLAN_DROP_FIELDS = ['desc', 'skills'];
 
 function slimPlans(plans) {
@@ -343,15 +326,13 @@ function buildDataPayload() {
   }
   obj.plans = slimPlans(obj.plans);
   const raw = Buffer.from(JSON.stringify(obj), 'utf-8');
-  // ETag 必须由**内容**导出：原实现用 dataSignature().length —— 那是签名字符串的长度，
-  // 实测恒为 132（mtime/size 位数不变），等价于只靠 raw.length 区分版本。
-  // 若一次同步后总字节数恰好不变（改名、等长数值），浏览器会拿到 304 而永远看不到新数据。
+  // ⚠️ ETag 必须是响应内容的哈希：原实现误用 dataSignature().length（恒为 132 的常数），
+  // 数据变化也命中 304，前端永远拿到旧数据
   const etag = `W/"${crypto.createHash('sha1').update(raw).digest('base64url')}"`;
   return { raw, gzip: zlib.gzipSync(raw, { level: 6 }), etag };
 }
 
-/** /api/data：解析结果按 mtime 缓存，命中 ETag 直接 304。
- *  原实现每次请求都同步读解 ~33MB（约 270ms 阻塞事件循环）并全量重新序列化。 */
+/** /api/data：解析结果按 mtime 缓存，命中 ETag 直接 304（原实现每请求同步读解 ~33MB、阻塞事件循环） */
 function sendData(req, res) {
   const sig = dataSignature();
   if (!dataCache || dataCache.sig !== sig) {
@@ -377,8 +358,7 @@ function sendData(req, res) {
 // ---------- 同步 handler 统一骨架（busy 互斥锁 / 进度 syncState / cookie 解析 / try-catch-finally） ----------
 
 /** 跑一次同步：互斥锁 + 进度上报 + 错误处理 + cookie 来源统一（请求体 > 本地缓存）。
- *  runSync(cookies, onProgress) 负责调用 fetch* 并返回 { stats }；内部自行写入 data/*.json。
- *  progressShape：'step' 表示 fetch* 上报 {step,done,total}（library/workshop）；'count' 表示上报 (done,total)（characters/plans）。 */
+ *  progressShape：'step' = {step,done,total}（library/workshop）；'count' = (done,total)（characters/plans）。 */
 async function runSync(
   req,
   res,
@@ -445,9 +425,7 @@ const cookieFromBodyOrCache = async (body) => {
   return c || (await charactersMod()).readCookieCache();
 };
 
-// 四个同步动作（同步耗时较长，请求期间页面显示「正在同步…」）。fetch* 内部已写入 data/*.json。
-// run 里统一走 loadSyncMods()：每次同步按 library.json 的 mtime 决定是否重新求值同步模块，
-// 保证「更新数据库」后同进程内的后续同步用的是新的名称索引（详见 loadSyncMods 注释）。
+// 四个同步动作：fetch* 内部已写入 data/*.json；run 统一走 loadSyncMods()（按 library mtime 失效缓存，见上）
 const syncLibraryHandler = (req, res) =>
   runSync(req, res, {
     kind: SYNC_KINDS.LIBRARY,
@@ -496,9 +474,8 @@ const syncPlansHandler = (req, res) =>
 const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
   try {
-    // /login：把 ?token= 写进 cookie 后跳首页（只需做一次，之后浏览器自动带 cookie）。
-    // 必须在鉴权判定**之前**处理：token 在 query 里时 isAuthed 已为真，若放在后面会走
-    // 「已鉴权」分支直接跳转而不种 cookie，用户下一个请求照样 401。
+    // /login：把 ?token= 写进 cookie 后跳首页（只需一次）。
+    // 必须在鉴权判定之前处理：token 在 query 里时 isAuthed 已为真，放后面会直接跳转而不种 cookie
     if (req.method === 'GET' && url === '/login') {
       const t = new URLSearchParams(req.url.split('?')[1] || '').get('token') || '';
       const headers = { Location: '/' };
@@ -604,8 +581,8 @@ server.listen(PORT, HOST, () => {
   if (IS_LOOPBACK && !process.env.NO_OPEN) openBrowser(`http://localhost:${PORT}`);
 });
 
-// 优雅退出：systemd/docker stop 发的是 SIGTERM。原先没有任何处理 = 默认立即终止，
-// 若此时正在写 data/*.json（同步收尾）会留下半个文件。这里停止收新连接并给在途请求 10s 收尾。
+// 优雅退出：SIGTERM（systemd/docker stop）若直接终止，正在写 data/*.json 会留下半个文件；
+// 这里停止收新连接并给在途请求 10s 收尾。
 let shuttingDown = false;
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {

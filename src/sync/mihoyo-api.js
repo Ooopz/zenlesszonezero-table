@@ -1,18 +1,11 @@
-// src/sync/http.js —— 米游社接口统一请求封装（Node 专属，仅供 sync 脚本与 server.js 复用）
-// 吸收 library.js 的 fetchJSON（简单重试）、characters.js 的 request（无重试）、
-// plans.js 的 request（429/10041 指数退避）三套实现；差异经 retry 选项保留。
+// src/sync/mihoyo-api.js —— 米游社接口统一请求封装（Node 专属，仅供 sync 脚本与 server.js 复用）
+// 吸收 library.js/characters.js/plans.js 三套请求实现，差异经 retry 选项保留。
 import { serializeCookies } from '../lib/util.js';
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * 请求 JSON 接口：cookie 序列化 + HTTP 状态 + retcode 业务码校验 + 可配置重试。
- * @param {string} url
- * @param {object} [opts]
- * @param {object} [opts.headers]  请求头（不含 cookie）
- * @param {object} [opts.cookies]  按 cookie 对象自动序列化进 header；null 时不带
- * @param {object} [opts.retry]    重试策略（见下方 retry 预设）；null = 不重试
- * @returns {Promise<object>}  解析后的 JSON 响应
+ * 请求 JSON 接口：cookie 序列化 + HTTP 状态 + retcode 业务码校验 + 可配置重试（retry null = 不重试）。
  */
 export async function requestJson(url, { headers = {}, cookies = null, retry = null } = {}) {
   const cookie = cookies ? serializeCookies(cookies) : null;

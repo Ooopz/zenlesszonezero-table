@@ -1,8 +1,7 @@
-// src/web/simulate.js —— 成长极限模拟视图：选择角色/音擎/套装/456 主词条后，
-// 生成任意两个或三个面板属性之间的帕累托有效前沿，并支持临时叠加多张图。
+// src/web/simulate.js —— 成长极限模拟视图：生成任意两/三维面板属性间的帕累托有效前沿，支持临时叠加多张图
 import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget } from './data.js';
 import { PANEL_ORDER, MAIN_STAT_OPTIONS, TARGET_KEYS } from '../lib/constants.js';
-import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable, axisSubstatTypes, axisRollCap } from '../lib/simulate.js';
+import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable, axisSubstatTypes, axisRollCap } from '../lib/simCalc.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
 import { clearCharts, registerChart, chartBox, CHART_COLORS } from './charts.js';
 

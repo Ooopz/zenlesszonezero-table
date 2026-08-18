@@ -1,21 +1,11 @@
-// src/lib/simulate.js —— 驱动盘成长极限模拟：给定角色/音擎/套装/456 主词条后，
-// 把六枚 S 级满级驱动盘的副词条强化次数在任意两个面板属性之间分配，
-// 求这两个属性的帕累托有效前沿（Pareto efficient frontier）。
-// 纯逻辑、无 DOM/Node 依赖；数据经参数注入，浏览器与 Node 测试共用。
-//
-// 模型口径（重要）：
-// - 每枚盘按 S 级满级处理：4 个副词条槽、总强化次数 9（4 初始 + 5 次强化）。
-// - 每枚盘同一副词条类型只能出现一次、单条最多 6 次强化（初始 1 + 强化 5）。
-// - 副词条类型不得与该盘主词条重复：例如 4 号位主词条为异常精通时，该盘副词条不再出现异常精通。
-// - 有效前沿只关心两个轴属性；其余副词条槽一律视为「废词条」填 1 次。
-//   这是「把成长极限画成两属性前沿」的可视化口径，不承诺三属性同时最优。
-// - 4 件套条件效果与音擎被动特效不计入面板（与现有「推算未计 4 件套条件效果」口径一致）；
-//   4 件套所选套装的 2 件套效果按 4+2 配装实际生效计入。
+// src/lib/simCalc.js —— 驱动盘成长极限模拟：S 级满级盘（4 词条槽、总强化 9 次）的副词条强化次数在两个面板属性间分配，求两属性帕累托有效前沿（纯逻辑无 DOM/Node 依赖，双端共用）。
+// 口径：同副词条类型每盘最多一次、不与主词条重复、单条最多 6 次强化；轴外词条一律按「废词条」填 1 次（不承诺三属性同时最优）。
+// 4 件套条件效果与音擎被动不计入（与「推算未计 4 件套条件效果」口径一致），2 件套按 4+2 配装实际生效计入。
 
 import { resolveEntry, CATEGORY } from './names.js';
-import { panelBonus, classifyBonus, coreSkillBoostAt, substatGrowthTable } from './calc.js';
+import { panelBonus, coreSkillBoostAt, substatGrowthTable, accumulateBonus } from './calc.js';
 import { PANEL_ORDER, STAT } from './constants.js';
-import { statEntries } from './util.js';
+import { statEntries, pierceStat } from './util.js';
 
 const S = substatGrowthTable.S;
 
@@ -106,19 +96,7 @@ function fixedPanel(libChar, libWengine, mains) {
   const pct = {};
   const flat = {};
   const damage = {};
-  const accumulate = (name, value) => {
-    const c = classifyBonus(name, value);
-    if (!c) return;
-    if (c.kind === 'damage') {
-      damage[name] = (damage[name] || 0) + value;
-    } else if (c.kind === 'pen') {
-      flat[STAT.PEN_VALUE] = (flat[STAT.PEN_VALUE] || 0) + value;
-    } else if (c.kind === 'pct') {
-      pct[name] = (pct[name] || 0) + value;
-    } else {
-      flat[name] = (flat[name] || 0) + value;
-    }
-  };
+  const accumulate = (name, value) => accumulateBonus({ damage, flat, pct }, name, value);
 
   for (const t of statEntries(libWengine?.subStats)) accumulate(t.name, t.value);
 
@@ -151,9 +129,8 @@ function fixedPanel(libChar, libWengine, mains) {
   for (const [name, value] of Object.entries(damage)) final[name] = value;
 
   if (libChar?.trait === '命破' && final[STAT.ATK] != null && final[STAT.HP] != null) {
-    const pierce = (a, h) => Math.round(0.3 * a + 0.1 * h);
-    base[STAT.PIERCE] = pierce(base[STAT.ATK], base[STAT.HP]);
-    final[STAT.PIERCE] = pierce(final[STAT.ATK], final[STAT.HP]);
+    base[STAT.PIERCE] = pierceStat(base[STAT.ATK], base[STAT.HP]);
+    final[STAT.PIERCE] = pierceStat(final[STAT.ATK], final[STAT.HP]);
     base[STAT.PEN_RATE] = null;
     final[STAT.PEN_RATE] = null;
   }
@@ -168,11 +145,7 @@ function fixedPanelWithSets(fixed, libChar, setBonuses) {
   const flat = { ...fixed.flat };
   const damage = { ...(fixed.damage || {}) };
   for (const [name, value] of Object.entries(setBonuses)) {
-    const c = classifyBonus(name, value);
-    if (!c) continue;
-    if (c.kind === 'damage') damage[name] = (damage[name] || 0) + value;
-    else if (c.kind === 'pct') pct[name] = (pct[name] || 0) + value;
-    else flat[name] = (flat[name] || 0) + value;
+    accumulateBonus({ damage, pct, flat }, name, value);
   }
   const final = {};
   for (const s of PANEL_ORDER) {
@@ -181,9 +154,8 @@ function fixedPanelWithSets(fixed, libChar, setBonuses) {
   }
   for (const [name, value] of Object.entries(damage)) final[name] = value;
   if (libChar?.trait === '命破' && final[STAT.ATK] != null && final[STAT.HP] != null) {
-    const pierce = (a, h) => Math.round(0.3 * a + 0.1 * h);
-    base[STAT.PIERCE] = pierce(base[STAT.ATK], base[STAT.HP]);
-    final[STAT.PIERCE] = pierce(final[STAT.ATK], final[STAT.HP]);
+    base[STAT.PIERCE] = pierceStat(base[STAT.ATK], base[STAT.HP]);
+    final[STAT.PIERCE] = pierceStat(final[STAT.ATK], final[STAT.HP]);
     base[STAT.PEN_RATE] = null;
     final[STAT.PEN_RATE] = null;
   }
@@ -288,9 +260,7 @@ function mainTypeForSlot(slot, mains) {
   if (slot === 3) return '防御力';
   return canonMain(mains[slot]) || '';
 }
-/**
- * 解析一次配装，返回固定面板与主词条（2D/3D 共用）。
- */
+/** 解析一次配装，返回固定面板与主词条（2D/3D 共用）。 */
 function resolveBuild(ctx, opts) {
   const { charIndex, wengineIndex, discIndex } = ctx;
   const libChar = resolveEntry(CATEGORY.CHAR, charIndex, opts.charName) || {};
@@ -376,7 +346,6 @@ function discOptionsND(relevant, bannedType, nDims) {
   return paretoND(raw);
 }
 
-/** 多维最大化帕累托过滤。 */
 function paretoND(points) {
   if (!points.length) return [];
   const nDims = points[0].dims.length;
@@ -447,12 +416,8 @@ function combineND(optionsBySlot, nDims) {
   return states;
 }
 
-/**
- * 计算二维有效前沿。
- * @param {object} ctx { charIndex, wengineIndex, discIndex }（buildNameIndex 产物）
- * @param {object} opts { charName, wengineName, set2, set4, main4, main5, main6, xAxis, yAxis }
- * @returns {{ fixed:object, points:Array<{x,y}>, sourceDefs:Array, discOptions:Array }}
- */
+/** 计算二维有效前沿。
+ *  ctx = { charIndex, wengineIndex, discIndex }（buildNameIndex 产物）；opts = { charName, wengineName, set2, set4, main4-6, xAxis, yAxis } */
 export function simulateFrontier(ctx, opts) {
   const { withSets, mains } = resolveBuild(ctx, opts);
   const axes = [opts.xAxis, opts.yAxis];

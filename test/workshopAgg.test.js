@@ -1,4 +1,4 @@
-// test/workshopStats.test.js —— 工坊统计：驱动盘单盘 / 面板散点 / 新指标聚合（评分·影画分层·技能·角色盘）
+// test/workshopAgg.test.js —— 工坊统计聚合：驱动盘单盘 / 面板散点 / 新指标聚合（评分·影画分层·技能·角色盘）
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ import {
   styleLabel,
   styleAttrShort,
   styleMatch,
-} from '../src/lib/workshopStats.js';
+} from '../src/lib/workshopAgg.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { iterWorkshopFile } from '../src/lib/node.js';
 import { loadDataFile } from './helpers.js';
@@ -254,7 +254,6 @@ test('computeWorkshopDiscStats 新字段：有效强化次数分布 / 副词条�
   // 主词条×副词条协同：槽4 盘（主词条 暴击率）；mys 盘槽1 主词条不在 456 范围不参与
   assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1, 暴击率: 1, 异常精通: 1 });
   assert.ok(!静听.mainSubCross[1], '槽1 无协同（非 456 槽位）');
-  // 幂等
   assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, {}), out);
 });
 
@@ -311,7 +310,6 @@ test('computeWorkshopDiscStats：mys 与 2025 同构，主词条/协同统计两
   // 主词条×副词条协同：两源都参与
   assert.deepEqual(静听.mainSubCross[4]['暴击率'], { '攻击力%': 1, 暴击伤害: 1 });
   assert.deepEqual(静听.mainSubCross[4]['暴击伤害'], { 暴击率: 1, 防御力: 1 });
-  // 幂等
   assert.deepEqual(computeWorkshopDiscStats(entries, discIndex, {}), out);
 });
 
@@ -368,7 +366,6 @@ test('computePanelScatter：每角色/全体 2D 密度网格（攻击归一、�
       assert.ok(count > 0);
     }
   }
-  // 幂等
   assert.deepEqual(computePanelScatter(entries), out);
 });
 
@@ -625,9 +622,8 @@ test('computeRoleCooccurrence：同 uid 角色共现（配队亲和）', () => {
   assert.ok(out['1011'][0][1] >= out['1011'][1][1], '按次数降序');
 });
 
-// ---------- computeWorkshopStats（顶层聚合，统计视图全部数据的入口） ----------
-// 此前无任何测试覆盖：音擎/套装的「按配装条目计数」与「4 件套只计一次」去重口径、
-// 面板百分比归一（'70%' → 0.7）、空串视为缺失，全靠 2.2GB 真实数据跑一遍才能发现问题。
+// ---------- computeWorkshopStats（顶层聚合入口） ----------
+// 此前无测试覆盖：条目计数/4件套去重/百分比归一/空串缺失，全靠真实数据发现问题。
 
 test('computeWorkshopStats：音擎按配装条目计数，characters 去重', () => {
   const out = computeWorkshopStats([

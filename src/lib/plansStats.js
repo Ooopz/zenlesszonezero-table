@@ -5,11 +5,8 @@
 const setCount = (s) => Number(s?.num ?? s?.cnt ?? 0);
 
 /**
- * 套装组合文本顺序归一化：件数降序（4 件套在前、2 件套在后，同件数按名称排序），并据此重建组合名。
- * 工坊数据（set_info 顺序不固定）与方案数据（原件数升序）两个数据源经此归一后，同名组合文本一致，
- * 避免「2件套在前/4件套在前」顺序不同造成的显示与差异对比差异。
- * @param {object[]} sets  组合内各套装 {name, num|cnt, ...}
- * @returns {{name:string, sets:object[]}}  name =「套装名+件数」以 + 连接；sets 输出均带 num 字段
+ * 套装组合文本顺序归一化：件数降序（4 件套在前、2 件套在后，同件数按名称排序）。
+ * 工坊（set_info 顺序不固定）与方案（原件数升序）两源经此归一后同名组合文本一致；sets 输出均带 num 字段。
  */
 export function orderComboSets4First(sets) {
   const sorted = [...(sets || [])].sort(
@@ -22,12 +19,8 @@ export function orderComboSets4First(sets) {
 }
 
 /**
- * 每角色的 Top 音擎 / 套装及占比（按方案出现次数计）。
- * @param {object} plans  plans.json：{ avatarId: { name, plans: [...] } }
- *   plan.weapon = {main, backup}；plan.sets = [{name, cnt}]
- * @returns {Object<string, {wengines:{name:string, percent:number}[], relics:{name:string, sets:{name:string,num:number}[], percent:number}[]}>}
- *   角色名 → Top 3 音擎 / 套装组合（percent = 出现次数 / 该角色总数，保留 1 位小数）。
- *   relics 按「套装组合」统计（与 workshop-grad 结构一致，组合内 4 件套在前、2 件套在后），sets 为组合内各套装及件数。
+ * 每角色 Top 3 音擎 / 套装组合及占比（按方案出现次数计，percent 保留 1 位小数）。
+ * relics 按「套装组合」统计（与 workshop-grad 结构一致，组合内 4 件套在前、2 件套在后）。
  */
 export function computeRoleBuildsFromPlans(plans) {
   const out = {};
@@ -38,7 +31,7 @@ export function computeRoleBuildsFromPlans(plans) {
     for (const p of v.plans || []) {
       if (p.weapon?.main) wCount[p.weapon.main] = (wCount[p.weapon.main] || 0) + 1;
       if (p.weapon?.backup) wCount[p.weapon.backup] = (wCount[p.weapon.backup] || 0) + 1;
-      // 套装组合：件数降序（4 件套在前、2 件套在后，同组合不同顺序视为同一）
+      // 组合顺序归一：同组合不同顺序视为同一
       const sets = (p.sets || []).filter((s) => s && s.name);
       if (!sets.length) continue;
       const { name: comboName, sets: sortedSets } = orderComboSets4First(sets);

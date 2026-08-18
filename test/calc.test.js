@@ -9,10 +9,11 @@ import {
   panelBonus,
   classifyBonus,
   atkWhiteValue,
-  inBattleAtk,
   coreSkillBoostAt,
   resolveStatCurrent,
   firstDamageBonus,
+  substatGrowthTable,
+  statProgress,
 } from '../src/lib/calc.js';
 import { buildNameIndex, CATEGORY } from '../src/lib/names.js';
 import { loadDataFile } from './helpers.js';
@@ -85,7 +86,6 @@ test('targetGap 按目标面板估算副词条缺口', () => {
   setCalcContext({ readCharTarget: () => ({}) });
   const cur = R.final['暴击率'];
   if (cur != null && cur < 0.6) {
-    // 目标未达成：应有缺口分析，且暴击率缺口为正整数
     assert.ok(g, '未达成目标应有缺口分析');
     const crit = g.items.find((it) => it.name === '暴击率');
     assert.ok(crit, '缺口应包含暴击率');
@@ -144,7 +144,6 @@ test('核心技提升提取：每档增量数组，满级累计 = 各档之和�
   assert.ok(!hasStat(get('「11号」'), '暴击伤害'), '「11号」数字档暴击伤害不计入');
   assert.ok(!hasStat(get('浅羽悠真'), '攻击力%'), '浅羽悠真数字档攻击力不计入');
   assert.ok(!hasStat(get('冯·莱卡恩'), '冲击力%'), '冯·莱卡恩数字档冲击力不计入');
-  // 不应存在 coreSkillEnhance 字段
   assert.ok(!('coreSkillEnhance' in library.characters['猫宫又奈']), '不应有 coreSkillEnhance 字段');
 });
 
@@ -206,7 +205,6 @@ test('局外面板公式：panelBonus 单一属性合成', () => {
   const crit = panelBonus('暴击率', 0.05, 0.1, 0);
   assert.equal(crit.bonus, 0.1);
   assert.ok(Math.abs(crit.final - 0.15) < 1e-9, `final 应≈0.15，得到 ${crit.final}`);
-  // base 为空返回 null
   assert.equal(panelBonus('攻击力', null), null);
 });
 
@@ -220,12 +218,9 @@ test('局外面板公式：classifyBonus 加成分类', () => {
   assert.equal(classifyBonus(null, 5), null);
 });
 
-test('局外面板公式：atkWhiteValue / inBattleAtk', () => {
+test('局外面板公式：atkWhiteValue', () => {
   assert.equal(atkWhiteValue(784, 624), 1408); // 无核心技提升
   assert.equal(atkWhiteValue(784, 624, 75), 1483); // 含核心技满级攻击提升
-  assert.equal(inBattleAtk(3087), 3087); // 无局内加成恒等
-  assert.equal(inBattleAtk(3087, { inPct: 0.25 }), 3087 * 1.25);
-  assert.equal(inBattleAtk(3087, { inPct: 0.2, inFlat: 100 }), 3087 * 1.2 + 100);
 });
 
 test('calculateCharacter 基础攻击含核心技提升且账号路径不重复计算', () => {
@@ -263,7 +258,6 @@ test('coreSkillBoostAt 按核心技等级累计基础面板提升', () => {
   // 旧结构（满级累计对象）兼容
   assert.equal(coreSkillBoostAt({ coreSkillBoost: { 攻击力: 75 } }, '攻击力', 3), 75);
   assert.equal(coreSkillBoostAt({ coreSkillBoost: { 攻击力: 75 } }, '异常精通', 7), 0);
-  // 缺核心技数据返回 0
   assert.equal(coreSkillBoostAt({}, '攻击力', 7), 0);
 });
 
@@ -366,4 +360,24 @@ test('驱动盘 2 件套需同套装 ≥2 件才生效', () => {
   );
   assert.equal(R1.theoretical.final.能量自动回复, 1.2, '仅 1 件套装：set2 不生效');
   assert.ok(Math.abs(R2.theoretical.final.能量自动回复 - 1.2 * 1.2) < 0.01, '同套装 2 件：set2 生效（×20%）');
+});
+
+test('副词条成长表 S 级关键数值（口径基准，勿改）', () => {
+  const S = substatGrowthTable.S;
+  assert.equal(S['攻击力'], 19);
+  assert.equal(S['暴击率'], 0.024);
+  assert.equal(S['生命值%'], 0.03);
+  assert.equal(S['异常精通'], 9);
+});
+
+test('statProgress 达成率 = 当前/目标（targetPercents 目标按 % 折算）', () => {
+  setCalcContext({ readCharTarget: () => ({ 暴击率: 50 }) }); // 目标 50%
+  const c = characters[0];
+  const R = calculateCharacter(c);
+  const p = statProgress(c, R, '暴击率');
+  setCalcContext({ readCharTarget: () => ({}) });
+  const cur = R.final['暴击率'];
+  if (cur == null) return; // 角色无暴击率则跳过
+  assert.ok(p && p.rate != null, '应有达成率');
+  assert.ok(Math.abs(p.rate - cur / 0.5) < 1e-9, `rate=${p.rate} 应为 current/target=${cur / 0.5}`);
 });

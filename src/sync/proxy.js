@@ -1,23 +1,14 @@
 // src/sync/proxy.js —— 零依赖代理支持（HTTP CONNECT / SOCKS5 隧道），仅 Node 使用
-//
-// 背景：Node 内置 fetch（undici）不读 HTTP_PROXY/HTTPS_PROXY 环境变量（Node 24+ 才有
-// `node --use-env-proxy` 原生支持），且本项目零依赖不引入 undici。这里手动实现代理隧道，
-// 用 installProxyFetch() 把全局 fetch 包一层：目标主机匹配 applyHosts（默认 *.zzzmap.com）
-// 的请求走代理，其余请求原样走原生 fetch，互不影响。
-//
-// 用法（任选其一，优先级：命令行参数 > HTTPS_PROXY > ALL_PROXY > HTTP_PROXY）：
-//   node src/sync/workshop.js 57 300 6 http://127.0.0.1:7890             # 第 5 参显式指定
-//   HTTPS_PROXY=http://user:pass@127.0.0.1:7890 node src/sync/workshop.js  # 环境变量（标准约定）
-//   ALL_PROXY=socks5://127.0.0.1:1080 node src/sync/workshop.js            # SOCKS5 代理
-// 认证：http(s) 代理支持 Basic（URL 里 user:pass）；socks5 支持 RFC1929 用户名密码。
-// 说明：每次请求新建一条隧道（代理并发连接数 ≈ 配装并发 CONCURRENCY，代理限连接数时调低第 4 参）。
+// Node 内置 fetch 不读代理环境变量（Node 24+ 才有 --use-env-proxy），故手动实现隧道并包全局 fetch：
+// 仅目标主机匹配 applyHosts（默认 *.zzzmap.com）走代理，其余走原生 fetch。
+// 用法：命令行第 5 参 > HTTPS_PROXY > ALL_PROXY > HTTP_PROXY；http(s) 支持 Basic、socks5 支持 RFC1929 认证；每次请求新建一条隧道。
 import net from 'node:net';
 import tls from 'node:tls';
 import zlib from 'node:zlib';
 import { URL } from 'node:url';
 
 const DEFAULT_APPLY_HOSTS = [/(^|\.)zzzmap\.com$/];
-const TUNNEL_TIMEOUT = 15000; // 建隧道超时
+const TUNNEL_TIMEOUT = 15000;
 const REQUEST_TIMEOUT = 120000; // 单请求整体超时（原生 fetch 无默认超时，这里兜底防代理挂起）
 const ORIGINAL = Symbol('proxy.originalFetch'); // 全局 fetch 原文存储位（防二次包装）
 
@@ -47,15 +38,14 @@ export function maskProxyUrl(url) {
 }
 
 // ---------- 顺序读取器（带遗留缓冲） ----------
-// 响应头/体可能落在同一个 TCP 分片里，逐次 readUntil/readN 各自监听会丢字节，
-// 必须由 Reader 统一持有 socket 监听与未消费缓冲，按序消费。
+// 响应头/体可能落在同一 TCP 分片：逐次 readUntil/readN 监听会丢字节，必须统一持有 socket 监听与未消费缓冲。
 
 class Reader {
   constructor(socket) {
     this.socket = socket;
-    this.buf = Buffer.alloc(0); // 已收到但未被消费的字节
+    this.buf = Buffer.alloc(0);
     this.waiting = null; // {kind:'n',n} | {kind:'until',marker}，挂起的读取
-    this.endWaiter = null; // readToEnd 挂起者
+    this.endWaiter = null;
     this.closed = false;
     this._onData = (c) => {
       this.buf = Buffer.concat([this.buf, c]);
@@ -138,7 +128,6 @@ class Reader {
     return p;
   }
 
-  /** 精确读 n 字节 */
   readN(n) {
     if (n === 0) return Promise.resolve(Buffer.alloc(0));
     return this._wait({ kind: 'n', n });
@@ -172,7 +161,6 @@ class Reader {
 
 // ---------- 隧道建立 ----------
 
-/** HTTP 代理 CONNECT 握手 */
 function httpConnectHandshake(reader, p, host, port) {
   const auth = p.username
     ? `Proxy-Authorization: Basic ${Buffer.from(`${decodeURIComponent(p.username)}:${decodeURIComponent(p.password || '')}`).toString('base64')}\r\n`
@@ -190,7 +178,7 @@ function httpConnectHandshake(reader, p, host, port) {
   });
 }
 
-/** SOCKS5 握手（支持 RFC1929 用户名密码认证，目标地址用域名） */
+/** SOCKS5 握手（RFC1929 用户名密码认证，目标地址用域名） */
 async function socks5Handshake(reader, p, host, port) {
   const hasAuth = !!(p.username || p.password);
   reader.socket.write(Buffer.from([0x05, 0x01, hasAuth ? 0x02 : 0x00]));
@@ -230,7 +218,7 @@ async function socks5Handshake(reader, p, host, port) {
   }
 }
 
-/** 连到代理服务器，返回已连通的裸 socket（含超时/错误处理） */
+/** 连到代理服务器，返回已连通的裸 socket */
 function connectToProxy(proxyUrl) {
   return new Promise((resolve, reject) => {
     let p;
@@ -369,14 +357,7 @@ async function proxyRequest(proxyUrl, u, opts) {
   };
 }
 
-/**
- * 包一层全局 fetch：目标主机匹配 applyHosts 才走代理，其余用原生 fetch。
- * 可重复调用（每次以真正的原生 fetch 为底，重新包装）。
- * @param {string} proxyUrl  代理地址（http:// 或 https:// 或 socks5://，可带 user:pass）
- * @param {object} [opts]
- * @param {RegExp[]} [opts.applyHosts]  走代理的主机匹配，默认 *.zzzmap.com
- * @returns {Function} 原生 fetch（便于需要时恢复）
- */
+/** 包全局 fetch：目标主机匹配 applyHosts 才走代理，其余用原生 fetch；可重复调用（以真正原生 fetch 为底重新包装），返回原 fetch 便于恢复 */
 export function installProxyFetch(proxyUrl, { applyHosts = DEFAULT_APPLY_HOSTS } = {}) {
   const originalFetch = globalThis[ORIGINAL] || globalThis.fetch;
   globalThis[ORIGINAL] = originalFetch;

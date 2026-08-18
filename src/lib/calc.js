@@ -1,7 +1,6 @@
 // src/lib/calc.js —— 计算引擎：属性常量 + 词条成长 + 面板计算 + 达成率
-// 纯逻辑、无 DOM/Node 依赖；需要数据的函数通过 setCalcContext 注入上下文，
-// 因此浏览器（web/main.js 注入）与 Node（测试/批量分析）都能使用。
-import { statEntries, formatValue } from './util.js';
+// 纯逻辑无 DOM/Node 依赖，数据经 setCalcContext 注入（浏览器 web/main.js 与 Node 共用）。
+import { statEntries, formatValue, pierceStat } from './util.js';
 import { resolveEntry, CATEGORY } from './names.js';
 import {
   STAT,
@@ -131,14 +130,19 @@ export function classifyBonus(name, value) {
   return multStats.has(name) ? (value <= 1 ? { kind: 'pct' } : { kind: 'flat' }) : { kind: 'pct' };
 }
 
-/** 基础攻击白值 = 角色基础攻击 + 音擎基础攻击 + 核心技满级基础攻击提升 */
-export function atkWhiteValue(charAtk, wengineAtk, coreAtk = 0) {
-  return charAtk + wengineAtk + coreAtk;
+/** 加成分类累加（calc/simCalc 共用）：按 classifyBonus 分入 damage/穿透值/pct/flat 四类目标 */
+export function accumulateBonus(targets, name, value) {
+  const c = classifyBonus(name, value);
+  if (!c) return;
+  const { damage, flat, pct } = targets;
+  if (c.kind === 'damage') damage[name] = (damage[name] || 0) + value;
+  else if (c.kind === 'pen') flat[STAT.PEN_VALUE] = (flat[STAT.PEN_VALUE] || 0) + value;
+  else if (c.kind === 'pct') pct[name] = (pct[name] || 0) + value;
+  else flat[name] = (flat[name] || 0) + value;
 }
 
-/** 局内攻击力 = 场外总攻 × (1+局内%) + 局内固定（战斗 buff 预留，后续伤害功能用） */
-export function inBattleAtk(outOfBattleAtk, { inPct = 0, inFlat = 0 } = {}) {
-  return outOfBattleAtk * (1 + inPct) + inFlat;
+export function atkWhiteValue(charAtk, wengineAtk, coreAtk = 0) {
+  return charAtk + wengineAtk + coreAtk;
 }
 
 /** 核心技在指定等级（1-7）的基础面板提升（累计值）。
@@ -170,7 +174,6 @@ function theoreticalBaseOf(s, { baseSource, wengineAtk, libCharacter, coreLevel 
   return bs != null ? bs + coreSkillBoostAt(libCharacter, s, coreLevel) : s === '穿透值' ? 0 : null;
 }
 
-/** 从基础值合成 { base, bonus, final }；base 为空返回 null */
 function synthPanel(s, tb, pct, flat) {
   if (tb == null) return null;
   const r = panelBonus(s, tb, pct[s] || 0, flat[s] || 0);
@@ -194,9 +197,8 @@ function roundTheoretical(final) {
  *  panel 为 { base, bonus, final }；最终面板与理论面板共用。 */
 function applyPiercing(panel, libCharacter) {
   if (libCharacter.trait !== '命破') return;
-  const pierce = (a, h) => (a != null && h != null ? Math.round(0.3 * a + 0.1 * h) : null);
-  panel.final['贯穿力'] = pierce(panel.final['攻击力'], panel.final['生命值']);
-  panel.base['贯穿力'] = pierce(panel.base['攻击力'], panel.base['生命值']);
+  panel.final['贯穿力'] = pierceStat(panel.final['攻击力'], panel.final['生命值']);
+  panel.base['贯穿力'] = pierceStat(panel.base['攻击力'], panel.base['生命值']);
   panel.bonus['贯穿力'] =
     panel.final['贯穿力'] != null && panel.base['贯穿力'] != null ? panel.final['贯穿力'] - panel.base['贯穿力'] : null;
   panel.final['穿透率'] = null;
@@ -240,20 +242,7 @@ export function calculateCharacter(character) {
   const pct = {},
     flat = {},
     damageBonus = {};
-  function accumulate(name, value) {
-    const c = classifyBonus(name, value);
-    if (!c) return;
-    if (c.kind === 'damage') {
-      damageBonus[name] = (damageBonus[name] || 0) + value;
-      return;
-    }
-    if (c.kind === 'pen') {
-      flat.穿透值 = (flat.穿透值 || 0) + value;
-      return;
-    }
-    if (c.kind === 'pct') pct[name] = (pct[name] || 0) + value;
-    else flat[name] = (flat[name] || 0) + value;
-  }
+  const accumulate = (name, value) => accumulateBonus({ damage: damageBonus, flat, pct }, name, value);
   const sources = {};
   function recordSource(name, label, value) {
     if (value == null) return;
@@ -328,9 +317,8 @@ export function calculateCharacter(character) {
     theoretical.bonus[s] = r.bonus;
     theoretical.final[s] = r.final;
   }
-  roundTheoretical(theoretical.final); // 对齐游戏面板取整
+  roundTheoretical(theoretical.final);
 
-  // 命破角色：贯穿力派生 + 穿透率置空（最终面板与理论面板共用同一逻辑）
   applyPiercing({ base, bonus, final }, libCharacter);
   applyPiercing(theoretical, libCharacter);
 
@@ -430,7 +418,7 @@ export function targetGap(character, R) {
     if (current == null) continue;
     const targetInternal = targetPercents.has(name) ? Number(target[name]) / 100 : Number(target[name]);
     const gap = targetInternal - current;
-    if (gap <= 0) continue; // 该属性已达标
+    if (gap <= 0) continue;
     const advice = GAP_ADVICE[name] ? GAP_ADVICE[name](R) : null;
     const gain = advice?.gain || 0;
     const count = gain > 0 ? Math.ceil(gap / gain) : null;

@@ -24,8 +24,7 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 /** data/ 数据目录（同步脚本写 data/*.json 用） */
 export const DATA_DIR = path.join(ROOT, 'data');
 
-/** ESM 入口判断：仅当直接运行该脚本文件时执行 run()。
- *  用法：isMain(import.meta, () => main())；main 的异常由这里统一捕获并 exit(1)。 */
+/** ESM 入口判断：仅当直接运行该脚本文件时执行 run()（异常统一捕获并 exit(1)）。 */
 export function isMain(meta, run) {
   if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(meta.url))
     run().catch((e) => {
@@ -56,8 +55,7 @@ export async function pool(items, limit, fn, onProgress) {
   return ret;
 }
 
-/** 原子写 JSON（tmp + rename）：直接覆盖时若进程在写入中途退出/磁盘写满，
- *  会留下被截断的半个文件——这些文件是下游全部统计的输入，损坏后要重爬数小时才能恢复。
+/** 原子写 JSON（tmp + rename）：直接覆盖时中途退出/磁盘写满会留下被截断的半个文件——下游统计的输入损坏后要重爬数小时才能恢复。
  *  工坊三件产物（workshop.json / workshop-grad.json / workshop-stats.json）与权重共用。 */
 export function writeJsonAtomic(file, data) {
   const tmp = `${file}.tmp`;
@@ -65,9 +63,8 @@ export function writeJsonAtomic(file, data) {
   fs.renameSync(tmp, file);
 }
 
-/** 校验 + 写入 data/ 下的 JSON 文件（sync 脚本收尾共用）。
- *  validate 提供校验函数时先 warnIfInvalid（strict 为 true 则抛错中断）；
- *  pretty 为 false 时用紧凑格式——library.json 嵌套 5 层，pretty 会膨胀到 ~11MB，紧凑仅 ~3.5MB。 */
+/** 校验 + 写入 data/ 下的 JSON 文件（sync 脚本收尾共用）。validate 时先 warnIfInvalid（strict 则抛错）；
+ *  pretty=false 用紧凑格式——library.json 嵌套 5 层，pretty 会膨胀到 ~11MB，紧凑仅 ~3.5MB。 */
 export function writeDataFile(file, data, { label = '', validate = null, strict = false, pretty = true } = {}) {
   if (validate) warnIfInvalid(label, validate(data), { strict });
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -75,18 +72,11 @@ export function writeDataFile(file, data, { label = '', validate = null, strict 
 }
 
 /**
- * 流式读取「JSON 顶层数组」的元素（同步 generator）：每次只读一个文件块、逐字符解析，
- * yield 每个顶层元素的原始 JSON 字符串（调用方自行 JSON.parse）。
- *
- * 用于超大 JSON 数组文件（如 workshop.json 达 90 万+ 条、2.13GB）：一次性 fs.readFileSync +
- * JSON.stringify 会超过 V8 单字符串上限（Invalid string length，约 5.36 亿字符）并撑爆堆，
- * 流式读可处理任意大小。文件形如 `{"meta":{...},"entries":[elem1,elem2,...]}`——
- * 自动跳过 meta 定位 `"entries":[`，只 yield entries 数组内的元素。
- * @param {string} file  文件路径
- * @param {number} [chunkSize]  每次读取的字节数（默认 1MB）
+ * 流式读取「JSON 顶层数组」的元素（同步 generator）：逐块逐字符解析，yield 每个顶层元素的原始 JSON（调用方自行 parse）。
+ * 用于超大 JSON 数组（如 workshop.json 90 万+ 条、2.13GB——整文件 readFileSync 会超 V8 单字符串上限并撑爆堆）；
+ * 自动跳过 meta 定位 `"entries":[`，只 yield entries 内的元素。
  */
-/** 解码 Buffer 前 n 字节到「最后一个完整 UTF-8 字符边界」：
- *  返回 { text, tail }——text 为可安全解码的字符串（无切断），tail 为可能跨块的尾部字节（≤3）交下块拼接。 */
+/** 解码到「最后一个完整 UTF-8 字符边界」：返回 {text, tail}——tail 为跨块尾部字节（≤3）交下块拼接。 */
 function decodeUtf8Tail(buff, n) {
   let start = n - 1;
   while (start >= 0 && (buff[start] & 0xc0) === 0x80) start--; // 跳过续字节找起始字节
@@ -98,7 +88,7 @@ function decodeUtf8Tail(buff, n) {
   else if ((b & 0xf0) === 0xe0) len = 3;
   else if ((b & 0xf8) === 0xf0) len = 4;
   else return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) }; // 非法起始字节：整体解码（toString 处理）
-  if (start + len <= n) return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) }; // 最后字符完整
+  if (start + len <= n) return { text: buff.toString('utf8', 0, n), tail: Buffer.alloc(0) };
   return { text: buff.toString('utf8', 0, start), tail: Buffer.from(buff.subarray(start, n)) }; // 最后字符跨块 → 推迟
 }
 
@@ -171,9 +161,8 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
         }
         if (st.started) st.elem += ch;
       }
-      // ⚠️ 不能在此检查「数组结束」：`!started && depth===0` 在「元素之间」（},{ 间隙）也为真，
-      // 块边界恰好落在间隙时会把后续全部条目丢弃（曾致 60 万条文件只解析出 9 万）。
-      // 数组结束已由上面 ']' 分支处理，此处不 break，while 靠 readSync 返回 0 自然结束。
+      // ⚠️ 不能在此检查「数组结束」：`!started && depth===0` 在元素间隙也为真，块边界落间隙会丢全部后续条目（曾致 60 万条只解析出 9 万）；
+      // 数组结束已由 ']' 分支处理，while 靠 readSync 返回 0 自然结束。
     }
     // 文件末尾残留（≤3 字节，如结尾 `]}`）——正常文件为 ASCII，直接解码处理
     if (carry.length) {
@@ -239,13 +228,9 @@ export function* streamJsonArrayElements(file, chunkSize = 1 << 20) {
 }
 
 // ---------- workshop.json：分块 gzip（非固实）存储 ----------
-// 内容仍是普通 JSON（entries 数组），但按固定条目数切成若干块、每块独立 gzip（非固实压缩：
-// 任一块可独立解压/定位，读第 N 块无需解压前面的块）。文件布局：
-//   第 0 行（JSON，以换行结尾）：{"meta":{...},"perChunk":20000,"offsets":[0,12345,...]}
-//     offsets 为各 gzip 块相对「头部行之后」的字节偏移（读时 + 头部行长度即文件内绝对位置）
-//   之后：N 个首尾相接的 gzip 流，第 i 块 = gzip(JSON.stringify(entries[i*perChunk .. (i+1)*perChunk)))
-// 读取：头部一次解析 → 逐块 readSync 定长读 → gunzipSync → JSON.parse（整块解析，远快于逐字符状态机）。
-// 合并：旧文件逐块解码 + PART 逐行解码 → 重新分块压缩写出（merge 只在爬取收尾跑一次，可接受）。
+// 按固定条目数切块、每块独立 gzip（任一块可独立解压/定位，读第 N 块无需解压前面的块）。布局：
+//   第 0 行头部 {"meta":{...},"perChunk":20000,"offsets":[0,12345,...]}，offsets 为各块相对「头部行之后」的字节偏移；
+//   之后 N 个首尾相接的 gzip 流。读取 = 头部一次解析 → 逐块定长 readSync → gunzip → JSON.parse（整块解析，远快于逐字符状态机）。
 export const WORKSHOP_PER_CHUNK = 20000;
 
 /** 读第 0 行头部（读完即关 fd；Windows 下未关的读句柄会挡住对同一文件的 rename） */
@@ -298,9 +283,7 @@ export function* iterWorkshopFile(file) {
 }
 
 /** 把条目流按 perChunk 分块 gzip 写入 outFile（原子：tmp+rename；头部最后拼装）。
- *  @param {Iterable<object>} entries  条目迭代器（可为 generator，只消费一次）
- *  @param {object|Function} meta  头部 meta；传函数时以实际条数调用 meta(count)（转换场景 entryCount 未知）
- *  @returns {number} 写入的条目数 */
+ *  meta 传函数时以实际条数调用 meta(count)（转换场景 entryCount 未知）；返回写入条目数。 */
 export function writeWorkshopFile(outFile, entries, meta = {}, perChunk = WORKSHOP_PER_CHUNK) {
   const tmp = `${outFile}.tmp`;
   const fd = fs.openSync(tmp, 'w');
@@ -324,7 +307,6 @@ export function writeWorkshopFile(outFile, entries, meta = {}, perChunk = WORKSH
   } finally {
     fs.closeSync(fd);
   }
-  // 头部 + body 拼接（meta 为函数时按实际条数生成）
   const finalMeta = typeof meta === 'function' ? meta(count) : meta;
   const head = Buffer.from(JSON.stringify({ meta: finalMeta, perChunk, offsets }) + '\n');
   const bodyFd = fs.openSync(tmp, 'r');

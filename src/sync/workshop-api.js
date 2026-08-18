@@ -1,9 +1,8 @@
-// src/sync/workshop-api.js —— 「绝区零工坊」（api.zzzmap.com）API 客户端
-// 签名协议（MD5(key+参数排序)，逆向自工坊 wxapkg，无需 token）+ 带重试的请求 + 可选代理。
-// 与 src/sync/http.js（米游社接口）分工：本模块只管 zzzmap，http.js 只管米游社。
-// workshop.js（爬取/提取）与 workshop-stats.js（聚合）共用；模块加载时自动启用代理。
+// src/sync/workshop-api.js —— 「绝区零工坊」（api.zzzmap.com）API 客户端：签名（MD5(key+参数排序)，无需 token）+ 带重试请求 + 可选代理。
+// 只管 zzzmap（与 mihoyo-api.js 分工）；workshop.js 与 workshop-stats.js 共用；模块加载时自动启用代理。
 import crypto from 'node:crypto';
 import { installProxyFetch, resolveProxyUrl, maskProxyUrl } from './proxy.js';
+import { sleep } from './mihoyo-api.js';
 
 // ---------- 签名协议（逆向自工坊 wxapkg） ----------
 const KEY = 'VW^)(^*^$$#*%(#)!@VIAI%';
@@ -27,12 +26,9 @@ function filterParams(data) {
 }
 
 // ---------- 带重试的请求 ----------
-/** 非 2xx / 非 JSON（风控返回 HTML 页）/ 网络错误 → 指数退避重试。
- *  实测工坊 API 风控/限流时返回 HTML（`<html>...`，res.json() 解析抛 "Unexpected token '<'"），
- *  且会持续数分钟——重试退避 2s→6s→18s→54s 后仍失败才抛错（调用方记 fail，续爬自愈重爬）。 */
+/** 非 2xx / 非 JSON（风控返回 HTML 页）/ 网络错误 → 指数退避重试（2s→6s→18s→54s），仍失败才抛错（调用方记 fail 续爬）。 */
 const RETRY_MAX = 4; // 重试次数（不含首次）
 const RETRY_BASE = 2000; // 初始退避 2s，指数 ×3
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchJson(url, opts, attempt = 0) {
   let res;
   try {
@@ -93,9 +89,7 @@ export async function apiPost(path, data) {
 }
 
 // ---------- 代理（可选）：第 5 参 > HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量 ----------
-// IP 被工坊风控/封禁时用代理换 IP（工坊按 IP 限流，签名/接口不受 IP 影响）。
-// 模块加载时启用，server.js 复用 fetchWorkshopData 的「更新工坊配装」按钮同样生效；
-// 只对 api.zzzmap.com 生效（见 proxy.js 的 applyHosts），米游社等其他请求不受影响。
+// IP 被风控时用代理换 IP；模块加载时启用（server.js 复用同样生效），仅 api.zzzmap.com 走代理（见 proxy.js）。
 const proxyUrl = resolveProxyUrl(process.argv[5]);
 if (proxyUrl) {
   installProxyFetch(proxyUrl);

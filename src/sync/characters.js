@@ -1,12 +1,6 @@
-// src/sync/characters.js —— 通过米游社账号 cookie，拉取你账号里所有角色的当前真实数据
-//
-// 运行:  npm run sync:characters   （或 node src/sync/characters.js）
-// 流程:  ① 自动打开 user.mihoyo.com 登录页
-//        ② 按提示在浏览器控制台执行一段脚本，把 cookie 复制到剪贴板
-//        ③ 在终端粘贴 cookie 回车，自动拉取全部角色
-// 输出:  ① data/characters.json     —— 全部角色数据
-//        ② data/debug-response.json —— 第一个角色的原始响应（供排查）
-//        ③ data/.cookie.json        —— 缓存 cookie
+// src/sync/characters.js —— 通过米游社 cookie 拉取账号全部角色真实数据（交互式：自动开登录页、粘贴 cookie 回车）
+// 运行: npm run sync:characters
+// 输出: data/characters.json（全部角色）+ data/.cookie.json（cookie 缓存）
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,7 +9,7 @@ import { DATA_DIR, isMain, writeDataFile, openBrowser, pool } from '../lib/node.
 import { parseCookies, parseNum, CLIPBOARD_SCRIPT } from '../lib/util.js';
 import { canonicalize, CATEGORY } from '../lib/names.js';
 import { validateCharacters } from '../lib/schema.js';
-import { requestJson, fetchUid } from './http.js';
+import { requestJson, fetchUid } from './mihoyo-api.js';
 import { loadNameIndexes } from './name-index.js';
 
 const COOKIE_FILE = path.join(DATA_DIR, '.cookie.json');
@@ -24,8 +18,7 @@ const COOKIE_FILE = path.join(DATA_DIR, '.cookie.json');
 // library.json 为标准名权威源；缺失/损坏时降级为不归一（名称保持接口原样），并在同步时提示。
 const libNameIndex = loadNameIndexes('账号音擎/驱动盘名');
 
-/** 账号角色写时归一：音擎名 / 驱动盘套装名统一解析为 library 标准名（「未佩戴音擎」「未佩戴驱动盘」「未知」占位保留）。
- *  extractCharacter 保持纯函数，此层只在写 data/characters.json 前对已提取角色做名称固化。 */
+/** 账号角色写时归一：音擎/驱动盘名解析为 library 标准名（占位名保留）；extractCharacter 保持纯函数，此层只在写文件前固化名称。 */
 function normalizeCharacterOutput(c) {
   if (!libNameIndex || !c) return c;
   const wengine =
@@ -59,8 +52,7 @@ const baseHeaders = {
   'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
 };
 
-// 米游社客户端模拟头：随客户端版本变化，接口可能校验。App 升级后若接口拒绝访问，
-// 需按新客户端抓包出的实际请求头更新这几个值。
+// 客户端模拟头：App 升级后接口可能校验，拒绝访问时需按新客户端抓包更新这些值。
 const CLIENT = {
   'x-rpc-app_version': '2.75.2',
   'x-rpc-device_id': '06770e63-c0e8-38da-89bd-1a1e504b6bfd',
@@ -141,9 +133,7 @@ async function fetchCharacterDetail(cookies, uid, charId, page) {
 
 // ---------------- 数据提取 ----------------
 
-/** 把 {property_name, base} 数组整理成 [{name, value}]。
- *  用数组而非对象：同一盘可能同时有「攻击力%」和「攻击力固定」两条同名词条，对象会互相覆盖。
- *  数值解析统一走 util.parseNum（带 % 转小数、非法/空 → null）。 */
+/** {property_name, base}[] → [{name, value}]。用数组而非对象：同一盘可同时有「攻击力%」「攻击力固定」同名条目，对象会互相覆盖；数值走 parseNum。 */
 function collectStats(arr) {
   const out = [];
   for (const p of arr || []) {
@@ -156,9 +146,7 @@ function collectStats(arr) {
   return out;
 }
 
-/** 从 avatar/info 响应提取角色的全部可获取数据。
- *  除面板/装备外，还包括当前影画(rank/ranks)、技能等级(skills)、皮肤、元素/职业代码、
- *  立绘主色、音擎特效标题、技能觉醒与装备规划等。 */
+/** 从 avatar/info 响应提取角色全部可获取数据（面板/装备/影画/技能/皮肤/潜能觉醒/equipPlan 等） */
 export function extractCharacter(response) {
   const a = response?.data?.avatar_list?.[0];
   if (!a) return null;
@@ -203,10 +191,10 @@ export function extractCharacter(response) {
     wengine,
     discs: discs.slice(0, 6),
     // ---------- 全量附加数据 ----------
-    elementType: a.element_type ?? null, // 元素代码
-    profession: a.avatar_profession ?? null, // 职业代码
-    subElementType: a.sub_element_type ?? null, // 副元素代码
-    verticalPaintingColor: a.vertical_painting_color || '', // 立绘主色
+    elementType: a.element_type ?? null,
+    profession: a.avatar_profession ?? null,
+    subElementType: a.sub_element_type ?? null,
+    verticalPaintingColor: a.vertical_painting_color || '',
     usName: a.us_full_name || '', // 英文名
     skins: (a.skin_list || []).map((s) => ({
       id: s.skin_id,
@@ -234,7 +222,7 @@ export function extractCharacter(response) {
       level: s.level,
       items: (s.items || []).map((it) => ({
         title: it.title || '',
-        text: it.text || '', // 技能完整描述
+        text: it.text || '',
         awaken: !!it.awaken,
       })),
     })),
@@ -265,8 +253,7 @@ export function readCookieCache() {
   }
 }
 
-/** 用 cookie 抓取全部角色数据并写入 data/characters.json，供命令行与 server.js 复用。
- *  onProgress 可选回调，上报 (done, total) 供同步进度展示。
+/** 用 cookie 抓取全部角色并写入 data/characters.json，供命令行与 server.js 复用。
  *  opts.strict 为 true 时校验异常直接抛错（命令行 STRICT=1 开启）。 */
 export async function fetchMyCharacters(cookies, onProgress, { strict = false } = {}) {
   console.log('\n④ 获取 UID…');
@@ -288,11 +275,6 @@ export async function fetchMyCharacters(cookies, onProgress, { strict = false } 
           const extracted = extractCharacter(response);
           if (extracted) {
             extracted.icon = extracted.icon || it.icon;
-            // 保留第一个角色的原始响应供排查
-            if (i === 0) {
-              fs.mkdirSync(DATA_DIR, { recursive: true });
-              fs.writeFileSync(path.join(DATA_DIR, 'debug-response.json'), JSON.stringify(response, null, 2), 'utf-8');
-            }
             console.log(`   ${i + 1}/${charList.length} ${extracted.name}（等级${extracted.level}）`);
             return extracted;
           }
@@ -311,7 +293,6 @@ export async function fetchMyCharacters(cookies, onProgress, { strict = false } 
   const data = results.map(normalizeCharacterOutput);
   const stats = { characters: results.length };
 
-  // 校验 + 写入 data/characters.json
   writeDataFile('characters.json', data, { label: '我的角色', validate: validateCharacters, strict });
 
   return { data, stats, uid };
@@ -319,10 +300,10 @@ export async function fetchMyCharacters(cookies, onProgress, { strict = false } 
 
 async function main() {
   const cookies = await fetchCookie();
-  cacheCookies(cookies); // 缓存，下次可直接用
+  cacheCookies(cookies);
   const { stats } = await fetchMyCharacters(cookies, null, { strict: !!process.env.STRICT });
   console.log(`\n完成！共 ${stats.characters} 个角色。`);
-  console.log('  data/characters.json 已生成；data/debug-response.json 保留第一个角色的原始响应');
+  console.log('  data/characters.json 已生成');
 }
 
 // ESM 入口判断：仅当直接运行本文件时执行 main()

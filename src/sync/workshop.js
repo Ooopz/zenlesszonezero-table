@@ -1,27 +1,10 @@
-// src/sync/workshop.js —— 爬取「绝区零工坊」全角色驱动排名 + 玩家完整配装（下载/提取侧）
-// 数据源：api.zzzmap.com（逆向自 wxapkg，签名=MD5(key+参数排序)，无需 token）
-// 用法：
-//   node src/sync/workshop.js                    # 全量 57 角色 × 7 影画 × 每影画 300 条（榜单全量）
-//   node src/sync/workshop.js 3                  # 只爬前 3 个角色（试跑）
-//   node src/sync/workshop.js 57 300 6           # 第 4 参 = v3 配装并发（默认 6，调高加速但注意限流）
-//   node src/sync/workshop.js 57 300 6 http://127.0.0.1:7890   # 第 5 参 = 代理 URL（IP 被封时换 IP）
-//       代理支持 http/https CONNECT 与 socks5（可带 user:pass 认证）；也可用环境变量
-//       HTTPS_PROXY / ALL_PROXY / HTTP_PROXY（仅 api.zzzmap.com 走代理，其余请求不受影响，
-//       见 src/sync/proxy.js）。Node 24+ 也可用原生 `node --use-env-proxy`。
-// 排名收集：角色级并发 + 每角色 7 影画组内并行翻页（实测 6.4× 提速）。
-// 输出：data/workshop.json（配装条目）、data/workshop-grad.json（全服统计）、
-//       data/workshop-stats.json（汇总）、data/workshop-weights.json（角色默认流派权重）
-// 断点续爬：以 workshop.json 实际内容为准（文件里没有的 uid 自动重爬），写文件原子化（tmp+rename）；
-// 不再使用进度文件（旧 data/.workshop-progress.json 已废弃，可删除）
-// 职责划分（2026-10 拆分，本文件只负责下载/提取 + 主流程编排）：
-//   · workshop-api.js —— zzzmap API 客户端（签名/重试/代理），本文件只 import 不实现
-//   · workshop-stats.js —— 聚合（buildWorkshopStats / fetchWorkshopGrad），本文件 re-export
-//   · workshop-static.js —— 逆向静态数据表（2025 源面板公式用），本文件 import
-// 提取兼容 mys 源（面板现成）与 2025 源（面板按公式计算，原 workshop-panel.js 的面板计算保留在本文件）。
+// src/sync/workshop.js —— 爬取「绝区零工坊」全角色排名+玩家配装（下载/提取侧）：api.zzzmap.com，签名=MD5(key+参数排序)，无需 token
+// 用法：node src/sync/workshop.js [角色数=57] [每影画条数=300] [v3并发=6] [代理URL]（IP 被封时换 IP；亦可用 HTTPS_PROXY/ALL_PROXY 环境变量，仅 api.zzzmap.com 走代理）
+// 断点续爬以 workshop.json 实际内容为准（文件里没有的 uid 一律重爬，写文件原子 tmp+rename，不再用进度文件）；聚合/API/静态表/2025 源面板拆在 workshop-stats.js 等模块
 import fs from 'node:fs';
 import path from 'node:path';
 import { romanNumeralUnicode, normalizeStatKey } from '../lib/util.js';
-import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
+import { buildNameIndex, canonicalName, CATEGORY } from '../lib/names.js';
 import {
   iterWorkshopFile,
   readLines,
@@ -33,13 +16,14 @@ import {
 } from '../lib/node.js';
 import { apiGet, apiPost } from './workshop-api.js';
 import { buildWorkshopStats, fetchWorkshopGrad, OUT_FILE } from './workshop-stats.js';
-import { items, rolebase, suits, weapons } from './workshop-static.js';
-import { loadNameIndexes } from './name-index.js';
+import { computeEnkaPanel, propName } from './workshop-panel.js';
+import { items } from './workshop-static.js'; // 装备表（buildCtx 的 ctx.items 供 2025 源配装映射）
+import { loadNameIndexes, resolveWengineName } from './name-index.js';
+import { sleep } from './mihoyo-api.js';
 
 const WEIGHTS_FILE = path.join(DATA_DIR, 'workshop-weights.json'); // 角色默认流派权重（工坊有效词条口径）
-// 名称索引（统一 resolver，library.json 为权威源）：工坊 nick_name 的 ASCII 罗马数字/括号差异、角色简称
-// （维琳娜/星徽·比利）等一律在写时解析回 wiki 标准名，保证三个工坊数据文件与 library/plans 一致。
-// library.json 缺失/损坏时降级为空索引（名称归一退化为原样，不崩——与 plans/characters 一致，测试可直接 import 本模块）
+// 名称索引（统一 resolver，library.json 为权威源）：工坊 nick_name 差异在写时解析回 wiki 标准名，保证与 library/plans 一致；
+// library.json 缺失/损坏时降级为空索引（不归一、不崩——测试可直接 import 本模块）
 const {
   char: libChars,
   wengine: libWengines,
@@ -49,58 +33,40 @@ const {
   wengine: buildNameIndex({}, CATEGORY.WENGINE),
   disc: buildNameIndex({}, CATEGORY.DISC),
 };
-/** 工坊音擎 nick_name → wiki 规范音擎条目（统一 resolver；找不到返回 null） */
-function resolveWengine(rawName) {
-  return resolveEntry(CATEGORY.WENGINE, libWengines, rawName);
-}
-
 // ---------- 参数 ----------
 const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模式）
-// 每影画拉多少条：实测每角色×影画档的排行榜上限 ≈298 去重 uid（offset≥300 返回空），
-// 故默认 300 = 榜单全量（旧默认 100 只拿 1/3）；排名无 total 字段，无法预知精确上限。
-// 扩大 uid 集合的其他路径均已实测无效：weapon_id/part_index 为榜单子集/被忽略，
-// type 变体（weapon/relic/player/all）返回空；uid 自增扫描不可行（uid 空间 10^7~1.5×10^9，
-// 无效 uid 也返回 code:0 data:null 需完整请求才能判定，命中率极低且易触发风控）。
-const PER_RANK = Number(process.argv[3] || 300); // 每影画拉多少条（默认 300 = 榜单全量）
-// v3 配装请求并发（默认 6）：排名收集阶段每个角色 7 影画组内并行，不占此并发；
-// 调高可加速配装爬取（响应大、吃带宽，注意工坊 API 限流）
+// 每影画排行榜上限 ≈298 去重 uid（offset≥300 返回空），故 300 = 榜单全量（旧默认 100 只拿 1/3）；扩大 uid 集合的其他路径均实测无效
+const PER_RANK = Number(process.argv[3] || 300);
+// v3 配装请求并发（默认 6）：排名收集阶段每角色 7 影画组内并行，不占此并发；调高加速但响应大吃带宽，注意工坊 API 限流
 const CONCURRENCY = Number(process.argv[4] || 6);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // 暂停用（代理/风控暂停 60s 等）
 
-// ---------- 断点续爬（以文件内容为准，不再依赖进度文件） ----------
-// 曾用 data/.workshop-progress.json 缓存「已爬 uid」做跳过判断，但进度保存在写文件之前，
-// 中断时会出现「进度领先于数据」→ 下次运行跳过大量 uid 并把残缺 entries 全量重写覆盖旧文件
-// （实测 145830 条覆盖仅 9579/63842 uid 的数据丢失事故）。现改为：
-//   · 跳过判断 = 恢复出的 entries 实际覆盖的 uid 集合（fileUids），文件里没有的 uid 一律重爬（自愈）；
-//   · 写文件原子化（tmp + rename），中断只损坏临时文件，旧文件完好。
-// 崩溃续爬 = 旧文件断点：上次「写入文件后」爬的 uid 不在文件里 → 本次自动重爬，永不静默丢数据。
+// ---------- 断点续爬：以文件实际内容为准（不再用进度文件） ----------
+// 曾用 .workshop-progress.json 缓存「已爬 uid」，进度先于写文件 → 中断后跳过大量 uid 且残缺 entries 覆盖旧文件
+// （实测 145830 条覆盖 9579/63842 uid 的数据丢失事故）。现改为跳过判断 = 文件实际覆盖的 uid 集合，缺的自动重爬（自愈），写文件原子化（tmp+rename）
+// 崩溃续爬 = 旧文件断点：写入文件后爬的 uid 不在文件里 → 自动重爬，永不静默丢数据。
 
-// ---------- 大文件流式处理（防 OOM：90 万+ 条目全量进内存 ≈ 7GB，超 Node 默认 4GB 堆） ----------
-/** 本次新增配装条目的暂存文件（裸逗号流：`e1,e2,...`，无 [ ] 头尾）。
- *  爬取中分批落盘；结束时与旧文件流式合并成最终 workshop.json。
- *  崩溃残留直接删除（自愈：这些 uid 不在最终文件里，下次自动重爬）。 */
+// ---------- 大文件流式处理（防 OOM：90 万+ 条全量进内存 ≈ 7GB，超 Node 默认 4GB 堆） ----------
+/** 本次新增配装条目的暂存文件（每行一条完整 JSON，无 [ ] 头尾）：爬取中分批落盘，结束时与旧文件流式合并；崩溃残留直接删除（自愈重爬） */
 const PART_FILE = path.join(DATA_DIR, '.workshop-part.json');
-const PART_FLUSH = 10000; // 内存条目达到该数即落盘一批（常驻内存 ~60MB + 序列化临时 ~30MB）
+const PART_FLUSH = 10000; // 内存条目达该数即落盘一批（常驻 ~60MB + 序列化临时 ~30MB）
 
-/** 把内存中的 entries 追加写进 PART 裸流并**清空数组**（partCount 累计已落盘条数）。
- *  ⚠️ 必须清空：不清空会让 entries 长度持续 ≥ 阈值，每个 build 都触发 flush，
- *  每次重写全部条目导致 partCount 虚高（O(n²)）与 PART 写放大（曾出现 870 万虚高计数）。 */
+/** 把 entries 追加写进 PART 并**清空数组**（partCount 累计已落盘条数）。
+ *  ⚠️ 不清空会每个 build 都触发 flush 重写全部条目，partCount 虚高（O(n²)）与写放大（曾现 870 万虚高计数）。 */
 export function flushPart(entries, partCount, file = PART_FILE) {
   if (!entries.length) return partCount;
   const fd = fs.openSync(file, 'a');
   try {
-    // 每条约一行（完整 JSON）：合并时按行读取，跨块 UTF-8 天然安全（\n 不出现在多字节字符内）
+    // 每条约一行（完整 JSON）：合并按行读取，跨块 UTF-8 天然安全（\n 不出现在多字节字符内）
     for (const e of entries) fs.writeSync(fd, JSON.stringify(e) + '\n');
   } finally {
     fs.closeSync(fd);
   }
   const n = entries.length;
-  entries.length = 0; // 清空：下次 flush 只写新条目
+  entries.length = 0;
   return partCount + n;
 }
 
-/** 合并写出 workshop.json（分块 gzip，原子 tmp+rename）：旧文件逐块解码 + PART 逐行解码 → 重新分块压缩。
- *  在爬取收尾跑一次（数小时爬取的最后一步），全量重压 ~2 分钟可接受；换来格式简单、无偏移拼接逻辑。
+/** 合并写出 workshop.json（分块 gzip，原子 tmp+rename）：旧文件逐块解码 + PART 逐行解码 → 重新分块压缩（收尾跑一次，全量重压 ~2 分钟可接受）。
  *  perChunk 可选（默认 WORKSHOP_PER_CHUNK），测试用小值强制多块。 */
 export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile, perChunk }) {
   const entries = (function* () {
@@ -108,7 +74,6 @@ export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile,
     if (oldFile && fs.existsSync(oldFile)) {
       for (const e of iterWorkshopFile(oldFile)) yield e;
     }
-    // PART：完整 JSON 行（flushPart 写入）
     if (partCount > 0 && partFile && fs.existsSync(partFile)) {
       for (const line of readLines(partFile)) {
         if (!line) continue;
@@ -123,251 +88,14 @@ export function mergeWorkshopFile({ meta, oldFile, partFile, partCount, outFile,
   writeWorkshopFile(outFile, entries, meta, perChunk);
 }
 
-// ---------- 属性映射（get_prop_desc：PropertyId → 属性名，逆向自工坊） ----------
-const PROP_DESC = {
-  11101: '生命值',
-  11102: '生命值百分比',
-  11103: '生命值',
-  12101: '攻击力',
-  12102: '攻击力百分比',
-  12103: '攻击力',
-  12201: '冲击力',
-  12202: '冲击力百分比',
-  13101: '防御力',
-  13102: '防御力百分比',
-  13103: '防御力',
-  20101: '暴击率百分比',
-  20103: '暴击率百分比',
-  21101: '暴击伤害百分比',
-  21103: '暴击伤害百分比',
-  23101: '穿透率百分比',
-  23103: '穿透率百分比',
-  23201: '穿透值',
-  23203: '穿透值',
-  30501: '能量回复',
-  30502: '能量回复百分比',
-  30503: '能量回复',
-  31201: '异常精通',
-  31203: '异常精通',
-  31401: '异常掌控',
-  31402: '异常掌控百分比',
-  31403: '异常掌控',
-  31501: '物伤加成百分比',
-  31503: '物伤加成百分比',
-  31601: '火伤加成百分比',
-  31603: '火伤加成百分比',
-  31701: '冰伤加成百分比',
-  31703: '冰伤加成百分比',
-  31801: '电伤加成百分比',
-  31803: '电伤加成百分比',
-  31901: '以太加伤百分比',
-  31903: '以太加伤百分比',
-  32301: '风伤加成百分比',
-  32303: '风伤加成百分比',
-};
-const propName = (id) => PROP_DESC[id] || `未知${id}`;
-
-// ---------- 2025 源面板计算（复现工坊 enka_attrs_mapping，原 workshop-panel.js） ----------
-/** 驱动盘主属性按稀有度的等级成长系数（工坊 relic_calculate） */
-const RARITY_GROWTH = { 4: 0.2, 3: 0.25, 2: 0.3 };
-
-/** 角色基础属性：BaseProps + GrowthProps×(等级-1)/10000 + 突破档 + 核心强化档 */
-function calcBaseTotalValue(ij) {
-  const stat = rolebase[String(ij.Id)];
-  if (!stat) return {};
-  const { BaseProps = {}, GrowthProps = {}, PromotionProps = [], CoreEnhancementProps = {} } = stat;
-  const lvl = ij.Level,
-    prom = ij.PromotionLevel,
-    core = ij.CoreSkillEnhancement;
-  const d = {};
-  for (const u in BaseProps) {
-    const p =
-      (BaseProps[u] || 0) +
-      ((GrowthProps[u] || 0) * (lvl - 1)) / 10000 +
-      ((PromotionProps[prom - 1] && PromotionProps[prom - 1][u]) || 0) +
-      ((CoreEnhancementProps[core] && CoreEnhancementProps[core][u]) || 0);
-    d[u] = (d[u] || 0) + p;
-  }
-  return d;
-}
-
-/** 武器属性：MainStat×(1+0.1568×等级+0.8922×突破) + Secondary×(1+0.3×突破) */
-function calcWeaponProperties(wpn) {
-  if (!wpn) return {};
-  const w = weapons[String(wpn.Id)];
-  if (!w) return {};
-  const s = {};
-  if (w.MainStat)
-    s[w.MainStat.PropertyId] =
-      w.MainStat.PropertyValue * (1 + 0.1568166666666667 * wpn.Level + 0.8922 * wpn.BreakLevel);
-  if (w.SecondaryStat) s[w.SecondaryStat.PropertyId] = w.SecondaryStat.PropertyValue * (1 + 0.3 * wpn.BreakLevel);
-  return s;
-}
-
-/** 驱动盘主副词条属性：主属性按等级成长，副属性 ×词条等级 */
-function relicCalc(equippedList) {
-  const i = {};
-  for (const slot of equippedList || []) {
-    const eq = slot && slot.Equipment;
-    if (!eq) continue;
-    const item = items[String(eq.Id)];
-    const growth = RARITY_GROWTH[item ? item.Rarity : 4] || 0.2;
-    for (const m of eq.MainPropertyList || []) {
-      i[m.PropertyId] = (i[m.PropertyId] || 0) + m.PropertyValue + m.PropertyValue * eq.Level * growth;
-    }
-    for (const m of eq.RandomPropertyList || []) {
-      i[m.PropertyId] = (i[m.PropertyId] || 0) + m.PropertyValue * m.PropertyLevel;
-    }
-  }
-  return i;
-}
-
-/** 套装加成：同套装 ≥2 件 → SetBonusProps（工坊只算 2 件套加成，4 件套为条件效果不计） */
-function setBonusProps(equippedList) {
-  const cnt = {};
-  for (const slot of equippedList || []) {
-    const item = slot && slot.Equipment && items[String(slot.Equipment.Id)];
-    if (!item) continue;
-    cnt[item.SuitId] = (cnt[item.SuitId] || 0) + 1;
-  }
-  const bonus = {};
-  for (const [suitId, n] of Object.entries(cnt)) {
-    if (n >= 2) {
-      const st = suits[suitId];
-      if (st && st.SetBonusProps) for (const k in st.SetBonusProps) bonus[k] = (bonus[k] || 0) + st.SetBonusProps[k];
-    }
-  }
-  return bonus;
-}
-
-/** 百分比/固定值汇总：各属性 Final = 固定 + 基础×百分比/10000 + 固定（复现工坊 sumAttrFinalValue） */
-function sumAttrFinalValue(e, o) {
-  return {
-    HpFinal: (e[11101] || 0) + (o.hpBase * (e[11102] || 0)) / 10000 + (e[11103] || 0),
-    AtkFinal: (e[12101] || 0) + (o.atkBase * (e[12102] || 0)) / 10000 + (e[12103] || 0),
-    DefFinal: (e[13101] || 0) + (o.defBase * (e[13102] || 0)) / 10000 + (e[13103] || 0),
-    BreakStunFinal: (e[12201] || 0) + (o.breakStunBase * (e[12202] || 0)) / 10000,
-    CritRateFinal: (e[20101] || 0) + (e[20103] || 0),
-    CritDamageFinal: (e[21101] || 0) + (e[21103] || 0),
-    PenetrationRateFinal: (e[23101] || 0) + (e[23103] || 0),
-    PenetrationValueFinal: (e[23201] || 0) + (e[23203] || 0),
-    EnergyRecoverFinal: (e[30501] || 0) + (o.energyBase * (e[30502] || 0)) / 10000 + (e[30503] || 0),
-    AnomalyMasteryFinal: (e[31401] || 0) + (o.anomalyMasteryBase * (e[31402] || 0)) / 10000 + (e[31403] || 0),
-    AnomalyProficiencyFinal: (e[31201] || 0) + (e[31203] || 0),
-  };
-}
-
-/** 计算 2025 源玩家的面板（复现工坊 enka_attrs_mapping），返回与 mys 源 panel 一致的格式 */
-function computeEnkaPanel(ij) {
-  const base = calcBaseTotalValue(ij);
-  const wpn = calcWeaponProperties(ij.Weapon);
-  // 装备属性 = 驱动盘主/副词条 + 套装 2 件套加成（必须累加合并；对象展开会覆盖同键属性，如暴伤被套装覆盖丢失）
-  const equip = {};
-  for (const [k, v] of Object.entries(relicCalc(ij.EquippedList))) equip[k] = (equip[k] || 0) + v;
-  for (const [k, v] of Object.entries(setBonusProps(ij.EquippedList))) equip[k] = (equip[k] || 0) + v;
-  const o = {
-    hpBase: base[11101] || 0,
-    atkBase: (base[12101] || 0) + Math.floor(wpn[12101] || 0),
-    defBase: base[13101] || 0,
-    breakStunBase: base[12201] || 0,
-    energyBase: base[30501] || 0,
-    anomalyMasteryBase: base[31401] || 0,
-  };
-  const wpnNoAtk = { ...wpn };
-  delete wpnNoAtk[12101]; // 武器主攻击已计入 atkBase
-  const c = sumAttrFinalValue(wpnNoAtk, o); // 武器其他属性
-  const l = sumAttrFinalValue(equip, o); // 装备属性
-
-  const hpBase = Math.floor(base[11101] || 0);
-  const atkBase = Math.floor(base[12101] || 0) + Math.floor(wpn[12101] || 0);
-  const defBase = Math.floor(base[13101] || 0);
-  const brkBase = Math.floor(base[12201] || 0);
-  const panel = [
-    {
-      name: '生命值',
-      base: String(hpBase),
-      add: '',
-      final: String(Math.round(hpBase + (c.HpFinal || 0) + (l.HpFinal || 0))),
-    },
-    {
-      name: '攻击力',
-      base: String(atkBase),
-      add: '',
-      final: String(Math.floor(atkBase + (c.AtkFinal || 0) + (l.AtkFinal || 0))),
-    },
-    {
-      name: '防御力',
-      base: String(defBase),
-      add: '',
-      final: String(Math.floor(defBase + (c.DefFinal || 0) + (l.DefFinal || 0))),
-    },
-    {
-      name: '冲击力',
-      base: String(brkBase),
-      add: '',
-      final: String(Math.floor(brkBase + (c.BreakStunFinal || 0) + (l.BreakStunFinal || 0))),
-    },
-    {
-      name: '暴击率',
-      base: '',
-      add: '',
-      final: String(
-        Number((((base[20101] || 0) + (c.CritRateFinal || 0) + (l.CritRateFinal || 0)) / 10000).toFixed(3))
-      ),
-    },
-    {
-      name: '暴击伤害',
-      base: '',
-      add: '',
-      final: String(
-        Number((((base[21101] || 0) + (c.CritDamageFinal || 0) + (l.CritDamageFinal || 0)) / 10000).toFixed(3))
-      ),
-    },
-    {
-      name: '穿透率',
-      base: '',
-      add: '',
-      final: String(
-        Number(
-          (((base[23101] || 0) + (c.PenetrationRateFinal || 0) + (l.PenetrationRateFinal || 0)) / 10000).toFixed(3)
-        )
-      ),
-    },
-    {
-      name: '能量自动回复',
-      base: '',
-      add: '',
-      final: String(
-        Number((((base[30501] || 0) + (c.EnergyRecoverFinal || 0) + (l.EnergyRecoverFinal || 0)) / 100).toFixed(2))
-      ),
-    },
-    {
-      name: '异常精通',
-      base: '',
-      add: '',
-      final: String(
-        Math.floor((base[31201] || 0) + (c.AnomalyProficiencyFinal || 0) + (l.AnomalyProficiencyFinal || 0))
-      ),
-    },
-    {
-      name: '异常掌控',
-      base: '',
-      add: '',
-      final: String(Math.floor((base[31401] || 0) + (c.AnomalyMasteryFinal || 0) + (l.AnomalyMasteryFinal || 0))),
-    },
-  ];
-  return panel.filter((p) => p.final !== '0' && p.final !== '');
-}
-
 // ---------- 聚合（buildWorkshopStats / fetchWorkshopGrad 已拆分到 workshop-stats.js，原样透传供调用方复用） ----------
 export { buildWorkshopStats, fetchWorkshopGrad } from './workshop-stats.js';
 
 // ---------- 提取玩家某角色的配装（兼容 mys 源 / 2025 源两种 item_json） ----------
 // ctx = { weapons: system_weapons, artifacts: system_artifacts, items: 装备表 }
 
-/** 角色是否「练满」：角色 ≥60 级、音擎 ≥60 级、6 块驱动盘全部 15 级且全部 R5（金盘）。
- *  爬取时过滤未毕业角色。R4 盘上限 +12（游戏规则），R5 才是满配。
- *  role 为 user_role/v3 的 role（含 item_json；mys 源用 ij.weapon/ij.equip，2025 源用 ij.Weapon/ij.EquippedList）。 */
+/** 角色是否「练满」：角色≥60 / 音擎≥60 / 6 块驱动盘全 15 级且全 R5（R4 盘上限 +12，R5 才是满配）；爬取时过滤未毕业角色。
+ *  role 为 user_role/v3 的 role；mys 源字段 ij.weapon/ij.equip，2025 源 ij.Weapon/ij.EquippedList（大小写不同）。 */
 export function isMaxedRole(role) {
   if (!role || !role.item_json) return false;
   if ((role.level ?? 0) < 60) return false;
@@ -383,7 +111,7 @@ export function isMaxedRole(role) {
     const lv = d && d.level != null ? d.level : d && d.Equipment ? d.Equipment.Level : null;
     if (lv !== 15) return false;
     const rar = d && d.rarity != null ? d.rarity : d && d.Equipment ? d.Equipment.Rarity : null;
-    if (rar !== 5) return false; // 必须 R5（金色盘）
+    if (rar !== 5) return false;
   }
   return true;
 }
@@ -396,17 +124,16 @@ export function extractBuild(v3Data, roleId, ctx) {
   // relic_point 写时归一为数字（工坊返回字符串如 "294.30"；0/缺失 = 未带驱动盘或 2025 源无评分，置 null 由聚合层过滤）
   const rp = Number(role.relic_point);
   const base = { level: role.level, rank: role.rank, relic_point: Number.isFinite(rp) && rp > 0 ? rp : null };
-  // mys 源判定要「有实际数据」（数组非空）：2025 源若带空的 properties/equip 数组（[] 为 truthy）
-  // 会误走 mys 分支返回空面板，必须落到 2025 分支按公式算 enka 面板。
+  // mys 源判定要「有实际数据」（数组非空）：2025 源的空 properties/equip 数组（[] 为 truthy）会误走 mys 分支返回空面板
   if ((ij.equip && ij.equip.length) || (ij.properties && ij.properties.length)) {
     // mys 源：工坊格式化结构（名称统一解析回 wiki 标准名 / 属性键归一）
     return {
       ...base,
       source: 'mys', // 源标记（技能 type 为官方语义：0普攻/1特殊技/2闪避/3终结+连携/5核心/6支援技）
-      skills: (ij.skills || []).map((s) => ({ type: s.skill_type, level: s.level })), // 技能练度（6 技能 {type 0-6, level}）
+      skills: (ij.skills || []).map((s) => ({ type: s.skill_type, level: s.level })),
       weapon: ij.weapon && {
         id: ij.weapon.id,
-        name: ij.weapon.name ? resolveWengine(ij.weapon.name)?.name || romanNumeralUnicode(ij.weapon.name) : null,
+        name: ij.weapon.name ? resolveWengineName(libWengines, ij.weapon.name)?.name || romanNumeralUnicode(ij.weapon.name) : null,
         level: ij.weapon.level,
         rarity: ij.weapon.rarity,
         main: (ij.weapon.main_properties || []).map((p) => ({
@@ -425,8 +152,7 @@ export function extractBuild(v3Data, roleId, ctx) {
           e.equip_suit && e.equip_suit.name
             ? canonicalName(CATEGORY.DISC, libDiscs, e.equip_suit.name) || e.equip_suit.name
             : undefined;
-        // 主/副词条与 2025 源同构：main=主词条（main_properties）、subs=全部副词条（properties）。
-        // 不提取 mys 独有的 valid/all_hit/invalid_property_cnt（两源结构需一致，聚合层按统一口径判定）。
+        // 主/副词条与 2025 源同构（main=主词条、subs=全部副词条）；不提取 mys 独有 valid/all_hit 等——两源结构需一致
         return {
           id: e.id,
           name: e.name,
@@ -447,7 +173,7 @@ export function extractBuild(v3Data, roleId, ctx) {
     // 2025 源：游戏内嵌原始数据（面板经 enka_attrs_mapping 计算；音擎/驱动盘经装备表+系统字典映射）
     const w = ij.Weapon;
     const sysW = w && ctx.weapons.find((x) => String(x.item_id) === String(w.Id));
-    const libW = sysW ? resolveWengine(sysW.nick_name) : null;
+    const libW = sysW ? resolveWengineName(libWengines, sysW.nick_name) : null;
     const weapon = w && {
       id: w.Id,
       name: sysW ? (libW ? libW.name : romanNumeralUnicode(sysW.nick_name)) : null,
@@ -481,7 +207,7 @@ export function extractBuild(v3Data, roleId, ctx) {
     return {
       ...base,
       source: '2025', // 源标记（技能 type 为 1.x 游戏 ID 语义：0普攻/1闪避/2特殊技/3连携/5核心/6终结）
-      skills: (ij.SkillLevelList || []).map((s) => ({ type: s.Index, level: s.Level })), // 技能练度（与 mys 源同构 {type, level}）
+      skills: (ij.SkillLevelList || []).map((s) => ({ type: s.Index, level: s.Level })), // 与 mys 源同构 {type, level}
       weapon,
       panel: computeEnkaPanel(ij),
       equips,
@@ -504,8 +230,7 @@ async function buildCtx() {
   };
 }
 
-/** 拉单个「角色 × 影画档」的排名行（最多 PER_RANK 条）：offset 串行翻页（每页 50，rows<50 即拉完）。
- *  接口硬性每页 50 条（limit 参数无效），无法一次拿更多。 */
+/** 拉单个「角色 × 影画档」的排名行（最多 PER_RANK 条）：offset 串行翻页；接口硬性每页 50（limit 无效，rows<50 即拉完） */
 async function fetchRankRows(itemId, rank) {
   const rows = [];
   let offset = 0;
@@ -539,7 +264,7 @@ export async function fetchWorkshopData(onProgress) {
   const targets = roles.slice(0, MAX_ROLES);
   console.log(`角色总数 ${roles.length}，本次爬 ${targets.length} 个\n`);
 
-  // 收集排名（角色级并发；每角色 7 影画组内并行翻页——排名请求轻量，原 7×页数 串行往返 → 一轮并行）
+  // 收集排名（角色级并发；每角色 7 影画组内并行翻页——排名请求轻量，串行往返改一轮并行）
   const uidMap = new Map(); // uid -> [{role_id, rank}]
   let rankFetch = 0,
     roleDone = 0;
@@ -561,11 +286,9 @@ export async function fetchWorkshopData(onProgress) {
   });
   console.log(`\n排名条目 ${rankFetch}，去重 uid ${uidMap.size}\n`);
 
-  // 每个 uid 拉完整配装（并发；断点续爬：恢复旧文件条目 + 以文件实际覆盖的 uid 为跳过依据）
-  // 内存安全：条目不保留全量——恢复只收集 fileUids，本次新增分批落盘 PART 裸流（90 万+ 条全量
-  // 进数组 ≈ 7GB 会 OOM），结束阶段再与旧文件流式合并成最终 workshop.json
+  // 每个 uid 拉完整配装（并发）；内存安全：恢复只收集 fileUids，本次新增分批落盘 PART（90 万+ 条全量进数组 ≈ 7GB 会 OOM）
   fs.rmSync(PART_FILE, { force: true }); // 清残留：上次崩溃的 PART 丢弃（缺失 uid 由自愈机制重爬）
-  const fileUids = new Set(); // 旧文件实际覆盖的 uid（跳过判断的唯一依据：文件里没有的 uid 一律重爬，自愈进度领先）
+  const fileUids = new Set(); // 旧文件实际覆盖的 uid（跳过判断唯一依据：文件里没有的 uid 一律重爬，自愈进度领先）
   let oldEntryCount = 0;
   if (fs.existsSync(OUT_FILE)) {
     for (const e of iterWorkshopFile(OUT_FILE)) {
@@ -573,7 +296,6 @@ export async function fetchWorkshopData(onProgress) {
       if (e && e.uid) fileUids.add(e.uid);
     }
   }
-  // 只爬「文件里没有」的 uid：上次中断（写入前崩溃/写失败）丢失的 uid 会自动重爬，不再静默跳过
   const newUids = [...uidMap.keys()].filter((u) => !fileUids.has(u));
   const skippedCount = uidMap.size - newUids.length;
   console.log(
@@ -586,12 +308,12 @@ export async function fetchWorkshopData(onProgress) {
     done = 0,
     consecutiveFail = 0; // 连续失败计数（防加剧风控：连续失败过多时暂停 60s）
   let entries = []; // 内存中未落盘的本次新增条目（达到 PART_FLUSH 即写入 PART）
-  let partCount = 0; // 已落盘 PART 的条目数
+  let partCount = 0;
   await pool(newUids, CONCURRENCY, async (uid) => {
     try {
       const j = await apiPost('/api/v1/user_role/v3', { uid, refresh: false, type: 'ranking' });
       const nick = j.data && j.data.nick_name;
-      // 爬该 uid 下所有角色（不只排名上榜的角色），每角色一条；排除未毕业（角色<60 / 音擎<60 / 驱动盘非 6 块 15 级 / 非全 R5）
+      // 爬该 uid 下所有角色（不只排名上榜的角色），每角色一条；未毕业的跳过（见 isMaxedRole）
       const roles = (j.data && j.data.roles) || [];
       for (const role of roles) {
         if (!isMaxedRole(role)) continue;
@@ -654,8 +376,7 @@ export async function fetchWorkshopData(onProgress) {
     ])
   );
   buildWorkshopStats(roleNameMap, weightJson, totalCount); // 配装数据更新后自动生成汇总（含 weightJson，流式遍历防 OOM）
-  // grad 是收尾步骤：此时配装与 stats 都已落盘，且本函数的 roleNameMap 来自 system_data 而非 grad，
-  // 故 grad 失败不影响已完成的工作——只告警不抛，避免把数小时的爬取整体报成失败。
+  // grad 是收尾步骤：此时配装与 stats 都已落盘，且本函数的 roleNameMap 来自 system_data 而非 grad——失败只告警不抛，避免数小时爬取整体报失败
   let gradRoles = null;
   try {
     const g = await fetchWorkshopGrad(onProgress, CONCURRENCY); // 同时更新全服配装统计（workshop-grad.json）
