@@ -2405,6 +2405,15 @@ main {
   .chart-grid {
     grid-template-columns: 1fr;
   }
+  .dp-slots {
+    grid-template-columns: repeat(2, 1fr); /* 窄屏：两列 */
+  }
+  .dp-slots-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dp-body {
+    grid-template-columns: 1fr; /* 窄屏：驱动盘输入与权重/输出上下堆叠 */
+  }
   .stamp-wrap {
     display: none;
   }
@@ -2493,4 +2502,194 @@ main {
 .sim-tip {
   color: var(--dim);
   font-size: var(--fs-sm);
+}
+
+/* ============================================================
+   驱动盘模拟（模拟视图 · 二级子面板）：6 盘当前装备（主/副词条下拉）+ 左列副词条池价值权重 + 右列定向/结果表
+   ============================================================ */
+.dp-slots-title {
+  font-family: var(--font-disp);
+  font-size: var(--fs-sm);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--hazard-lt);
+  border-bottom: 1px solid var(--line2);
+  padding-bottom: var(--sp-1);
+  margin: var(--sp-3) 0 0;
+}
+.dp-slots {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.dp-slots-3 {
+  grid-template-columns: repeat(3, 1fr); /* 驱动盘输入：两行三列 */
+}
+.dp-slot {
+  border: 1px solid var(--line);
+  background: var(--card2);
+  padding: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dp-slot-head {
+  font-family: var(--font-disp);
+  color: var(--hazard-lt);
+  border-bottom: 1px solid var(--line2);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  text-align: center;
+}
+.dp-slot .dp-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dp-slot .dp-row label {
+  font-size: 11px;
+  color: var(--dim);
+  flex: none;
+  width: 56px; /* 对齐「命中次数」「定向副词条」等长标签 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-slot select,
+.dp-slot input {
+  flex: 1;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line2);
+  color: var(--txt);
+  font-size: var(--fs-sm);
+  padding: 1px 2px;
+}
+.dp-slot .dp-sub-row {
+  gap: 3px;
+}
+.dp-slot .dp-sub-row select {
+  flex: 1.6; /* 第一列：词条下拉占大头 */
+}
+.dp-slot .dp-sub-row .dp-hit-sub {
+  flex: 0 0 30px; /* 第二列：命中次数 */
+  width: 30px;
+  text-align: center;
+}
+.dp-slot .dp-sub-val {
+  flex: 0 0 42px; /* 第三列：基础值 × 命中 */
+  min-width: 0;
+  text-align: right;
+  font-size: 10px;
+  color: var(--hazard);
+  font-variant-numeric: tabular-nums;
+}
+.dp-slot .dp-slot-main-fixed {
+  flex: 1;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line2);
+  color: var(--hazard-lt);
+  font-size: var(--fs-sm);
+  padding: 1px 2px;
+  text-align: center;
+}
+.dp-slot .dp-dir-block {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 212, 0, 0.05);
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dp-slot .dp-dir-block .dp-dir-head {
+  font-size: 10px;
+  color: var(--hazard);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px dashed var(--line2);
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+}
+.dp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); /* 左：驱动盘输入（3×2）；右：权重（上）+ 输出（下） */
+  gap: var(--sp-4);
+  margin-top: var(--sp-3);
+  align-items: start;
+}
+.dp-body-left {
+  min-width: 0;
+}
+.dp-body-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.dp-body-right > h4 {
+  font-family: var(--font-disp);
+  font-size: var(--fs-sm);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--hazard-lt);
+  border-bottom: 1px solid var(--line2);
+  padding-bottom: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+.dp-entries {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* 5 行 × 2 列（配对：生命/防御/攻击 + 暴击暴伤 + 精通穿透） */
+  gap: var(--sp-2);
+}
+.dp-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--card2);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-sm);
+}
+.dp-entry .dp-ename {
+  flex: 1;
+  min-width: 3em;
+}
+.dp-entry label {
+  font-size: 11px;
+  color: var(--dim);
+}
+.dp-entry input {
+  width: 52px;
+  background: var(--card);
+  border: 1px solid var(--line2);
+  color: var(--txt);
+  padding: 1px 4px;
+  font-size: var(--fs-sm);
+}
+.dp-result {
+  margin-top: var(--sp-4);
+}
+.dp-result-chart {
+  margin-top: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card2);
+  padding: var(--sp-2);
+}
+.dp-result-table {
+  max-width: 480px;
+}
+.dp-result-table tr.dp-total td {
+  border-top: 2px solid var(--hazard);
+  color: var(--hazard-lt);
+  font-weight: 700;
+}
+.dp-detail-title {
+  margin-top: var(--sp-3);
+  border-top: 1px dashed var(--line2);
+  padding-top: var(--sp-2);
 }

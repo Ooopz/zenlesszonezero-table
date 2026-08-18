@@ -16,6 +16,7 @@ export const STAT = {
   PIERCE: '贯穿力',
   PEN_VALUE: '穿透值',
   ENERGY: '能量自动回复',
+  DMG_BONUS: '伤害加成', // 工坊权重 key「加伤」的标准化名（通用伤害加成）
 };
 /** 面板属性展示顺序（卡片/表格列序的权威依据） */
 export const PANEL_ORDER = [
@@ -90,6 +91,86 @@ export const SUBSTAT = {
   DEF_PCT: '防御力%',
 };
 export const SUBSTAT_TYPE_SET = new Set(Object.values(SUBSTAT));
+
+// ---------- 驱动盘模拟概率（模拟视图「驱动盘模拟」子面板，discProb.js 消费；名称与 SUBSTAT/MAIN_STAT_OPTIONS 统一） ----------
+/** 副词条 10 维顺序（对应游戏 10 种副词条；界面显示按 5 行×2 列配对，见 discProb.js 的 DP_ROW_PAIRS）：
+    生命值%/生命值/攻击力%/攻击力/穿透值/防御力%/防御力/暴击伤害/暴击率/异常精通 */
+export const DISC_SUBSTATS = [
+  SUBSTAT.HP_PCT,
+  SUBSTAT.HP,
+  SUBSTAT.ATK_PCT,
+  SUBSTAT.ATK,
+  SUBSTAT.PEN_VALUE,
+  SUBSTAT.DEF_PCT,
+  SUBSTAT.DEF,
+  SUBSTAT.CD,
+  SUBSTAT.CR,
+  SUBSTAT.ANOMALY_PROF,
+];
+/** 每种副词条的抽取基础权重（词条池加权抽样用） */
+export const DISC_SUBSTAT_SPECIAL_WEIGHTS = [10, 10, 9, 9, 8, 10, 10, 8, 8, 8];
+/** 456 号位主词条出现概率（key 与 MAIN_STAT_OPTIONS 一致；数值源自游戏实测） */
+export const DISC_MAIN_PROB_WEIGHTS = {
+  4: { [SUBSTAT.ATK_PCT]: 18, [SUBSTAT.HP_PCT]: 21, [SUBSTAT.DEF_PCT]: 21, [STAT.CR]: 12, [STAT.CD]: 12, [STAT.ANOMALY_PROF]: 15 },
+  5: {
+    [SUBSTAT.ATK_PCT]: 16.5,
+    [SUBSTAT.HP_PCT]: 19.2,
+    [SUBSTAT.DEF_PCT]: 19.2,
+    [STAT.PEN_RATE]: 9.1,
+    物理伤害加成: 6,
+    火属性伤害加成: 6,
+    冰属性伤害加成: 6,
+    电属性伤害加成: 6,
+    以太伤害加成: 6,
+    风属性伤害加成: 6,
+  },
+  6: {
+    [SUBSTAT.ATK_PCT]: 18,
+    [SUBSTAT.HP_PCT]: 21,
+    [SUBSTAT.DEF_PCT]: 21,
+    [STAT.ANOMALY_CTRL]: 15,
+    [STAT.IMPACT]: 15,
+    [STAT.ENERGY]: 15,
+  },
+};
+/** 主词条 → 禁用的同类副词条（副词条不得与主词条重复；key 即主词条名，值即 DISC_SUBSTATS 中对应的副词条） */
+export const DISC_MAIN_BLOCK = {
+  [SUBSTAT.ATK_PCT]: SUBSTAT.ATK_PCT,
+  [SUBSTAT.HP_PCT]: SUBSTAT.HP_PCT,
+  [SUBSTAT.DEF_PCT]: SUBSTAT.DEF_PCT,
+  [STAT.CR]: SUBSTAT.CR,
+  [STAT.CD]: SUBSTAT.CD,
+  [STAT.ANOMALY_PROF]: SUBSTAT.ANOMALY_PROF,
+};
+/** 工坊流派权重 key → CONSTANT 属性名（system_data weight_json 抽取/落地时映射，消费端直接按标准名匹配）。
+ *  ⚠️ 12 个 key 全映射：暴击/暴伤/攻击/穿透值/能量/冲击/穿透率/加伤 + 生命/防御/精通/掌控（旧抓取曾丢后 4 个）。 */
+export const WS_KEY_TO_STAT = {
+  攻击: STAT.ATK,
+  暴击: STAT.CR,
+  暴伤: STAT.CD,
+  生命: STAT.HP,
+  防御: STAT.DEF,
+  精通: STAT.ANOMALY_PROF,
+  掌控: STAT.ANOMALY_CTRL,
+  穿透值: STAT.PEN_VALUE,
+  穿透率: STAT.PEN_RATE,
+  能量: STAT.ENERGY,
+  冲击: STAT.IMPACT,
+  加伤: STAT.DMG_BONUS,
+};
+/** 副词条维度 → 落地权重 key（% 与固定共享父属性权重：攻击力% 与 攻击力 都取「攻击力」等） */
+export const DISC_SUBSTAT_WS_KEY = {
+  [SUBSTAT.ATK_PCT]: STAT.ATK,
+  [SUBSTAT.ATK]: STAT.ATK,
+  [SUBSTAT.HP_PCT]: STAT.HP,
+  [SUBSTAT.HP]: STAT.HP,
+  [SUBSTAT.DEF_PCT]: STAT.DEF,
+  [SUBSTAT.DEF]: STAT.DEF,
+  [SUBSTAT.CR]: STAT.CR,
+  [SUBSTAT.CD]: STAT.CD,
+  [SUBSTAT.PEN_VALUE]: STAT.PEN_VALUE,
+  [SUBSTAT.ANOMALY_PROF]: STAT.ANOMALY_PROF,
+};
 /** 有效副词条选项（目标弹窗「有效」勾选 + 计算命中用） */
 export const VALID_STAT_OPTIONS = [
   { type: SUBSTAT.ATK, label: '攻击力（固定）' },

@@ -6,12 +6,14 @@ import { myTab, setMyTab } from './myChars.js';
 import { wikiTab, setWikiTab } from './wiki.js';
 import { statsTab, setStatsTab, selectedRole, setSelectedRole } from './statsView.js';
 import { selectedDisc, setSelectedDisc } from './discstats.js';
+import { simTab, setSimTab } from './simulate.js';
 
 /** 各一级视图的合法子 tab 键（URL 恢复时白名单校验） */
 const URL_TABS = {
   [VIEWS.MY_CHARS]: ['card', 'table'],
   [VIEWS.WIKI]: ['characters', 'wengines', 'discs', 'bangboos'],
   [VIEWS.STATS]: ['detail', 'discs', 'overview'],
+  [VIEWS.SIMULATE]: ['frontier', 'prob'],
 };
 
 /** 当前视图的子 tab 值（URL 写入用） */
@@ -19,6 +21,7 @@ function currentTab(view) {
   if (view === VIEWS.MY_CHARS) return myTab;
   if (view === VIEWS.WIKI) return wikiTab;
   if (view === VIEWS.STATS) return statsTab;
+  if (view === VIEWS.SIMULATE) return simTab;
   return null;
 }
 
@@ -69,6 +72,7 @@ export function applyUrlState() {
     if (view === VIEWS.MY_CHARS) setMyTab(tab);
     else if (view === VIEWS.WIKI) setWikiTab(tab);
     else if (view === VIEWS.STATS) setStatsTab(tab);
+    else if (view === VIEWS.SIMULATE) setSimTab(tab);
   }
   if (view === VIEWS.STATS) {
     if (p.get('role')) setSelectedRole(p.get('role'));

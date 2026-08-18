@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **零运行时依赖**（`echarts-gl` 仅用于产出 vendor 文件，运行时不读 node_modules），Node ≥ 18（自带 fetch），全 ESM。
 
-四个一级视图：**我的角色**（账号真实角色卡片/汇总）、**数据库**（wiki 属性库）、**统计**（跨角色统计，三子面板）、**模拟**（驱动盘成长极限帕累托前沿）。
+四个一级视图：**我的角色**（账号真实角色卡片/汇总）、**数据库**（wiki 属性库）、**统计**（跨角色统计，三子面板）、**模拟**（两个二级子面板：成长极限帕累托前沿 + 驱动盘练度提升概率）。
 
 ## 常用命令
 
@@ -21,6 +21,7 @@ npm run sync:workshop        # 工坊全量爬取（数小时）→ workshop.jso
 node src/sync/workshop.js 57 300 6 http://127.0.0.1:7890   # 第 5 参 = 代理 URL（IP 被封时换 IP）
 npm run rebuild:stats        # 只重算 workshop-stats.json（不重爬，~2-4 分钟）；改聚合逻辑后用它验证
 npm run rebuild:stats -- http://127.0.0.1:7890             # 带代理
+node scripts/rebuild-weights.mjs  # 单独重跑 workshop-weights 抽取（不爬配装）：拉 system_data → key 映射标准名 → 落盘 weights + 同步 stats.weightJson
 
 npm test                     # 全部单测（node:test）；缺 data/ 时打印 SKIP 横幅并跳过该文件
 REQUIRE_DATA=1 npm test      # 缺数据直接判失败（CI 用，防「静默全绿」）
@@ -56,13 +57,14 @@ src/sync/*  →  data/*.json  →  server.js /api/data  →  前端 fetch → se
 
 | 模块 | 职责 |
 |---|---|
-| `constants.js` | 游戏领域枚举单一权威（属性名/顺序/副词条/技能类型映射）。依赖树叶子，零 import |
+| `constants.js` | 游戏领域枚举单一权威（属性名/顺序/副词条/技能类型映射/驱动盘练度概率的 DISC_*：10 维副词条顺序与抽取权重、456 主词条概率表、主词条禁同类映射、工坊权重 key→副词条）。依赖树叶子，零 import |
 | `util.js` | 环境无关纯工具 + **属性名别名表 `STAT_ALIASES`**（跨源归一权威） |
 | `names.js` | 名称变体 → 标准名解析器（`buildNameIndex`/`resolveName`/`resolveEntry`） |
 | `schema.js` | data/*.json 契约（`KEYS` + `validate*`），作用在 sync 写盘边界 |
 | `calc.js` | 计算引擎：局外面板合成、副词条成长、达成率、目标缺口 |
 | `models.js` | 领域模型 `Character`/`Wengine`/`Disc`，构造时归一 + 派生 + 缓存 |
 | `simCalc.js` | 驱动盘成长极限模拟，帕累托有效前沿（2D/3D） |
+| `discProb.js` | 驱动盘练度提升概率计算（移植 ZZZ-DDC）：首 4 副词条组合枚举 × 强化成长通过率 × 主词条概率加权。词条体系在 constants.js（DISC_*）；角色价值权重来自 workshop-weights（经 workshop-grad 的 role_id→wiki 名对齐；落地 key 已是 CONSTANT 标准名，经 DISC_SUBSTAT_WS_KEY 直接匹配，查不到回退默认模板） |
 | `discAdvisor.js` | 驱动盘推荐统计 + 官方/实况双口径决策卡合并 |
 | `panelBench.js` | plans 的 low/mid/high 三档面板基准（MAD 去离群） |
 | `plansStats.js` | plans 每角色 Top 音擎/套装组合（结构对齐 workshop-grad） |
@@ -167,7 +169,7 @@ main.js → data.js → api.js（最底层，零依赖）
 | `workshop.json` | 173MB | **分块 gzip，不是普通 JSON**：第 0 行 `{meta, perChunk:20000, offsets}` + N 个独立 gzip 块。829,891 条。**必须用 `iterWorkshopFile()`/`readWorkshopHeader()`**，`readFileSync` 会超 V8 单字符串上限 |
 | `workshop-stats.json` | 1.66MB | 17 个聚合 key。**浏览器只加载这个，上限 ≤2MB，余量已不多**——新增聚合前先量体积 |
 | `workshop-grad.json` | 105KB | 全服累计占比。**是 `role_id → 角色名` 的唯一映射来源** |
-| `workshop-weights.json` | 14.7KB | 角色默认流派权重 |
+| `workshop-weights.json` | 14.7KB | 角色默认流派权重。**key 已是 CONSTANT 标准名**（抽取时经 `WS_KEY_TO_STAT` 映射：精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成等，全角色并集 12 key）；`scripts/rebuild-weights.mjs` 可单独重跑 |
 | `user-config.json` | 780B | 唯一由前端写入的文件（`POST /api/config` 原子写） |
 | `.cookie.json` | 575B | **明文米游社登录态** |
 
@@ -247,10 +249,10 @@ canonical（`constants.js` 的 `SKILL_TYPES`）= 0普攻/1闪避/2支援/3特殊
 
 ### 测试
 
-- `node --test` 内置，零测试依赖。全部顶层 `test()`，无 `describe`。当前 **190 项全绿，0 skip**
+- `node --test` 内置，零测试依赖。全部顶层 `test()`，无 `describe`。当前 **198 项全绿，0 skip**
 - **测试依赖真实数据文件**（`data/` 不入库）：`test/helpers.js` 的 `loadDataFile()` 缺文件时打印 **SKIP 横幅**后 `exit(0)`。⚠️ `node --test` 把「加载后 exit(0) 的文件」记成 1 个**通过**的测试，与真正全绿肉眼无法区分——CI 用 `REQUIRE_DATA=1 npm test`
-- **`package.json` 的 test 脚本是手动逐个列出 21 个文件的**（Node 的 `--test` 不支持 glob，且会把 `test/` 下所有 JS 当测试文件）。**新增测试文件必须手动追加进这个字符串**，否则该文件永远不会被运行且完全无提示。`test/helpers.js` 不在列表里（它不是测试文件）
-- 三种 mock 模式：纯内联 fixture / 真实数据依赖 / 混合（内联跑逻辑 + 末尾一个 `test('真实数据冒烟：…')`）。`test/plans.test.js`（`extractPlan`）与 `test/workshop-panel.test.js`（`computeEnkaPanel`/`propName`，fixture 取自 `workshop-static.js`）属**纯内联**，不依赖 `data/`，永远不会 SKIP
+- **`package.json` 的 test 脚本是手动逐个列出 22 个文件的**（Node 的 `--test` 不支持 glob，且会把 `test/` 下所有 JS 当测试文件）。**新增测试文件必须手动追加进这个字符串**，否则该文件永远不会被运行且完全无提示。`test/helpers.js` 不在列表里（它不是测试文件）
+- 三种 mock 模式：纯内联 fixture / 真实数据依赖 / 混合（内联跑逻辑 + 末尾一个 `test('真实数据冒烟：…')`）。`test/plans.test.js`（`extractPlan`）、`test/workshop-panel.test.js`（`computeEnkaPanel`/`propName`，fixture 取自 `workshop-static.js`）与 `test/discProb.test.js`（驱动盘练度概率，含概率单调性/定向过滤/别名映射断言）属**纯内联**，不依赖 `data/`，永远不会 SKIP
 - 断言几乎全带中文说明第三参；浮点用 `1e-9` 容差；键序也要一致的场景用 `JSON.stringify` 比对
 - **回归用例显式标注原 bug**，如 `'streamJsonArrayElements：块边界落在条目间隙不丢条目（回归：曾提前 break 丢 85% 条目）'`
 

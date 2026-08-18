@@ -20,6 +20,7 @@ import { computeEnkaPanel, propName } from './workshop-panel.js';
 import { items } from './workshop-static.js'; // 装备表（buildCtx 的 ctx.items 供 2025 源配装映射）
 import { loadNameIndexes, resolveWengineName } from './name-index.js';
 import { sleep } from './mihoyo-api.js';
+import { WS_KEY_TO_STAT } from '../lib/constants.js';
 
 const WEIGHTS_FILE = path.join(DATA_DIR, 'workshop-weights.json'); // 角色默认流派权重（工坊有效词条口径）
 // 名称索引（统一 resolver，library.json 为权威源）：工坊 nick_name 差异在写时解析回 wiki 标准名，保证与 library/plans 一致；
@@ -358,10 +359,20 @@ export async function fetchWorkshopData(onProgress) {
   mergeWorkshopFile({ meta: outMeta, oldFile: OUT_FILE, partFile: PART_FILE, partCount, outFile: OUT_FILE });
   fs.rmSync(PART_FILE, { force: true }); // 合并完成，清理暂存
 
-  // 角色默认流派权重（system_data 的 weight_json）独立落盘 + 并入 stats（供有效词条/评分口径复现）
+  // 角色默认流派权重（system_data 的 weight_json）独立落盘 + 并入 stats（供有效词条/评分口径复现）。
+  // ⚠️ 落盘前把工坊 key 映射为 CONSTANT 标准名（暴击→暴击率、精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成…），
+  // 消费端（discProb 等）直接按标准名匹配，不做 workshop 适配层。
   const weightJson = {};
   for (const r of roles) {
-    if (r && r.weight_json) weightJson[String(r.item_id)] = r.weight_json;
+    const wj = r && r.weight_json;
+    if (!wj) continue;
+    weightJson[String(r.item_id)] = {
+      ...wj,
+      factions: (wj.factions || []).map((f) => ({
+        ...f,
+        weights: (f.weights || []).map((it) => ({ key: WS_KEY_TO_STAT[it.key] || it.key, weight: it.weight })),
+      })),
+    };
   }
   writeJsonAtomic(WEIGHTS_FILE, {
     meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length },

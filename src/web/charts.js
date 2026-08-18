@@ -1257,3 +1257,51 @@ export function slotEfficiencyOption(rows) {
     ],
   };
 }
+
+// ================= 驱动盘模拟（练度提升概率）图表 =================
+
+/** 各位置「超过 / 保词条超过」概率双系列柱状图；items: [{pos, prob, probKeep}]（均为小数概率） */
+export function dpProbBarOption(items) {
+  return {
+    animation: false,
+    grid: { left: 52, right: 18, top: 40, bottom: 26, containLabel: true },
+    legend: { ...CHART_LEGEND, data: ['超过', '保词条超过'] },
+    tooltip: {
+      ...DARK_TOOLTIP,
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (ps) => {
+        const arr = Array.isArray(ps) ? ps : [ps];
+        const p = arr[0];
+        if (!p) return '';
+        return `<b>${p.name}</b><br>${arr
+          .filter((x) => x.value != null)
+          .map((x) => `${x.marker}${x.seriesName}：<b>${(x.value * 100).toFixed(4)}%</b>`)
+          .join('<br>')}`;
+      },
+    },
+    xAxis: { type: 'category', data: items.map((i) => `${i.pos}号位`), axisLine: AXIS_LINE, axisLabel: AXIS_LABEL },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisLabel: { ...AXIS_LABEL, formatter: (v) => (v * 100).toFixed(1) + '%' },
+      splitLine: SPLIT_LINE,
+    },
+    series: [
+      {
+        name: '超过',
+        type: 'bar',
+        barWidth: 13,
+        data: items.map((i) => ({ value: +i.prob.toFixed(8), d: i })),
+        itemStyle: { color: CHART_COLORS.acc },
+      },
+      {
+        name: '保词条超过',
+        type: 'bar',
+        barWidth: 13,
+        data: items.map((i) => ({ value: +i.probKeep.toFixed(8), d: i })),
+        itemStyle: { color: CHART_COLORS.blue },
+      },
+    ],
+  };
+}
