@@ -646,7 +646,7 @@ export async function fetchWorkshopData(onProgress) {
     weights: weightJson,
   });
 
-  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails / roleDiscStats 输出角色名）
+  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails 输出角色名）
   const roleNameMap = new Map(
     roles.map((r) => [
       String(r.item_id),

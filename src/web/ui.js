@@ -17,11 +17,66 @@ import {
   plansByName,
   library,
 } from './data.js';
-import { render, setMyTab } from './render.js';
-import { setWikiTab } from './wiki.js';
-import { setRecommendTab, setSelectedRole } from './recommend.js';
-import { setSelectedDisc } from './discstats.js';
+import { render, setMyTab, myTab } from './render.js';
+import { setWikiTab, wikiTab } from './wiki.js';
+import { setRecommendTab, setSelectedRole, recommendTab, selectedRole } from './recommend.js';
+import { setSelectedDisc, selectedDisc } from './discstats.js';
 import { setSimRerender, simSelect, simAxis, simAddChart, simRemoveChart } from './simulate.js';
+
+// ---------- 视图状态 URL 持久化（?view=&tab=&role=&disc=，replaceState 不产生历史记录） ----------
+/** 各一级视图的合法子 tab 键（URL 恢复时白名单校验） */
+const URL_TABS = {
+  [VIEWS.MY_CHARS]: ['card', 'table'],
+  [VIEWS.WIKI]: ['characters', 'wengines', 'discs', 'bangboos'],
+  [VIEWS.RECOMMEND]: ['detail', 'discs', 'overview'],
+};
+/** 当前视图的子 tab 值（URL 写入用） */
+function currentTab(view) {
+  if (view === VIEWS.MY_CHARS) return myTab;
+  if (view === VIEWS.WIKI) return wikiTab;
+  if (view === VIEWS.RECOMMEND) return recommendTab;
+  return null;
+}
+/** legacy 视图值 → 当前视图（与 render.js resolveView 同口径：card/table → mychars、discstats → recommend） */
+function resolveViewFrom(raw) {
+  if (raw === VIEWS.CARD || raw === VIEWS.TABLE) return VIEWS.MY_CHARS;
+  if (raw === 'discstats') return VIEWS.RECOMMEND;
+  return raw;
+}
+/** 把当前 视图/子tab/角色/盘 状态写入 URL。每次状态切换后调用（视图切换/子tab/角色下拉/盘下拉）。
+ *  view 缺省时沿用 URL 已有的 view（子 tab 切换场景），否则回退 userConfig.view——避免把
+ *  loadUserConfig 之前的默认 'card' 当成当前视图写进 URL。 */
+function syncUrl(view) {
+  if (!view) {
+    const raw = new URLSearchParams(location.search).get('view') || userConfig.view || VIEWS.MY_CHARS;
+    view = resolveViewFrom(raw);
+  }
+  const p = new URLSearchParams();
+  if (view !== VIEWS.MY_CHARS) p.set('view', view);
+  const tab = currentTab(view);
+  if (tab) p.set('tab', tab);
+  if (view === VIEWS.RECOMMEND) {
+    if (selectedRole) p.set('role', selectedRole);
+    if (selectedDisc) p.set('disc', selectedDisc);
+  }
+  const qs = p.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+}
+/** 首次渲染前从 URL 恢复 子tab/角色/盘 状态（一级 view 由 render.js 的 resolveView 解析）。 */
+function applyUrlState() {
+  const p = new URLSearchParams(location.search);
+  const view = resolveViewFrom(p.get('view') || userConfig.view || VIEWS.MY_CHARS);
+  const tab = p.get('tab');
+  if (tab && (URL_TABS[view] || []).includes(tab)) {
+    if (view === VIEWS.MY_CHARS) setMyTab(tab);
+    else if (view === VIEWS.WIKI) setWikiTab(tab);
+    else if (view === VIEWS.RECOMMEND) setRecommendTab(tab);
+  }
+  if (view === VIEWS.RECOMMEND) {
+    if (p.get('role')) setSelectedRole(p.get('role'));
+    if (p.get('disc')) setSelectedDisc(p.get('disc'));
+  }
+}
 
 // ---------- 提示条 ----------
 // notify 已上移到 util.js（data.js 也需要它，见那里的说明）
@@ -407,6 +462,8 @@ window.openTargetSettings = openTargetSettings;
 
 /** 初始化交互：绑定事件并启动加载配置（由 main.js 在数据就绪后调用） */
 export function initUi() {
+  // 从 URL 恢复子 tab/角色/盘状态（在首次 render 之前，见 loadUserConfig().then(render) 在函数末尾）
+  applyUrlState();
   // 图片加载失败统一占位：隐藏破图，露出容器背景色块（error 事件不冒泡，需捕获阶段）
   document.addEventListener(
     'error',
@@ -473,7 +530,7 @@ export function initUi() {
     b.addEventListener('click', () => {
       userConfig.view = b.dataset.view;
       saveUserConfig();
-      history.replaceState(null, '', b.dataset.view === VIEWS.MY_CHARS ? location.pathname : `?view=${b.dataset.view}`);
+      syncUrl(b.dataset.view);
       render();
     })
   );
@@ -484,22 +541,27 @@ export function initUi() {
   registerZZZ({
     wikiTab: (key) => {
       setWikiTab(key);
+      syncUrl();
       render();
     },
     recommendTab: (key) => {
       setRecommendTab(key);
+      syncUrl();
       render();
     },
     selectRole: (name) => {
       setSelectedRole(name); // 角色面板的角色下拉
+      syncUrl();
       render();
     },
     selectDisc: (name) => {
       setSelectedDisc(name); // 驱动盘图表卡片区的盘下拉
+      syncUrl();
       render();
     },
     myTab: (key) => {
       setMyTab(key);
+      syncUrl();
       render();
     },
     simSelect,

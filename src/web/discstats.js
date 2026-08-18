@@ -19,7 +19,7 @@ import {
   mainSubCrossOption,
 } from './charts.js';
 
-let selectedDisc = '';
+export let selectedDisc = '';
 export function setSelectedDisc(name) {
   selectedDisc = name;
 }

@@ -586,7 +586,7 @@ grid.addEventListener('click', (e) => {
 });
 
 // ---------- 我的角色视图（卡片 / 汇总 二级子页面） ----------
-let myTab = 'card';
+export let myTab = 'card';
 export function setMyTab(key) {
   myTab = key;
 }

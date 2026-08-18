@@ -3,9 +3,9 @@ import { setData, dataCtx } from './data.js';
 import { setCalcContext } from '../lib/calc.js';
 import { initUi } from './ui.js';
 
-// 记录页面头部高度，供表格冻结表头（吸顶）定位与 main/.wiki-wrap 的 max-height 计算。
-// header 是 flex-wrap: wrap，窄屏换行后会变高——只在加载时算一次会让 max-height 常年失准，
-// 所以用 ResizeObserver 实时跟踪（charts.js 的 resize 监听只负责 ECharts 重排，两者不相干）。
+// 记录页面头部高度，供主区域表格吸顶表头（sticky）定位：body 级滚动下表头需吸在 header 之下，
+// 偏移量 = header 高度（--head-h）。header 是 flex-wrap: wrap，窄屏换行后会变高——只在加载时算一次
+// 会让 sticky 常年失准，所以用 ResizeObserver 实时跟踪（charts.js 的 resize 监听只负责 ECharts 重排，两者不相干）。
 const header = document.querySelector('header');
 const syncHeadHeight = () => document.documentElement.style.setProperty('--head-h', header.offsetHeight + 'px');
 syncHeadHeight();

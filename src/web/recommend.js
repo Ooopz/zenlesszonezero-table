@@ -25,7 +25,6 @@ import {
   mountCharts,
   registerChart,
   chartBox,
-  heatmapOption,
   consensusGridOption,
   violinBoxOption,
   densityScatterOption,
@@ -54,14 +53,12 @@ const TABS = [
   { key: 'detail', label: '角色面板' },
   { key: 'discs', label: '驱动盘' },
   { key: 'overview', label: '全服总览' },
-  { key: 'pending', label: '待定' },
 ];
 /** 子面板 key → 渲染函数（renderRecommend 键控分发，驱动盘复用 discstats） */
 const PANEL_RENDERERS = {
   detail: renderRoleDetail,
   discs: renderDiscStats,
   overview: renderOverview,
-  pending: renderPending,
 };
 
 /** 统一空态：msg 为说明、hint 为操作提示/按钮（可选） */
@@ -195,9 +192,9 @@ function wsPanelMap() {
   }
   return _wsPanelCache;
 }
-/** 通用缓存：role_id 键的 stats 对象（relicStats/rankLayers/rankDist/skillStats 等）→ 角色名键 Map。
- *  用 WeakMap 按「源对象」缓存，而非单槽 `_roleKeyedSource !== source`：本函数有 8 个不同源的调用方
- *  （roleDiscStats/roleCooccurrence/relicStats/rankDist/skillStats），
+/** 通用缓存：role_id 键的 stats 对象（relicStats/rankDist/skillStats 等）→ 角色名键 Map。
+ *  用 WeakMap 按「源对象」缓存，而非单槽 `_roleKeyedSource !== source`：本函数有多个不同源的调用方
+ *  （roleCooccurrence/relicStats/rankDist/skillStats 等），
  *  单槽缓存被轮流打穿，每次调用都全量重建（命中率 0）。WeakMap 让每个源各自命中，
  *  且源对象随 setData 换新后旧表自动可回收。 */
 const _roleKeyedCache = new WeakMap();
@@ -469,93 +466,7 @@ function scatterCardsHtml(prefix, grid, subtitle) {
     })
     .join('');
 }
-// ---------- 「待定」面板：提升清单 / 面板达标 / 驱动盘毕业度 / 两源一致性审计（2026-10 从全服总览移入） ----------
-/** 提升清单 + 面板达标共用的「我的角色 × 核心属性」百分位数据（行按平均落后度降序） */
-function upgradeAndHeat(wsPanel, tiers, myCalc, roleNames) {
-  /** 平均落后度（50 − 百分位，仅有效格）：行排序依据 */
-  const avgLag = (row) => {
-    const vals = row.cells.filter((c) => c && c.pct != null).map((c) => 50 - c.pct);
-    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
-  };
-  // 达标热力：账号角色 × 核心属性，我的玩家百分位 + 是否达推荐中档；
-  // 行按「平均落后度」（50 − 百分位）降序（缺口地图：越落后越靠上），格子带缺口值悬浮
-  const heatAttrs = ['攻击力', '防御力', '生命值', '暴击率', '暴击伤害', '异常精通', '冲击力', '能量自动回复'].filter(
-    (a) => roleNames.some((n) => wsPanel.get(n)?.[a])
-  );
-  const heatRows = [...myCalc]
-    .map(([name, my]) => {
-      const st = wsPanel.get(name) || {};
-      const rec = tiers[name] || {};
-      const cells = heatAttrs.map((a) => {
-        const dist = st[a];
-        const v = my.final[a];
-        if (!dist || v == null) return null;
-        const pct = approxPercentile(v, dist);
-        const reached = rec[a]?.mid?.median != null && v >= rec[a].mid.median;
-        const gap = rec[a]?.mid?.median != null ? rec[a].mid.median - v : null;
-        return { pct, reached, gap: gap != null && gap > 0 ? gap : null };
-      });
-      return { name, cells };
-    })
-    .filter((r) => r.cells.some((c) => c))
-    .sort((a, b) => avgLag(b) - avgLag(a));
-  // 提升清单：缺口 = 推荐中档 − 我的值，按 缺口 × 落后度（50 − 百分位）排序取 Top
-  const upgradeRows = [];
-  for (const [name, my] of myCalc) {
-    const st = wsPanel.get(name) || {};
-    const rec = tiers[name] || {};
-    for (const a of heatAttrs) {
-      const dist = st[a];
-      const v = my.final[a];
-      const mid = rec[a]?.mid?.median;
-      if (v == null || mid == null) continue;
-      const pct = approxPercentile(v, dist);
-      if (pct == null) continue;
-      const gap = mid - v;
-      if (gap <= 0) continue; // 已达标不列入
-      upgradeRows.push({ name, attr: a, current: v, target: mid, pct, gap, score: gap * (50 - pct) });
-    }
-  }
-  upgradeRows.sort((x, y) => y.score - x.score);
-  const upgradeTip = `<b>提升清单</b><br><span style="color:var(--dim)">我的角色 × 落后属性：缺口 = 推荐中档 − 我的值，按 缺口 × 落后度（50 − 我的玩家百分位）排序——先做缺口大且百分位低的事；悬浮看各维度明细</span>`;
-  const upgradeCard =
-    upgradeRows.length > 0
-      ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(upgradeTip)}">提升清单</h3>${table(
-          ['角色', '属性', '我的', '推荐中档', '玩家百分位', '缺口'],
-          upgradeRows.slice(0, 12).map(
-            (r) => `<tr>
-            <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.attr)}</td>
-            <td>${formatValue(r.attr, r.current)}</td><td>${formatValue(r.attr, r.target)}</td>
-            <td style="color:${r.pct >= 50 ? 'var(--green)' : 'var(--orange)'}">P${Math.round(r.pct)}</td>
-            <td style="color:var(--red)">${formatValue(r.attr, r.gap)}</td>
-          </tr>`
-          ),
-          new Set()
-        )}</div>`
-      : '';
-  const heatTip = `<b>面板达标</b><br><span style="color:var(--dim)">我的角色 × 核心属性：色 = 我的玩家百分位（相对全服样本），悬浮格子看是否达到推荐中档与缺口；行按平均落后度排序（越落后越靠上）</span>`;
-  return { heatAttrs, heatRows, upgradeCard, heatTip };
-}
-
-/** 「待定」面板渲染：提升清单 / 面板达标 / 驱动盘毕业度 / 两源一致性审计（四卡从全服总览移入，2026-10） */
-function renderPending() {
-  if (!Object.keys(plans || {}).length)
-    return emptyState('暂无推荐方案数据。', '请在右上角 <b>同步数据 → 更新推荐方案</b> 后刷新查看。');
-  const wsPanel = wsPanelMap();
-  const tiers = recTierStats();
-  const myCalc = new Map(myCharacters.map((c) => [c.name, c.calculate()]));
-  const roleNames = Object.values(plans).map((v) => v.name);
-  const { heatAttrs, heatRows, upgradeCard, heatTip } = upgradeAndHeat(wsPanel, tiers, myCalc, roleNames);
-  registerChart('pending-heat', heatmapOption(heatRows, heatAttrs));
-  const { discMatrix, discTip } = discMatrixCard();
-  const { auditTable, auditSummary, auditTip } = auditCard();
-  return `<div class="chart-grid">
-    ${upgradeCard}
-    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(heatTip)}">面板达标</h3>${chartBox('pending-heat', 720)}</div>
-    ${discMatrix ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(discTip)}">驱动盘毕业度</h3>${discMatrix}</div>` : ''}
-    ${auditTable ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(auditTip)}">两源一致性审计</h3>${auditSummary}${auditTable}</div>` : ''}
-  </div>`;
-}
+// ---------- 全服总览（全局总览层：共识度 / 评分×盘毕业度 / 练度总览） ----------
 
 function renderOverview() {
   if (!Object.keys(plans || {}).length)
@@ -593,8 +504,6 @@ function renderOverview() {
   if (consensusGrid.length) registerChart('overview-consensus', consensusGridOption(consensusGrid));
   const consensusTip = `<b>玩家分化 vs 攻略分歧</b><br><span style="color:var(--dim)">每属性一个子图，每点一个角色：横轴=玩家分化（该属性全服玩家数值的标准差，越大玩家之间差距越大）；纵轴=攻略分歧（米游社推荐方案 high 档毕业值的变异系数 CV=标准差/均值，越大攻略之间分歧越大）。<br>左下=玩家与攻略均共识 · 左上=玩家共识但攻略分歧 · 右下=玩家分化大但攻略一致 · 右上=两方面均无共识（该属性参考价值低）</span>`;
 
-  // 驱动盘毕业度矩阵已移至「待定」面板（discMatrixCard()，见模块底部 2026-10）
-
   // 4. D9 评分 × 盘毕业度：每角色「工坊评分 relic_point」与「加权词条效率分」的皮尔逊相关
   //    r 高 = 工坊评分基本就是词条效率的另一种写法，可放心当毕业度代理；r 低 = 评分掺了别的东西
   const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency); // 角色名 → {weights,...}
@@ -607,8 +516,6 @@ function renderOverview() {
   srRows.sort((a, b) => b.r - a.r); // r 降序传入：ECharts 类目轴首项画在底部，故最脱节（r 最低）的落在图顶最显眼处
   if (srRows.length) registerChart('overview-score-relic', scoreRelicOption(srRows));
   const srTip = `<b>评分 × 盘毕业度（D9）</b><br><span style="color:var(--dim)">每角色：工坊装配评分 <b>relic_point</b> 与本项目的<b>加权词条效率分</b>（Σ 强化次数 × 该角色流派权重）在同一玩家样本上的皮尔逊相关 r。<br>r≈1 说明工坊评分与词条效率几乎等价——看评分即可代表毕业度；r 偏低说明评分掺入了词条效率之外的成分，此时对该角色<b>不宜直接拿评分当毕业度</b>，应看有效强化次数。配对样本 &lt;30 的角色不参与（记 null）。<br>绿 ≥0.90 · 金 ≥0.80 · 橙 &lt;0.80</span>`;
-
-  // 两源一致性审计已移至「待定」面板（auditCard()，见模块底部 2026-10）
 
   // 5. 角色拥有率：样本池（全部上榜去重 uid）中拥有该角色的占比，降序排列
   const ownMap = roleKeyedMap(workshopStats.roleOwnership);
@@ -635,133 +542,9 @@ function renderOverview() {
   </div>`;
 }
 
-// ---------- 「待定」面板的卡片构建（2026-10 从全服总览移入，模块顶层） ----------
-
-/** 驱动盘毕业度矩阵 + 替换建议：有效强化次数 vs 该盘 effDist + 主词条是否该角色该槽主流（roleDiscStats）。
- *  ⚠️ 这里必须遍历 myCharacters 而非 myCalc：calculateCharacter 的返回里**没有** discs 字段
- *    （只有 base/bonus/final/actual/theoretical/sources），旧代码读 c[1].discs 恒为 undefined，
- *    整张矩阵一行都渲染不出来。Disc 实例只在 Character 上，且自带 growth（强化次数）。 */
-function discMatrixCard() {
-  const discDetailsMap = new Map((workshopStats.discDetails || []).map((d) => [d.name, d]));
-  const roleDiscMap = roleKeyedMap(workshopStats.roleDiscStats); // 角色名 → {main456}
-  const rollEffMap = roleKeyedMap(workshopStats.rollEfficiency); // 角色名 → {weights,...}
-  const myDiscRows = [];
-  for (const ch of myCharacters) {
-    // 该角色的有效副词条集合（工坊默认流派权重），与聚合侧 effDist 完全同一张表；缺权重时退化为全部合法副词条
-    const w = rollEffMap.get(ch.name)?.weights;
-    const effSet = new Set(w && Object.keys(w).length ? Object.keys(w) : [...SUBSTAT_TYPE_SET]);
-    for (const disc of ch.discs || []) {
-      const suit = disc.set || disc.suit;
-      const detail = suit ? discDetailsMap.get(suit) : null;
-      // 有效强化次数：每条落在有效集合上的副词条计 1 + 成长次数（getHitCount），与工坊 effDist 同口径
-      const eff = disc.getHitCount(effSet) ?? 0;
-      let pct = null;
-      if (detail?.effDist) {
-        // 「优于 N% 玩家」= 池中**差于**我的盘的占比。旧代码算的是 key >= eff 的占比，
-        // 方向正好反了（盘越烂显示的百分比越高），一并修正。
-        const total = Object.values(detail.effDist).reduce((s2, v) => s2 + v, 0);
-        const worse = Object.entries(detail.effDist)
-          .filter(([k]) => Number(k) < eff)
-          .reduce((s2, [, v]) => s2 + v, 0);
-        pct = total ? Math.round((worse / total) * 100) : null;
-      }
-      // 主词条正确率：该角色该槽最常见主词条（roleDiscStats）vs 我的盘
-      const slot = disc.slot;
-      const roleDisc = roleDiscMap.get(ch.name);
-      const mainStat = (disc.mainStats || [])[0]?.name || null;
-      const mainstream = slot != null && roleDisc?.main456?.[slot]?.length ? roleDisc.main456[slot][0].name : null;
-      const mainOk = mainStat != null && mainstream != null && mainStat === mainstream;
-      // 阈值按次数口径重定（旧口径是「词条个数 <2/<3」）：满级盘总强化 8-9 次，
-      // 有效 ≤3 次 = 四条副词条基本没吃到该角色关心的属性，≤5 次 = 中等偏下
-      const advice =
-        eff <= 3 && !mainOk
-          ? '优先替换'
-          : eff <= 3
-            ? '可替换'
-            : eff <= 5 && !mainOk
-              ? '词条/主词条待优化'
-              : mainOk
-                ? ''
-                : '主词条待优化';
-      myDiscRows.push({ char: ch.name, disc: suit || '?', eff, pct, mainStat, mainstream, mainOk, advice });
-    }
-  }
-  const adviceColor = (a) => (a === '优先替换' ? 'var(--red)' : a === '可替换' ? 'var(--orange)' : 'var(--dim)');
-  const discMatrix = myDiscRows.length
-    ? `<div class="wiki-wrap"><table class="rec-table"><thead><tr><th>我的角色</th><th>驱动盘</th><th>有效强化次数</th><th>优于玩家</th><th>主词条</th><th>建议</th></tr></thead><tbody>${myDiscRows
-        .map(
-          (r) => `<tr>
-          <td>${escapeHtml(r.char)}</td><td>${escapeHtml(r.disc)}</td>
-          <td style="color:${r.eff >= 6 ? 'var(--green)' : r.eff >= 4 ? 'var(--orange)' : 'var(--red)'}">${r.eff}</td>
-          <td style="color:${r.pct != null && r.pct >= 70 ? 'var(--green)' : r.pct != null && r.pct >= 40 ? 'var(--orange)' : 'var(--red)'}">${r.pct != null ? `优于 ${r.pct}% 玩家` : '—'}</td>
-          <td>${r.mainStat ? escapeHtml(r.mainStat) : '—'}${r.mainstream && r.mainStat !== r.mainstream ? `<span class="ds-dim">（主流 ${escapeHtml(r.mainstream)}）</span>` : ''}</td>
-          <td style="color:${adviceColor(r.advice)}">${r.advice || '✓'}</td>
-        </tr>`
-        )
-        .join('')}</tbody></table></div>`
-    : '';
-  const discTip = `<b>驱动盘毕业度</b><br><span style="color:var(--dim)">我每块驱动盘的<b>有效强化次数</b>（落在该角色有效副词条上的强化次数之和，满级盘总强化 8-9 次）vs 该盘工坊玩家分布（优于玩家 %）。有效副词条取工坊角色默认流派权重，与聚合侧同一张表。<br>旧口径统计的是「有效词条个数」，上限只有 4 且实测 99.95% 的盘都等于 4，毫无区分度，故改为次数。<br>主词条列对比该角色该槽主流选择（roleDiscStats）；建议列 = 有效次数 ≤3 或主词条偏离主流时提示替换</span>`;
-  return { discMatrix, discTip };
-}
-
-/** D10 两源一致性审计：2025 源面板是按复现的 enka_attrs_mapping 公式算的，
- *  公式随游戏版本失准会静默污染所有跨源聚合——这张表是唯一告警面。
- *  diff = (2025均值 − mys均值) / mys均值（聚合侧已算好，为小数比例）。 */
-function auditCard() {
-  const AUDIT_ATTRS = ['攻击力', '生命值', '防御力', '暴击率', '暴击伤害', '异常精通'];
-  const auditIdToName = wsRoleIdMap();
-  const auditRows = [];
-  const allDiffs = [];
-  let audit2025 = 0;
-  let auditMys = 0;
-  for (const [rid, d] of Object.entries(workshopStats.sourceAudit || {})) {
-    const gradName = auditIdToName.get(String(rid));
-    if (!gradName) continue;
-    audit2025 += d.counts?.['2025'] || 0;
-    auditMys += d.counts?.mys || 0;
-    const diffs = AUDIT_ATTRS.map((a) => d.attrs?.[a]?.diff ?? null);
-    diffs.forEach((v) => v != null && allDiffs.push(Math.abs(v)));
-    const maxAbs = diffs.reduce((m, v) => (v == null ? m : Math.max(m, Math.abs(v))), 0);
-    auditRows.push({ name: alignRoleName(gradName), counts: d.counts || {}, diffs, maxAbs });
-  }
-  auditRows.sort((a, b) => b.maxAbs - a.maxAbs); // 异常最大的排最上（这张表是给人扫异常的，不是给人查角色的）
-  allDiffs.sort((a, b) => a - b);
-  const medDiff = allDiffs.length ? allDiffs[Math.floor(allDiffs.length / 2)] : null;
-  /** |diff| 分级配色：≥10% 红（需查）· ≥5% 橙（留意）· 否则绿（公式对齐） */
-  const diffColor = (v) => {
-    const a = Math.abs(v);
-    return a >= 0.1 ? 'var(--red)' : a >= 0.05 ? 'var(--orange)' : 'var(--green)';
-  };
-  const auditTable = auditRows.length
-    ? table(
-        ['角色', '2025 样本', 'mys 样本', ...AUDIT_ATTRS],
-        auditRows.map(
-          (r) => `<tr>
-          <td>${escapeHtml(r.name)}</td>
-          <td class="ds-dim">${(r.counts['2025'] || 0).toLocaleString()}</td>
-          <td class="ds-dim">${(r.counts.mys || 0).toLocaleString()}</td>
-          ${r.diffs
-            .map((v) =>
-              v == null
-                ? '<td class="ds-dim">—</td>'
-                : `<td style="color:${diffColor(v)}">${v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%</td>`
-            )
-            .join('')}
-        </tr>`
-        ),
-        new Set()
-      )
-    : '';
-  const auditSummary = auditRows.length
-    ? `<div class="ds-dim" style="margin-bottom:6px">判源样本 ${(audit2025 + auditMys).toLocaleString()}（mys ${auditMys.toLocaleString()} / 2025 ${audit2025.toLocaleString()}）· ${auditRows.length} 角色 × ${AUDIT_ATTRS.length} 属性 · |相对差| 中位 <b>${medDiff != null ? (medDiff * 100).toFixed(2) + '%' : '—'}</b></div>`
-    : '';
-  const auditTip = `<b>两源一致性审计（D10）</b><br><span style="color:var(--dim)">工坊 <code>user_role/v3</code> 返回两种玩家数据源：<b>mys</b>（工坊格式化，面板是游戏内实际值）与 <b>2025</b>（游戏内嵌原始数据，面板由本项目复现 <code>enka_attrs_mapping</code> 公式算出）。表中 <b>相对差 =（2025 均值 − mys 均值）/ mys 均值</b>，按每角色最大 |相对差| 降序排列。<br>公式随游戏版本失准会静默污染<b>所有</b>跨源聚合（面板分布/相关/散点），这张表是唯一的告警面：绿 &lt;5% 视为对齐良好，橙 ≥5% 留意，红 ≥10% 需要查。任一源样本 &lt;30 的属性不给相对差（显示 —）。<br><b>已知边界（非数据损坏）</b>：本·比格 攻击力约 −41%，因其核心被动把防御力转化为攻击力——mys 是含转化的实际面板，2025 复算公式<b>不含角色专属被动</b>。重跑后<b>新出现</b>的大偏差才是版本失准信号</span>`;
-  return { auditTable, auditSummary, auditTip };
-}
-
 // ---------- 角色详情 / 角色面板（角色选择） ----------
 /** 详情/分布面板当前选中角色（默认首个有玩家分布的角色） */
-let selectedRole = '';
+export let selectedRole = '';
 export function setSelectedRole(name) {
   selectedRole = name;
 }
