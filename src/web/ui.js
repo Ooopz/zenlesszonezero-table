@@ -22,7 +22,7 @@ import { setMyTab } from './myChars.js';
 import { setWikiTab } from './wiki.js';
 import { setStatsTab, setSelectedRole } from './statsView.js';
 import { setSelectedDisc } from './discstats.js';
-import { setSimRerender, simSelect, simAxis, simAddChart, simRemoveChart } from './simulate.js';
+import { setSimRerender, setSimTab, simSelect, simAxis, simAddChart, simRemoveChart } from './simulate.js';
 import { migrateViewState, syncUrl, applyUrlState } from './urlState.js';
 import { initSync, syncWorkshopData } from './sync.js';
 
@@ -355,6 +355,11 @@ export function initUi() {
     },
     myTab: (key) => {
       setMyTab(key);
+      syncUrl();
+      render();
+    },
+    simTab: (key) => {
+      setSimTab(key);
       syncUrl();
       render();
     },

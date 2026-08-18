@@ -1,9 +1,24 @@
-// src/web/simulate.js —— 成长极限模拟视图：生成任意两/三维面板属性间的帕累托有效前沿，支持临时叠加多张图
+// src/web/simulate.js —— 模拟视图（两个二级子面板）：①成长模拟（帕累托有效前沿） ②驱动盘模拟（练度提升概率，ZZZ-DDC 移植）
 import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget } from './data.js';
 import { PANEL_ORDER, MAIN_STAT_OPTIONS, TARGET_KEYS } from '../lib/constants.js';
 import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable, axisSubstatTypes, axisRollCap } from '../lib/simCalc.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
 import { clearCharts, registerChart, chartBox, CHART_COLORS } from './charts.js';
+import { renderProbPanel } from './discProb.js';
+
+// ---------- 二级子面板（模拟视图：成长模拟 / 驱动盘模拟） ----------
+export let simTab = 'frontier';
+export function setSimTab(key) {
+  simTab = key;
+}
+const SIM_TABS = [
+  { key: 'frontier', label: '成长模拟' },
+  { key: 'prob', label: '驱动盘模拟' },
+];
+const SIM_PANELS = {
+  frontier: renderFrontierPanel,
+  prob: renderProbPanel,
+};
 
 let rerender = () => {};
 export function setSimRerender(fn) {
@@ -460,6 +475,16 @@ export function simRemoveChart(id) {
 }
 
 export function renderSimulate() {
+  const tabs = SIM_TABS.map(
+    (t) =>
+      `<button class="wiki-tab ${t.key === simTab ? 'on' : ''}" data-tab="${t.key}" onclick="ZZZ.simTab('${t.key}')">${t.label}</button>`
+  ).join('');
+  const panel = SIM_PANELS[simTab] || SIM_PANELS.frontier;
+  return `<div class="wiki"><div class="wiki-tabs">${tabs}</div>${panel()}</div>`;
+}
+
+/** 子面板①：成长极限模拟（原单页内容） */
+function renderFrontierPanel() {
   ensureState();
   clearCharts();
   const charOptions = sortedNames(library.characters);
@@ -484,5 +509,5 @@ export function renderSimulate() {
   const cards = state.charts.map((c) => chartCard(c, state.charts.length > 1)).join('');
   const addBtn =
     '<div class="sim-add-row"><button class="primary" onclick="ZZZ.simAddChart(\'2d\')">＋ 添加二维图</button><button class="primary" onclick="ZZZ.simAddChart(\'3d\')">＋ 添加三维图</button><span class="sim-tip">二维图选择 X/Y 轴；三维图选择 X/Y/Z 轴，可拖拽旋转视角。</span></div>';
-  return '<div class="wiki"><div class="sim-wrap">' + config + '<div class="chart-grid">' + cards + '</div>' + addBtn + '</div></div>';
+  return '<div class="sim-wrap">' + config + '<div class="chart-grid">' + cards + '</div>' + addBtn + '</div>';
 }
