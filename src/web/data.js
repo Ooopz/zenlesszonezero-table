@@ -23,7 +23,7 @@ export let workshopGrad = { roles: [] };
 
 /** 工坊配装汇总（src/sync/workshop.js 的 buildWorkshopStats 生成，基于 workshop.json）：
  *  { wengines, discs, panels, panelCorr, panelScatter, discDetails, relicStats, rankDist,
- *    skillStats, roleDiscStats, roleCooccurrence, roleOwnership, sampleCoverage,
+ *    skillStats, roleCooccurrence, roleOwnership, sampleCoverage,
  *    choiceConcentration, weightJson }
  *  discDetails 为驱动盘单盘真实统计，供「统计→驱动盘」决策卡实况口径 */
 export let workshopStats = { wengines: [], discs: [], panels: [], discDetails: [] };

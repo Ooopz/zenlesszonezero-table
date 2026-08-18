@@ -187,10 +187,6 @@ if (typeof window !== 'undefined') {
 }
 
 // ---------- 公共 option 片段 ----------
-/** 基础坐标轴样式（暗色） */
-export function baseXAxis(cats) {
-  return { type: 'category', data: cats, axisLine: AXIS_LINE, axisLabel: AXIS_LABEL, axisTick: { show: false } };
-}
 /** 暗色 tooltip（统一悬浮风格） */
 export const DARK_TOOLTIP = {
   backgroundColor: CHART_COLORS.card,
@@ -199,57 +195,6 @@ export const DARK_TOOLTIP = {
 };
 
 // ---------- 各图表的 option 构建函数（数据由 recommend.js / discstats.js 各面板准备） ----------
-
-/** 热力图：角色×属性，色 = 数值（百分位）。
- *  @param {number} [max] visualMap 上限：达标热力图默认 100（百分位）。 */
-export function heatmapOption(data, attrs, max = 100) {
-  // data: [{name, cells: [{pct, reached, gap}|null]}]（gap = 推荐中档 − 我的值，仅未达标时非 null），attrs: 属性列表
-  const rows = [];
-  data.forEach((r, i) => {
-    r.cells.forEach((c, j) => {
-      // NaN/非有限值转 null，杜绝格子显示 NaN
-      rows.push([j, i, c == null || !Number.isFinite(c.pct) ? null : c.pct]);
-    });
-  });
-  return {
-    grid: { left: 110, right: 20, top: 20, bottom: 70 },
-    tooltip: {
-      ...DARK_TOOLTIP,
-      formatter: (p) => {
-        const c = data[p.value[1]]?.cells[p.value[0]];
-        if (!c || c.pct == null || !Number.isFinite(c.pct)) return '无数据';
-        const hit =
-          c.reached == null
-            ? ''
-            : c.reached
-              ? `<span style="color:${CHART_COLORS.green}">✓ 达到推荐中档</span>`
-              : `<span style="color:${CHART_COLORS.orange}">未达推荐中档</span>`;
-        const gap = c.gap != null && Number.isFinite(c.gap) ? `<br>缺口 ${formatValue(attrs[p.value[0]], c.gap)}` : '';
-        return `${attrs[p.value[0]]}<br>${c.label != null ? `${c.label}<br>` : ''}玩家百分位 <b>${Math.round(c.pct)}%</b>${hit ? '<br>' + hit : ''}${gap}`;
-      },
-    },
-    xAxis: { ...baseXAxis(attrs), axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 35 } },
-    yAxis: { type: 'category', data: data.map((r) => r.name), axisLine: { show: false }, axisLabel: AXIS_LABEL },
-    visualMap: {
-      min: 0,
-      max,
-      calculable: true,
-      orient: 'horizontal',
-      left: 'center',
-      bottom: 0,
-      inRange: { color: ['#401515', '#a83a3a', '#d4a81e', CHART_COLORS.green] }, // 深红→橙→金→绿，色阶鲜明
-      textStyle: { color: CHART_COLORS.dim },
-    },
-    series: [
-      {
-        type: 'heatmap',
-        data: rows,
-        label: { show: false }, // 不显示格子内数字，格子颜色传达百分位（悬浮看具体值），避免窄格子渲染异常
-        itemStyle: { borderColor: '#000', borderWidth: 1 }, // 清晰分隔
-      },
-    ],
-  };
-}
 
 /** 共识度散点多子图大图：每属性一个子图（X=玩家 sd、Y=推荐 CV，每角色一点）。
  *  attrs: [{attr, points: [{name, sd, cv}]}] —— 悬浮显示角色名与两项指标 */

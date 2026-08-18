@@ -1,5 +1,5 @@
 // src/sync/workshop-stats.js —— 工坊数据聚合（从 workshop.js 拆出的聚合职责，2026-10）
-// ① buildWorkshopStats：workshop.json → workshop-stats.json（单遍历 15 项聚合，纯逻辑在 lib/workshopStats.js）
+// ① buildWorkshopStats：workshop.json → workshop-stats.json（单遍历 13 项聚合，纯逻辑在 lib/workshopStats.js）
 // ② fetchWorkshopGrad：grad_stat 接口全服占比 → workshop-grad.json（下载 + 聚合）
 // 下载/提取（爬取配装、extractBuild）留在 workshop.js；本模块只依赖 workshop-api.js 的网络层，
 // 不与 workshop.js 互相 import（workshop.js 从这里 re-export，scripts/rebuild-stats.mjs 直接从这里取）。
@@ -57,23 +57,21 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     }
   }
   // 流式遍历 entries（90 万+ 条全量进数组 ≈ 7GB 会 OOM）：generator 逐条产出，峰值内存只留聚合 Map。
-  // 14 项聚合合并为**一次**遍历（computeAllWorkshopStats）：此前每项各调一次 iterWorkshopEntries，
+  // 13 项聚合合并为**一次**遍历（computeAllWorkshopStats）：此前每项各调一次 iterWorkshopEntries，
   // 等于把 2.13GB 文件流式解析 13 遍（每遍 ~27s，白白多花 ~6 分钟）。合并后输出逐位不变（见 workshopStats.js 累加器说明）
   const {
     stats,
     panelCorr, // 属性相关（按角色，同条目配对）
     discDetails, // 驱动盘单盘真实统计（含 D7 套装×槽位 slotDist、有效强化次数 effDist）
     panelScatter, // 面板属性对 2D 密度（暴击率×暴伤、攻击×暴伤，供密度散点图）
-    // 练度指标：评分分布 / 影画占比 / 技能练度 / 角色盘画像
+    // 练度指标：评分分布 / 影画占比 / 技能练度
     relicStats,
     rankDist,
     skillStats,
-    roleDiscStats,
     // 2026-10 新增：配队亲和
     roleCooccurrence,
-    // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）/ 两源一致性审计（D10）
+    // 2026-08 新增：加权词条效率分（含 D9 评分×毕业度）
     rollEfficiency,
-    sourceAudit,
     // 2026-10 新增：角色流派分析（面板 k-means，每角色 3 流派 + 典型面板）
     roleStyles,
     // 角色拥有率（样本池口径）：{pool, roles}，pool=去重 uid 总数
@@ -95,10 +93,8 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
     relicStats,
     rankDist,
     skillStats,
-    roleDiscStats,
     roleCooccurrence,
     rollEfficiency,
-    sourceAudit,
     roleStyles,
     roleOwnership: roleOwnership?.roles || {},
     sampleCoverage,

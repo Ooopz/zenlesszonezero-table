@@ -521,16 +521,11 @@ button.apply-btn {
    ============================================================ */
 main {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
   gap: var(--sp-5);
   padding: var(--sp-5);
-  max-height: calc(100vh - var(--head-h, 56px));
-  overflow: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-main::-webkit-scrollbar {
-  display: none;
+  /* 2026-11 起改为 body 级滚动：main 不再限高自滚，页面整体随文档流滚动
+     （原 max-height + overflow:auto + 隐藏滚动条会造成「看不见滚动条 + 嵌套滚动迷失」） */
 }
 .wiki,
 .discstats {
@@ -571,27 +566,19 @@ main::-webkit-scrollbar {
 }
 .mychars-body.cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
   gap: var(--sp-5);
 }
+/* 表格容器：body 级滚动后不再纵向限高内滚（表格完整展开，吸顶表头改相对视口）；
+   保留 overflow-x 横向滚动兜底（汇总表/数据库表列多，窄屏下防撑破布局） */
 .wiki-wrap {
-  overflow: auto;
-  max-height: calc(100vh - var(--head-h, 56px) - 90px);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  min-width: 0;
+  overflow-x: auto;
 }
-.wiki-wrap::-webkit-scrollbar {
-  display: none;
-}
-/* 汇总表滚动容器（与 wiki-wrap 同一套：吸顶表头随容器滚动） */
+/* 汇总表滚动容器（与 wiki-wrap 同一套：吸顶表头随视口滚动） */
 .tbl-wrap {
-  overflow: auto;
-  max-height: calc(100vh - var(--head-h, 56px) - 90px);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.tbl-wrap::-webkit-scrollbar {
-  display: none;
+  min-width: 0;
+  overflow-x: auto;
 }
 /* ECharts 挂载容器（高度内联传入；宽度撑满卡片） */
 .chart-init {
@@ -1081,14 +1068,29 @@ main::-webkit-scrollbar {
   text-align: center;
   white-space: nowrap;
 }
-/* 吸顶表头：压缩体大写 + 黄黑底线 */
+/* 吸顶表头：压缩体大写 + 黄黑底线。
+   两套滚动环境：
+   ① 弹窗内表格（.plantable/.skill-table）相对 .modal-scroll 滚动容器吸顶 → top: 0；
+   ② 主区域表格（.tbl/.wiki-table/.rec-table）随 body 滚动吸顶，需让开 sticky header → top: var(--head-h) */
 .plantable th,
-.skill-table th,
+.skill-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
+  color: var(--hazard-lt);
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--hazard);
+}
 .tbl th,
 .wiki-table th,
 .rec-table th {
   position: sticky;
-  top: 0;
+  top: var(--head-h, 56px);
   z-index: 5;
   background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--hazard-lt);
@@ -1506,7 +1508,7 @@ main::-webkit-scrollbar {
    ============================================================ */
 .chart-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
   gap: var(--sp-5);
   animation: viewIn 0.25s ease;
 }
@@ -1642,9 +1644,8 @@ main::-webkit-scrollbar {
   text-overflow: ellipsis;
 }
 .coverage-table-wrap {
-  max-height: 360px;
-  overflow: auto;
   border: 1px solid var(--line);
+  overflow-x: auto;
 }
 .coverage-table-wrap .rec-table {
   min-width: 620px;
@@ -1678,9 +1679,8 @@ main::-webkit-scrollbar {
   font-size: var(--fs-md);
 }
 .style-table-wrap {
-  overflow: auto;
-  max-height: 320px;
   border: 1px solid var(--line);
+  overflow-x: auto;
 }
 .style-table-wrap .rec-table {
   min-width: 560px;

@@ -2,9 +2,9 @@
 // 输入：workshop.json 的 entries（每条约一个玩家角色的配装：weapon/equips/panel/skills/rank/relic_point）
 // 输出（按角色/盘/玩家聚合）：computeWorkshopStats（音擎/驱动盘条目数 + 面板真实样本统计）、
 //   computePanelCorrelations（属性相关）、computeWorkshopDiscStats（驱动盘单盘统计）、
-//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankDist/skillStats/roleDiscStats/roleOwnership）、
+//   computePanelScatter（面板 2D 密度）、练度指标（relicStats/rankDist/skillStats/roleOwnership）、
 //   2026-10 新增（roleCooccurrence）、
-//   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度、sourceAudit 两源一致性 D10）、
+//   2026-08 新增（rollEfficiency 加权词条效率分 + D9 评分×毕业度）、
 //   discStatName、substatRolls、buildRoleSubstatWeights、sourceOf、bin2D。
 import { computeDist, kmeans, pearson, quantileSorted } from './distStats.js';
 import { canonicalName, CATEGORY } from './names.js';
@@ -50,8 +50,8 @@ function panelStats(arr) {
 // 与各自独立遍历时的顺序逐条一致，因此输出的键序、数组元素序、浮点求和/求均值的累加顺序都不变，
 // 结果与重构前**逐位相等**。若哪天有人把 add 挪到共享的中间结果上（比如两个盘聚合共用一次
 // subNames 解析），必须确认它不改变各自 Map 的首次插入顺序，否则键序会漂移。
-// 之所以不共享中间解析：computeWorkshopDiscStats 与 computeRoleDiscStats 的过滤/分组口径虽相近但不同，
-// 共享会引入耦合且收益有限（瓶颈是 JSON.parse 与磁盘 IO，不是这几次词条归一）。
+// 之所以不共享中间解析：各聚合的过滤/分组口径虽相近但不同，共享会引入耦合且收益有限
+// （瓶颈是 JSON.parse 与磁盘 IO，不是这几次词条归一）。
 
 /** 通用：把累加器套回「一次性函数」形态（原公开函数的循环体） */
 function runAcc(acc, entries) {
@@ -788,7 +788,7 @@ function is2025ByRarity(e) {
 }
 
 /** 工坊两源判别（'mys' / '2025' / null）：source 字段 → rarity 类型 → skills 数组顺序，逐级兜底。
- *  技能语义归一（skillTypeMapOf）与两源一致性审计（computeSourceAudit）共用同一判别，口径必须一致。 */
+ *  技能语义归一（skillTypeMapOf）共用此判别，口径必须一致。 */
 export function sourceOf(e) {
   if (!e) return null;
   if (e.source === 'mys' || e.source === '2025') return e.source;
@@ -839,74 +839,6 @@ function makeSkillStatsAcc() {
       return out;
     },
   };
-}
-
-/** 每角色驱动盘画像：456 主词条分布 / 副词条频率 / 有效强化次数分布（与 computeWorkshopDiscStats 同口径，按角色聚合）。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, equips}）
- *  @param {object} discIndex  buildNameIndex(library.discs, CATEGORY.DISC)
- *  @param {{roleNameMap?:Map<string,string>, weightJson?:object, roleWeights?:Map}} [opts]
- *  @returns {{name:string, main456:{4,5,6:{name,count}[]}, mainDenom:{4,5,6}, subs:{name,count}[], effDist:Object}[]} */
-export function computeRoleDiscStats(entries, discIndex, opts = {}) {
-  return runAcc(makeRoleDiscStatsAcc(opts), entries);
-}
-
-/** computeRoleDiscStats 的累加器（add 为原循环体、finish 为原收尾）。
- *  不收 discIndex：本聚合按角色分组、不解析套装名（公开函数的 discIndex 形参是历史签名，一直未被使用）。 */
-function makeRoleDiscStatsAcc(opts = {}) {
-  const roleNameMap = opts.roleNameMap || null;
-  const roleWeights = resolveRoleWeights(opts);
-  const acc = new Map(); // 角色名 -> 聚合
-  const add = (e) => {
-    if (!e || e.role_id == null) return;
-    const roleName = roleNameMap ? roleNameMap.get(String(e.role_id)) : String(e.role_id);
-    if (roleName == null) return;
-    const effW = roleWeights.get(String(e.role_id)) || null; // 该角色有效副词条集合；无权重则退化为全部合法副词条
-    let a = acc.get(roleName);
-    if (!a)
-      acc.set(
-        roleName,
-        (a = {
-          main456: { 4: new Map(), 5: new Map(), 6: new Map() },
-          mainDenom: { 4: 0, 5: 0, 6: 0 },
-          subs: new Map(),
-          effDist: new Map(),
-        })
-      );
-    for (const eq of e.equips || []) {
-      if (!eq || !eq.suit) continue;
-      const slot = slotOf(eq);
-      // 词条名清洗：丢弃含 U+FFFD 的坏名（同 computeWorkshopDiscStats 口径）；
-      // 副词条只保留合法副词条（SUBSTAT_TYPE_SET），主词条仅统计槽候选内（MAIN_STAT_OPTIONS）——游戏规则白名单
-      const cleanName = (n) => (n && !n.includes('\uFFFD') ? n : null);
-      const subPairs = (eq.subs || [])
-        .map((s) => {
-          const n = s && s.name ? cleanName(discStatName(s.name, s.value)) : null;
-          return n && SUBSTAT_TYPE_SET.has(n) ? { name: n, rolls: substatRolls(n, s.value) } : null;
-        })
-        .filter(Boolean);
-      const subNames = subPairs.map((s) => s.name);
-      const main = Array.isArray(eq.main) && eq.main[0];
-      const mn = main && main.name ? cleanName(mainStatName(discStatName(main.name, main.value))) : null;
-      const mnOk = mn && (MAIN_STAT_OPTIONS[slot] || []).includes(mn);
-      if (slot >= 4 && slot <= 6) {
-        a.mainDenom[slot]++;
-        if (mnOk) a.main456[slot].set(mn, (a.main456[slot].get(mn) || 0) + 1);
-      }
-      let effRolls = 0; // 有效强化次数（口径同 computeWorkshopDiscStats）
-      for (const s of subPairs) if (!effW || effW.has(s.name)) effRolls += s.rolls;
-      a.effDist.set(effRolls, (a.effDist.get(effRolls) || 0) + 1);
-      for (const n of subNames) a.subs.set(n, (a.subs.get(n) || 0) + 1);
-    }
-  };
-  const finish = () =>
-    [...acc.entries()].map(([name, a]) => ({
-      name,
-      main456: { 4: freqPairs(a.main456[4]), 5: freqPairs(a.main456[5]), 6: freqPairs(a.main456[6]) },
-      mainDenom: a.mainDenom,
-      subs: freqPairs(a.subs),
-      effDist: Object.fromEntries(a.effDist),
-    }));
-  return { add, finish };
 }
 
 // ---------- 加权词条效率分（强化次数 × 工坊角色流派权重） ----------
@@ -998,63 +930,6 @@ function makeRollEfficiencyAcc(opts = {}) {
   };
 }
 
-// ---------- D10 两源一致性审计（mys 现成面板 vs 2025 公式复算面板） ----------
-// workshop.json 的面板有两个来源：mys 源直接透传工坊格式化好的数值；2025 源是我们在 src/sync/workshop.js
-// 里复现工坊 enka_attrs_mapping 公式**算出来的**（角色基础 + 武器 + 驱动盘 + 2 件套）。公式一旦因游戏版本
-// 更新而失准，2025 源的面板会静默漂移，而所有跨源聚合（panels/panelCorr/panelScatter）都会被污染且无人察觉。
-// 本审计按「同角色、同属性」对比两源的样本量与均值：同一个高练度玩家池里，两源应当统计同分布，
-// 相对差长期应在个位数百分比内；若某属性 |diff| 明显偏大，就是公式该重新对齐的信号。
-
-/** 参与两源审计的属性（覆盖基础三围 + 双暴 + 异常，公式各分支都能照到） */
-const AUDIT_ATTRS = ['攻击力', '生命值', '防御力', '暴击率', '暴击伤害', '异常精通'];
-
-/** 两源面板一致性审计。
- *  @param {object[]} entries  workshop.json 的 entries（{role_id, source, equips, panel}）
- *  @returns {Object<string, {counts:{mys:number,'2025':number},
- *            attrs:Object<string,{mys:number|null,'2025':number|null,diff:number|null}>}>}
- *    role_id → 两源样本量与各属性均值；diff = (2025 − mys) / |mys|，任一源样本 <30 时该属性 diff 记 null。 */
-export function computeSourceAudit(entries) {
-  return runAcc(makeSourceAuditAcc(), entries);
-}
-
-function makeSourceAuditAcc() {
-  const acc = new Map(); // rid -> {counts:{mys,2025}, sums:Map<attr, {mys:{n,sum}, 2025:{n,sum}}>}
-  return {
-    add(e) {
-      if (!e || e.role_id == null) return;
-      const src = sourceOf(e);
-      if (!src) return;
-      let a = acc.get(e.role_id);
-      if (!a) acc.set(e.role_id, (a = { counts: { mys: 0, 2025: 0 }, sums: new Map() }));
-      a.counts[src] += 1;
-      for (const p of e.panel || []) {
-        if (!AUDIT_ATTRS.includes(p.name)) continue;
-        const v = parsePanelFinal(p.final);
-        if (v == null) continue;
-        let t = a.sums.get(p.name);
-        if (!t) a.sums.set(p.name, (t = { mys: { n: 0, sum: 0 }, 2025: { n: 0, sum: 0 } }));
-        t[src].n += 1;
-        t[src].sum += v;
-      }
-    },
-    finish() {
-      const out = {};
-      for (const [rid, a] of acc) {
-        const attrs = {};
-        for (const [name, t] of a.sums) {
-          const mMean = t.mys.n ? t.mys.sum / t.mys.n : null;
-          const wMean = t['2025'].n ? t['2025'].sum / t['2025'].n : null;
-          // 小样本的均值噪声会淹没真实漂移，故两源各需 ≥30 才给 diff（否则只留均值供人工看）
-          const ok = t.mys.n >= 30 && t['2025'].n >= 30 && mMean !== 0;
-          attrs[name] = { mys: mMean, 2025: wMean, diff: ok ? (wMean - mMean) / Math.abs(mMean) : null };
-        }
-        out[rid] = { counts: a.counts, attrs };
-      }
-      return out;
-    },
-  };
-}
-
 // ---------- 2026-10 新增聚合：配队亲和 ----------
 
 /** 每角色「同 uid 玩家同练角色」共现（真实配队亲和性）：角色 A → 队友 B 出现次数降序。
@@ -1102,16 +977,16 @@ function makeRoleCooccurrenceAcc() {
 // ---------- 单遍历总入口（2026-08 性能重构） ----------
 
 /**
- * 一次遍历 entries 完成全部 14 项聚合（原 buildWorkshopStats 逐个调用 = 逐项全量流式解析 2.13GB）。
+ * 一次遍历 entries 完成全部 13 项聚合（原 buildWorkshopStats 逐个调用 = 逐项全量流式解析 2.13GB）。
  * 每个 key 的值与对应公开函数**逐位相同**（累加顺序、Map 插入顺序完全一致，见文件顶部累加器说明）。
  * @param {Iterable<object>} entries  workshop.json 的 entries（可为 generator，仅消费一次）
  * @param {object} discIndex  buildNameIndex(library.discs, CATEGORY.DISC)
  * @param {{roleNameMap?:Map<string,string>, weightJson?:object, roleWeights?:Map}} [opts]
  *   weightJson：工坊角色流派权重（workshop-weights.json 的 weights 段）。驱动盘 effDist 的「有效副词条」
  *   与 rollEfficiency 都依赖它；缺失时 effDist 退化为「全部合法副词条」、rollEfficiency 返回空对象。
- * @returns {{stats, panelCorr, discDetails, panelScatter, relicStats, rankLayers, rankDist,
- *            skillStats, roleDiscStats, roleCooccurrence,
- *            rollEfficiency, sourceAudit}}
+ * @returns {{stats, panelCorr, discDetails, panelScatter, relicStats, rankDist,
+ *            skillStats, roleCooccurrence, rollEfficiency, roleStyles,
+ *            roleOwnership, sampleCoverage, choiceConcentration}}
  */
 // ---------- 角色流派分析（2026-10 新增） ----------
 // 流派 = 玩家在面板上的配置取向分化：同一角色的面板资源零和，玩家在「堆攻击 / 堆双暴 / 堆精通」等
@@ -1391,10 +1266,8 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
   const relicAcc = makeRelicStatsAcc();
   const rankDistAcc = makeRankDistAcc();
   const skillAcc = makeSkillStatsAcc();
-  const roleDiscAcc = makeRoleDiscStatsAcc(accOpts);
   const coAcc = makeRoleCooccurrenceAcc();
   const rollEffAcc = makeRollEfficiencyAcc(accOpts);
-  const auditAcc = makeSourceAuditAcc();
   const styleAcc = makeRoleStylesAcc(opts.traits);
   const ownAcc = makeRoleOwnershipAcc();
   const coverageAcc = makeSampleCoverageAcc();
@@ -1409,10 +1282,8 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     relicAcc.add(e);
     rankDistAcc.add(e);
     skillAcc.add(e);
-    roleDiscAcc.add(e);
     coAcc.add(e);
     rollEffAcc.add(e);
-    auditAcc.add(e);
     styleAcc.add(e);
     ownAcc.add(e);
     coverageAcc.add(e);
@@ -1428,10 +1299,8 @@ export function computeAllWorkshopStats(entries, discIndex, opts = {}) {
     relicStats: relicAcc.finish(),
     rankDist: rankDistAcc.finish(),
     skillStats: skillAcc.finish(),
-    roleDiscStats: roleDiscAcc.finish(),
     roleCooccurrence: coAcc.finish(),
     rollEfficiency: rollEffAcc.finish(),
-    sourceAudit: auditAcc.finish(),
     roleStyles: styleAcc.finish(),
     roleOwnership: ownAcc.finish(),
     sampleCoverage: coverageAcc.finish(),

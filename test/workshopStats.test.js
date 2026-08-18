@@ -10,13 +10,11 @@ import {
   computeRelicStats,
   computeRankDist,
   computeSkillStats,
-  computeRoleDiscStats,
   computeRoleCooccurrence,
   substatRolls,
   buildRoleSubstatWeights,
   sourceOf,
   computeRollEfficiency,
-  computeSourceAudit,
   computeRoleStyles,
   computeAllWorkshopStats,
   computeRoleOwnership,
@@ -553,22 +551,7 @@ test('computeSkillStats：旧数据无 source 回退数组顺序判别；无法�
   assert.equal(out['1031'], undefined, '无法判源条目不贡献');
 });
 
-test('computeRoleDiscStats：每角色 456 主词条/副词条/有效强化次数', () => {
-  const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
-  const roleNameMap = new Map([['1011', '安比·德玛拉']]);
-  const out = computeRoleDiscStats(NEW_META_ENTRIES, discIndex, { roleNameMap });
-  assert.equal(out.length, 1);
-  const r = out[0];
-  assert.equal(r.name, '安比·德玛拉');
-  assert.equal(r.mainDenom[4], 2);
-  assert.deepEqual(Object.fromEntries(r.main456[4].map((f) => [f.name, f.count])), { 暴击率: 2 });
-  // 副词条：异常掌控不是合法副词条（SUBSTAT_TYPE_SET 外）→ 白名单过滤，剩 攻击力% ×2 + 暴击伤害 ×1
-  assert.deepEqual(Object.fromEntries(r.subs.map((f) => [f.name, f.count])), { '攻击力%': 2, 暴击伤害: 1 });
-  // 有效词条（SUBSTAT 集合内）：攻击力% 有效，暴击伤害也有效 → 两盘各 1-2 个
-  assert.ok(r.effDist['2'] >= 1);
-});
-
-test('computeWorkshopDiscStats / computeRoleDiscStats：游戏规则白名单清洗（非法副词条/异常主词条过滤）', () => {
+test('computeWorkshopDiscStats：游戏规则白名单清洗（非法副词条/异常主词条过滤）', () => {
   const discIndex = buildNameIndex(['静听嘉音'], CATEGORY.DISC);
   const entries = [
     {
@@ -858,29 +841,6 @@ test('computeRollEfficiency：加权分 = Σ 次数×权重，歪词条不计分
   assert.ok(Number.isFinite(out2['1011'].scoreVsRelic.r));
 });
 
-test('computeSourceAudit：两源分别计数取均值，任一源 <30 时 diff 记 null', () => {
-  const mk = (src, atk) => ({
-    role_id: '1011',
-    equips: [{ rarity: src === 'mys' ? 'S' : 4 }],
-    panel: [{ name: '攻击力', final: String(atk) }],
-  });
-  // 小样本：只给均值不给 diff
-  const small = computeSourceAudit([mk('mys', 3000), mk('2025', 3300)]);
-  assert.deepEqual(small['1011'].counts, { mys: 1, 2025: 1 });
-  assert.equal(small['1011'].attrs['攻击力'].mys, 3000);
-  assert.equal(small['1011'].attrs['攻击力']['2025'], 3300);
-  assert.equal(small['1011'].attrs['攻击力'].diff, null, '样本 <30 不给 diff');
-  // 两源各 30 条：diff = (2025 均值 − mys 均值) / |mys 均值|
-  const big = [];
-  for (let i = 0; i < 30; i++) big.push(mk('mys', 3000), mk('2025', 3300));
-  const out = computeSourceAudit(big);
-  assert.deepEqual(out['1011'].counts, { mys: 30, 2025: 30 });
-  assert.ok(Math.abs(out['1011'].attrs['攻击力'].diff - 0.1) < 1e-12);
-  // 非审计属性不进表；无法判源的条目整条跳过
-  const skip = computeSourceAudit([{ role_id: '1011', equips: [], panel: [{ name: '攻击力', final: '3000' }] }]);
-  assert.deepEqual(skip, {}, '判不出源的条目不参与审计');
-});
-
 // ---------- 角色流派分析（computeRoleStyles / styleLabel / styleMatch） ----------
 
 test('styleLabel：4 号位取向 + 6 号位取向组合命名，同段去重', () => {
@@ -1148,10 +1108,8 @@ test('computeAllWorkshopStats：单遍历结果与逐个公开函数逐位相等
   eq(all.relicStats, computeRelicStats(entries), 'relicStats');
   eq(all.rankDist, computeRankDist(entries), 'rankDist');
   eq(all.skillStats, computeSkillStats(entries), 'skillStats');
-  eq(all.roleDiscStats, computeRoleDiscStats(entries), 'roleDiscStats');
   eq(all.roleCooccurrence, computeRoleCooccurrence(entries), 'roleCooccurrence');
   eq(all.rollEfficiency, computeRollEfficiency(entries), 'rollEfficiency');
-  eq(all.sourceAudit, computeSourceAudit(entries), 'sourceAudit');
   eq(all.roleStyles, computeRoleStyles(entries), 'roleStyles');
   eq(all.roleOwnership, computeRoleOwnership(entries), 'roleOwnership');
   eq(all.sampleCoverage, computeSampleCoverage(entries), 'sampleCoverage');
