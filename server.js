@@ -501,15 +501,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url === '/api/sync-workshop') return await syncWorkshopHandler(req, res);
     if (req.method === 'GET' && url === '/api/data') return sendData(req, res);
     if (req.method === 'GET' && url === '/api/cookie-status')
-      return respond(res, 200, { ok: true, cached: !!(await charactersMod()).readCookieCache() });
+      return respond(res, 200, {
+        ok: true,
+        cached: !!(await charactersMod()).readCookieCache(),
+        savedAt: mtimeOf('.cookie.json'),
+      });
     if (req.method === 'GET' && url === '/api/sync-progress')
       return respond(res, 200, { ok: true, progress: syncState });
     if (req.method === 'GET' && url === '/api/sync-status') {
       // 不回传 cookie 明文：任何能访问本服务的进程都能读到它，等同泄漏米游社登录态。
-      // 前端只需要知道「是否已缓存」，需要更换时重新粘贴即可。
+      // 前端只需要知道「是否已缓存 + 保存时间」，需要更换时重新粘贴即可。
       return respond(res, 200, {
         ok: true,
         cached: !!(await charactersMod()).readCookieCache(),
+        cookieSavedAt: mtimeOf('.cookie.json'),
         files: {
           library: mtimeOf('library.json'),
           characters: mtimeOf('characters.json'),

@@ -133,6 +133,7 @@ main.js → data.js → api.js（最底层，零依赖）
 - 路径穿越三重防护：`decodeURIComponent` 失败回 400、`path.resolve` + `ROOT+sep` 前缀校验、`fs.realpath` 二次校验防软链逃逸
 - `isServable` 白名单：任何以 `.` 开头的路径段全拒（挡 `.cookie.json`/`.git`）；`data/` 下**只放行 `data/img/`**
 - 所有 POST 先过 CSRF 来源校验——`text/plain` 是简单请求无预检，恶意页面可静默覆盖 `user-config.json`
+- **cookie 明文绝不回传前端**：`/api/cookie-status` 与 `/api/sync-status` 只回 `cached: true/false` + `savedAt`（`.cookie.json` 的 mtime，供前端提示「已保存 + 保存时间」）；需要更换时用户重新粘贴覆盖
 - `AUTH_TOKEN` 用 `crypto.timingSafeEqual` 比较
 - **`HOST` 非回环且未设 `AUTH_TOKEN` 时 `process.exit(1)`**，不是警告（后台运行时警告没人看）
 

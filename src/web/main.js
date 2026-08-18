@@ -14,6 +14,9 @@ const fail = (msg) => {
   document.getElementById('grid').innerHTML = `<div class="empty">${msg}</div>`;
 };
 const START_HINT = '请先运行 <b>npm start</b> 启动服务器，再打开本页。';
+// 首屏加载反馈：/api/data 约 34MB，解析+渲染需数秒，先给出加载态避免页面长时间空白
+document.getElementById('grid').innerHTML =
+  '<div class="empty"><span class="loader"></span>正在加载数据…</div>';
 try {
   const res = await fetch('/api/data');
   if (!res.ok) {

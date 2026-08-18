@@ -54,6 +54,15 @@ function rebuildIndex() {
 }
 export { statEntries };
 
+// ---------- 统计视图数据就绪检查（statsView/discstats 共用单一来源） ----------
+/** 返回统计视图缺失的数据源列表（空数组 = 就绪）；panels 为空视为缺工坊聚合数据 */
+export function statsMissingData() {
+  const miss = [];
+  if (!Object.keys(plans || {}).length) miss.push('推荐方案');
+  if (!Object.keys(workshopStats.panels || {}).length) miss.push('工坊配装');
+  return miss;
+}
+
 // ---------- 元素颜色（属性展示用） ----------
 export const elementColors = {
   物理: '#d9d9d9',

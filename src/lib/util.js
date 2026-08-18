@@ -44,9 +44,34 @@ export function serializeCookies(cookies) {
     .join('; ');
 }
 
-/** 复制 cookie 用的剪贴板脚本（浏览器控制台执行），命令行与网页共用 */
-export const CLIPBOARD_SCRIPT =
-  "var cookie=document.cookie;var ask=confirm('Cookie:'+cookie+'\\n\\nDo you want to copy the cookie to the clipboard?');if(ask==true){copy(cookie);msg=cookie}else{msg='Cancel'}";
+/** 收集米游社关键 cookie 的脚本：既作为书签小工具（bookmarklet）也作为控制台脚本（命令行与网页共用）。
+ *  只挑登录必需的白名单 key——ltoken/ltuid/account_id 是游戏数据接口主登录态；
+ *  DEVICEFP/_MHYUUID 是设备指纹（缺失触发风控 retcode 10035/10041）；e_nap_token 始终尝试收集
+ *  （mihoyo 域共享，任何米游社页面通常都能读到；仅同步推荐方案用），提示按当前页面是否养成指南区分。
+ *  SToken/mi18nLang 等经实测非接口必需，不收集。 */
+export const CLIPBOARD_SCRIPT = `(function () {
+  var must = ['DEVICEFP', '_MHYUUID', 'ltoken', 'ltuid', 'account_id', 'e_nap_token'];
+  var got = {};
+  document.cookie.split(';').forEach(function (p) {
+    var i = p.indexOf('=');
+    if (i < 0) return;
+    var k = p.slice(0, i).trim();
+    if (must.indexOf(k) >= 0) got[k] = p.slice(i + 1).trim();
+  });
+  var keys = Object.keys(got);
+  var out = keys.map(function (k) { return k + '=' + got[k]; }).join('; ');
+  var missing = must.filter(function (k) { return !(k in got); });
+  var isNap = location.href.indexOf('nap') >= 0;
+  var msg = '已收集 ' + keys.length + ' 个关键 cookie：' + (out || '(无)');
+  if (missing.length) msg += '\\n\\n缺失：' + missing.join(', ') + '（请确认已登录米游社后重试）';
+  if (isNap && !got.e_nap_token) msg += '\\n\\n当前在养成指南页但未取到 e_nap_token，请确认右上角已登录';
+  if (!isNap && !got.e_nap_token) msg += '\\n\\n（未取 e_nap_token：如需同步推荐方案，请到养成指南页再点一次书签）';
+  msg += '\\n\\n回到配装面板「数据同步」弹窗粘贴保存即可。';
+  function fallback() { prompt('请手动复制以下 cookie（Ctrl+C）：', out); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(out).then(function () { alert(msg + '\\n\\n✓ 已复制到剪贴板'); }, fallback);
+  } else fallback();
+})();`;
 
 /** 转义用于 data-detail 属性（dataset 读取时还原，内嵌 HTML 照常渲染）。
  *  用 ?? 而非 ||：`escapeHtml(0)` 曾返回空串，把合法的 0 从 DOM 里抹掉。 */

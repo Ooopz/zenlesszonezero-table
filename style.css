@@ -350,6 +350,36 @@ button.ghost:hover {
   color: var(--txt);
   background: var(--card2);
 }
+/* header 同步按钮进行中（sync.js 加 .syncing）：脉冲提示同步未结束（工坊可能数小时） */
+#syncBtn.syncing {
+  animation: syncingPulse 1.2s ease-in-out infinite;
+}
+@keyframes syncingPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+/* 首屏加载转圈（main.js 加载态） */
+.loader {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+  vertical-align: -3px;
+  border: 2px solid var(--hazard-dk);
+  border-top-color: var(--hazard);
+  border-radius: 50%;
+  animation: loaderSpin 0.8s linear infinite;
+}
+@keyframes loaderSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 button.mini {
   font-size: var(--fs-xs);
   padding: 1px 10px;
@@ -537,6 +567,14 @@ main {
   flex-wrap: wrap;
   gap: var(--sp-3);
   margin-bottom: var(--sp-4);
+  /* 二级 tab 栏随 body 滚动吸顶：紧贴 sticky header 下方（表格吸顶表头经 --tabs-h 让位） */
+  position: sticky;
+  top: var(--head-h);
+  z-index: 60;
+  background: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: var(--sp-2) 0;
 }
 /* 二级标签（我的角色卡片/汇总、数据库四面板、统计三面板）：斜切小分段 */
 .wiki-tab {
@@ -1091,7 +1129,7 @@ main {
 .wiki-table th,
 .rec-table th {
   position: sticky;
-  top: var(--head-h, 56px);
+  top: calc(var(--head-h, 56px) + var(--tabs-h, 0px)); /* header + 二级 tab 两层让位 */
   z-index: 5;
   background: linear-gradient(180deg, var(--card3) 0%, var(--card2) 100%);
   color: var(--hazard-lt);
@@ -2091,6 +2129,7 @@ main {
   display: flex;
   gap: var(--sp-3);
   margin-top: var(--sp-4);
+  margin-bottom: var(--sp-3); /* 与 row 下方内容（进度区/输入框等）拉开距离 */
   flex-wrap: wrap;
 }
 /* 目标设置输入网格 */
@@ -2197,6 +2236,63 @@ main {
 }
 .sync-opts input {
   accent-color: var(--hazard);
+}
+/* 工坊数据项：说明小字换行到按钮文本下方（flex 容器内 <br> 不生效，故拆两行 span） */
+.sync-opts label.sync-ws {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.sync-ws-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sync-ws-note {
+  font-size: 12px;
+  color: var(--dim);
+}
+/* 同步项缺数据：红色高亮 + 右上角「缺数据」徽标，引导勾选更新 */
+.sync-opts label.sync-miss {
+  position: relative;
+  border-color: var(--red);
+  background: rgba(255, 93, 93, 0.09);
+  color: #ffb3b3;
+  box-shadow: 0 0 0 1px rgba(255, 93, 93, 0.35);
+}
+.sync-miss-badge {
+  position: absolute;
+  top: -7px;
+  right: -4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #0a0a0a;
+  background: var(--red);
+  padding: 1px 8px;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+/* 米游社 Cookie 书签：虚线框提示可拖到书签栏 */
+#syncBookmarklet {
+  display: inline-block;
+  border: 1px dashed var(--hazard);
+  color: var(--hazard-lt);
+  padding: 1px 10px;
+  cursor: grab;
+  font-weight: 700;
+}
+#syncBookmarklet:hover {
+  background: rgba(255, 212, 0, 0.08);
+}
+/* cookie 状态行：已保存（含时间）绿色高亮，未保存中性灰 */
+.sync-cookie-state {
+  margin-bottom: var(--sp-2);
+  font-size: 13px;
+  color: var(--dim);
+}
+.sync-cookie-state.saved {
+  color: var(--green);
+  font-weight: 600;
 }
 .sync-chk {
   accent-color: var(--hazard);

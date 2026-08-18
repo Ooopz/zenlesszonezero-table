@@ -277,6 +277,12 @@ export function initUi() {
       if (el) el.classList.remove('show');
     }
   });
+  // 点击遮罩（modal 背景，非弹窗内容）关闭——与 Esc 等价的最常见习惯操作
+  for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal']) {
+    document.getElementById(id).addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) e.currentTarget.classList.remove('show');
+    });
+  }
   // ---------- 事件绑定 ----------
   document
     .getElementById('targetClose')
