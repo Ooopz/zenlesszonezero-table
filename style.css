@@ -604,7 +604,7 @@ main {
 }
 .mychars-body.cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* 一行最多两张卡片（3 张时轨道低于 minmax 下限会挤压溢出变形） */
   gap: var(--sp-5);
 }
 /* 表格容器：body 级滚动，表格完整展开，吸顶表头相对视口吸在 header 之下（top: var(--head-h)）。
@@ -2371,51 +2371,10 @@ main {
 /* ============================================================
    窄屏适配
    ============================================================ */
-@media (max-width: 900px) {
-  .upper {
-    grid-template-columns: 1fr;
-  }
-  .skill-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .upper-left.has-tachie {
-    padding-left: 0;
-  }
-  .upper-left.has-tachie .portrait-lg {
-    position: static;
-    width: 100%;
-    height: auto;
-    max-height: 220px;
-  }
-  .discs-vert {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .ad-slotgrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .style-blocks {
-    grid-template-columns: 1fr;
-  }
-  main {
-    grid-template-columns: 1fr;
-  }
+/* 角色卡片：设计宽度 560px，两列需容器 ≥ ~1240px，否则压缩变形 → 先降单列 */
+@media (max-width: 1240px) {
   .mychars-body.cards {
     grid-template-columns: 1fr;
-  }
-  .chart-grid {
-    grid-template-columns: 1fr;
-  }
-  .dp-slots {
-    grid-template-columns: repeat(2, 1fr); /* 窄屏：两列 */
-  }
-  .dp-slots-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .dp-body {
-    grid-template-columns: 1fr; /* 窄屏：驱动盘输入与权重/输出上下堆叠 */
-  }
-  .stamp-wrap {
-    display: none;
   }
 }
 
@@ -2616,7 +2575,7 @@ main {
 }
 .dp-body {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); /* 左：驱动盘输入（3×2）；右：权重（上）+ 输出（下） */
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); /* 左：驱动盘输入（3×2）；右：权重（上）+ 输出（下）；窄屏堆叠为上下排列 */
   gap: var(--sp-4);
   margin-top: var(--sp-3);
   align-items: start;
@@ -2692,4 +2651,60 @@ main {
   margin-top: var(--sp-3);
   border-top: 1px dashed var(--line2);
   padding-top: var(--sp-2);
+}
+
+/* ============================================================
+   窄屏适配（放文件末尾：主规则在前、断点在后，同特异性下断点才能覆盖主规则；
+   若断点写在 .dp-* 主规则之前，minmax 两栏会把 1fr 覆盖掉导致窄屏堆叠不生效）
+   ⚠️ 1200px 断点只放「驱动盘模拟」的规则（用户指定该面板 ≤1200 堆叠）；
+   全站通用窄屏规则仍留在 900px，避免其他页面（我的角色卡片等）被提前改布局。
+   ============================================================ */
+@media (max-width: 1200px) {
+  .dp-slots {
+    grid-template-columns: repeat(2, 1fr); /* 窄屏：两列 */
+  }
+  .dp-slots-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .dp-body {
+    grid-template-columns: 1fr; /* 窄屏：驱动盘输入与权重/输出变为上下排列 */
+  }
+}
+@media (max-width: 900px) {
+  .upper {
+    grid-template-columns: 1fr;
+  }
+  .skill-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .upper-left.has-tachie {
+    padding-left: 0;
+  }
+  .upper-left.has-tachie .portrait-lg {
+    position: static;
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+  }
+  .discs-vert {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ad-slotgrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .style-blocks {
+    grid-template-columns: 1fr;
+  }
+  main {
+    grid-template-columns: 1fr;
+  }
+  .mychars-body.cards {
+    grid-template-columns: 1fr;
+  }
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+  .stamp-wrap {
+    display: none;
+  }
 }

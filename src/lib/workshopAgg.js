@@ -187,38 +187,11 @@ function slotOf(eq) {
 }
 
 // ---------- 副词条强化次数（roll）还原 + 角色有效词条权重 ----------
-// 每条副词条数值 = 单次强化基数 × 强化次数（1-6）。两源存法不同但基数同源：2025 源百分比 ×100 存整数、
-// mys 源存去掉 % 的数；value 类型即源标记（实测与 rarity 判源 100% 同构零交叉），故按类型自判源。
+// ⚠️ substatRolls 权威在 discRules.js（规则 C4）；基数与 A3 成长表统一换算（百分比 = S 级成长值 × 100）。
 // 为什么还原次数：旧「有效词条个数」99.95% 恒为 4 无区分度；value/base 99.9987% 恰为 1-6 整数（余 19 条异常靠 round+钳制兜底）。
 // 注意「单盘总强化次数」恒为 8/9 无信息量，有区分度的是**落在角色有效词条上的次数**。
-
-/** 副词条单次强化基数（S 级盘，mys 口径：百分比按「去掉 % 的数」计） */
-const SUBSTAT_ROLL_BASE = {
-  暴击率: 2.4,
-  暴击伤害: 4.8,
-  '攻击力%': 3,
-  '生命值%': 3,
-  '防御力%': 4.8,
-  攻击力: 19,
-  生命值: 112,
-  防御力: 15,
-  穿透值: 9,
-  异常精通: 9,
-};
-
-/** 百分比形态副词条（2025 源存值需 ÷100 才与基数同量纲） */
-const PCT_SUBSTATS = new Set(['暴击率', '暴击伤害', '攻击力%', '生命值%', '防御力%']);
-
-/** 还原一条副词条的强化次数（1-6）。源按 value 类型自判（number=2025 需 ÷100 归一百分比、string=mys）。 */
-export function substatRolls(name, value) {
-  const base = SUBSTAT_ROLL_BASE[name];
-  if (!base) return 0;
-  const raw = parseFloat(String(value));
-  if (!Number.isFinite(raw)) return 0;
-  const v = typeof value === 'number' && PCT_SUBSTATS.has(name) ? raw / 100 : raw;
-  const r = Math.round(v / base);
-  return r < 1 ? 0 : r > 6 ? 6 : r; // 钳制：异常值（实测 19/144 万）不至于把分布拉出量程
-}
+import { substatRolls } from './discRules.js';
+export { substatRolls }; // 保持既有 import 链（test/workshopAgg.test.js 等）
 
 /** 副词条名 → 工坊权重表（workshop-weights.json）的权重 key。
  *  权重表另有 能量/冲击/穿透率/掌控/加伤 四五个 key，它们只可能是主词条，不参与副词条口径。 */

@@ -64,7 +64,8 @@ src/sync/*  →  data/*.json  →  server.js /api/data  →  前端 fetch → se
 | `calc.js` | 计算引擎：局外面板合成、副词条成长、达成率、目标缺口 |
 | `models.js` | 领域模型 `Character`/`Wengine`/`Disc`，构造时归一 + 派生 + 缓存 |
 | `simCalc.js` | 驱动盘成长极限模拟，帕累托有效前沿（2D/3D） |
-| `discProb.js` | 驱动盘练度提升概率计算（移植 ZZZ-DDC）：首 4 副词条组合枚举 × 强化成长通过率 × 主词条概率加权。词条体系在 constants.js（DISC_*）；角色价值权重来自 workshop-weights（经 workshop-grad 的 role_id→wiki 名对齐；落地 key 已是 CONSTANT 标准名，经 DISC_SUBSTAT_WS_KEY 直接匹配，查不到回退默认模板） |
+| `discRules.js` | **驱动盘领域规则唯一权威**（规则编号 A-H，对照 `docs/disc-rules-audit.md`）：A 词条体系（成长表/形态判定/123 固定主词条）、B 生成模型（ZZZ-DDC：首 4 枚举/强化成长/4-3 占比/主词条加权/位置 1/6/定向道具）、C 分数与命中（discGrowth/substatRolls）、D 权重来源、E 保词条比较（含百分比替代固定值）、H 显示配对。**新增驱动盘逻辑先查这里**；constants.js（叶子）仍是 A 组常量权威，discRules 再导出；calc/discProb/workshopAgg/web 均从 discRules 取规则 |
+| `discProb.js` | 驱动盘练度概率的**兼容层**（历史 import 链不变）：re-export discRules 的 B/D/E 组 + 保留评级（GRADE_TABLE/gradeOf）与别名（ENTRY_NAMES/SUBSTAT_SPECIAL_WEIGHTS） |
 | `discAdvisor.js` | 驱动盘推荐统计 + 官方/实况双口径决策卡合并 |
 | `panelBench.js` | plans 的 low/mid/high 三档面板基准（MAD 去离群） |
 | `plansStats.js` | plans 每角色 Top 音擎/套装组合（结构对齐 workshop-grad） |

@@ -1,7 +1,7 @@
 // src/web/statsView.js —— 统计视图：三个二级子面板（角色面板 / 驱动盘 / 全服总览）
 // 数据源：plans.json + workshop-grad.json + workshop-stats.json + characters.json；样本对标为高练度标杆池（不当作全服分布）。
 // 容器结构仿 wiki.js：TABS + PANEL_RENDERERS 键控分发 + 共享排序。
-import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex, statsMissingData } from './data.js';
+import { plans, library, workshopGrad, workshopStats, myCharacters, charIndex, wengineIndex, statsMissingData, roleOptionsHtml } from './data.js';
 import { computeRecTierStats } from '../lib/panelBench.js';
 import { CHAR_ALIASES } from '../lib/names.js';
 import { computeRoleBuildsFromPlans, orderComboSets4First } from '../lib/plansStats.js';
@@ -10,7 +10,6 @@ import { renderDiscStats } from './discstats.js';
 import { tableHtml } from './shared.js';
 import {
   escapeHtml,
-  escapeJsAttr,
   renderRichText,
   formatValue,
   statEntries,
@@ -549,10 +548,7 @@ export function setSelectedRole(name) {
 function roleSelectHtml(current) {
   const roleNames = Object.values(plans).map((v) => v.name);
   if (!current || !roleNames.includes(current)) current = roleNames[0];
-  const opts = roleNames
-    .map((n) => `<option value="${escapeJsAttr(n)}"${n === current ? ' selected' : ''}>${escapeHtml(n)}</option>`)
-    .join('');
-  return `<div class="chart-select"><label>角色</label><select onchange="ZZZ.selectRole(this.value)">${opts}</select></div>`;
+  return `<div class="chart-select"><label>角色</label><select onchange="ZZZ.selectRole(this.value)">${roleOptionsHtml(current, roleNames)}</select></div>`;
 }
 
 // ---------- 角色面板（单角色详情层：流派分析 / 小提琴+箱线 / 推荐三档增强图 / 技能对标与组合 / 配装对标 / 配队亲和 / 密度散点） ----------

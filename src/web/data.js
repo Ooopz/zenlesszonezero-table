@@ -1,5 +1,5 @@
 // src/web/data.js —— 数据层：由 main.js 注入数据（不再从 DOM 内嵌块读取），维护索引/配置/过滤
-import { statEntries } from '../lib/util.js';
+import { statEntries, escapeHtml } from '../lib/util.js';
 import { buildNameIndex, CATEGORY } from '../lib/names.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
@@ -76,7 +76,7 @@ export const elementColors = {
 };
 
 // ---------- 用户配置（目标/有效词条/表格顺序/视图），经服务器持久化到 data/user-config.json ----------
-export let userConfig = { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars' };
+export let userConfig = { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars', discWeights: {} };
 export function readCharTarget(name) {
   return userConfig.charTargets[name] || {};
 }
@@ -119,6 +119,32 @@ export function saveColOrder(order) {
   userConfig.colOrder = order;
   saveUserConfig();
 }
+
+// ---------- 驱动盘模拟：用户自定义的副词条价值权重（按角色保存；点「计算概率」时写入，选中角色时自动加载） ----------
+/** 该角色保存的 10 维价值权重（无返回 null，调用方回退 workshop 权重） */
+export function readDiscWeights(name) {
+  return userConfig.discWeights?.[name] || null;
+}
+export function saveDiscWeights(name, weights) {
+  userConfig.discWeights[name] = weights;
+  return saveUserConfig();
+}
+
+// ---------- 角色下拉共用（所有视图的角色选择统一：排序 + option 生成） ----------
+/** 角色名排序：rowOrder（用户配置顺序）中的在前、按序；其余按中文名。names 缺省 = library 全部角色 */
+export function sortRoleNames(names) {
+  const list = names || Object.keys(library.characters || {});
+  const order = readRowOrder() || [];
+  const orderSet = new Set(order.filter((n) => list.includes(n)));
+  const rest = list.filter((n) => !orderSet.has(n)).sort((a, b) => a.localeCompare(b, 'zh'));
+  return [...orderSet, ...rest];
+}
+/** 角色下拉 option HTML（统一排序 + 转义）；current 为当前选中名，names 缺省 = library 全部角色 */
+export function roleOptionsHtml(current = '', names) {
+  return sortRoleNames(names)
+    .map((n) => `<option value="${escapeHtml(n)}"${n === current ? ' selected' : ''}>${escapeHtml(n)}</option>`)
+    .join('');
+}
 /** 保存用户配置到服务器。必须 await + 查 ok：postJSON 失败时返回 null 而不抛，
  *  原先不检查导致保存失败无提示、刷新后修改全部丢失。 */
 export async function saveUserConfig() {
@@ -133,7 +159,7 @@ export async function loadUserConfig() {
     // 原地修改同一对象（render/ui 持有其引用），而不是重新赋值 let 变量
     Object.assign(
       userConfig,
-      { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars' },
+      { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars', discWeights: {} },
       j.config
     );
   }

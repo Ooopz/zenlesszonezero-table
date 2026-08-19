@@ -1,17 +1,29 @@
 // src/web/discProb.js —— 模拟视图 · 「驱动盘模拟」二级子面板
 // 驱动盘练度提升概率计算（移植 ZZZ-DDC）：按角色副词条价值权重，计算随机掉落+强化达到目标分的概率。
-// 计算逻辑在 src/lib/discProb.js（双端共享纯函数）；本文件只做表单与结果渲染。
+// 计算逻辑在 src/lib/discRules.js（双端共享纯函数，规则 A-H 编号见 docs/disc-rules-audit.md）；本文件只做表单与结果渲染。
 // 角色价值权重 = workshop-weights（经 workshop-grad 对齐 wiki 角色名）；词条/主词条名称与 constants 统一。
-import { library, myCharacters, workshopGrad, workshopStats } from './data.js';
+import { myCharacters, workshopGrad, workshopStats, sortRoleNames, roleOptionsHtml, readDiscWeights, saveDiscWeights } from './data.js';
 import {
   DISC_SUBSTATS,
   DISC_SUBSTAT_SPECIAL_WEIGHTS,
   MAIN_STAT_OPTIONS,
-  STAT,
   mainStatName,
 } from '../lib/constants.js';
-import { roleWeightsFromWs, DEFAULT_WEIGHTS, computePosProb, computePosProbKeep } from '../lib/discProb.js';
-import { substatGrowthTable, substatType } from '../lib/calc.js';
+import {
+  // A5：123 号位主词条固定；H1：副词条池配对/展示顺序
+  SLOT_FIXED_MAIN,
+  DP_ROW_PAIRS,
+  DP_SUB_ORDER,
+  // A3/A4：成长表与形态判定
+  substatGrowthTable,
+  substatType,
+  // D1-D4：权重来源
+  roleWeightsFromWs,
+  DEFAULT_WEIGHTS,
+  // B/E：生成模型与保词条比较
+  computePosProb,
+  computePosProbKeep,
+} from '../lib/discRules.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
 import { registerZZZ } from './shared.js';
 import { chartBox, registerChart, dpProbBarOption } from './charts.js';
@@ -30,20 +42,6 @@ function mountDpChart(key, opt) {
 }
 
 let dpRole = '';
-
-/** 副词条池 5 行 × 2 列配对顺序（每行两个数值即 DISC_SUBSTATS 下标；固定值在前、百分比在后） */
-const DP_ROW_PAIRS = [
-  [1, 0], // 生命值   | 生命值%
-  [6, 5], // 防御力   | 防御力%
-  [3, 2], // 攻击力   | 攻击力%
-  [8, 7], // 暴击率   | 暴击伤害
-  [9, 4], // 异常精通 | 穿透值
-];
-/** 副词条下拉展示顺序（配对展平，与权重池一致） */
-const DP_SUB_ORDER = DP_ROW_PAIRS.flat();
-
-/** 1-3 号位主词条固定（1=生命值 / 2=攻击力 / 3=防御力） */
-const SLOT_FIXED_MAIN = { 1: STAT.HP, 2: STAT.ATK, 3: STAT.DEF };
 
 /** 角色当前装备的 6 盘（按 1-6 号位排序，缺槽为 null） */
 function roleDiscs(name) {
@@ -171,14 +169,14 @@ export function dpDirChange(sel, pos) {
   refreshDirState(pos);
 }
 
-/** 当前角色的 10 维价值权重（workshop-weights，查不到回退默认模板） */
+/** 当前角色的 10 维价值权重：优先用户保存的（点计算时写入），其次 workshop-weights，最后默认模板 */
 function weightsFor(name) {
-  return roleWeightsFromWs(name, workshopStats.weightJson, workshopGrad.roles) ?? DEFAULT_WEIGHTS;
+  return readDiscWeights(name) ?? roleWeightsFromWs(name, workshopStats.weightJson, workshopGrad.roles) ?? DEFAULT_WEIGHTS;
 }
 
 /** 渲染驱动盘模拟子面板（simulate.js 的 PANEL_RENDERERS 调用） */
 export function renderProbPanel() {
-  const roles = Object.keys(library.characters || {}).sort((a, b) => a.localeCompare(b, 'zh'));
+  const roles = sortRoleNames();
   if (!dpRole || !roles.includes(dpRole)) dpRole = roles[0] || '';
   const weights = weightsFor(dpRole);
   const entryHtml = (i) =>
@@ -197,9 +195,7 @@ export function renderProbPanel() {
     <p class="sim-desc">按该角色的副词条价值权重（工坊默认流派口径），计算<b>刷到比当前驱动盘更好的盘的概率</b>：新盘随机掉落 + 强化后，副词条价值分超过当前盘该位置的分数。<b>概率越低 = 当前盘越接近极限、越难提升</b>。<br>目标主词条（456，默认 = 当前主词条）限定比较的主词条；<b>定向主词条</b> = 消耗道具使位置与主词条必出（消除 1/6 与主词条概率）；定向副词条需先定向主词条。
     模型：首 4 副词条按抽取权重枚举（同盘不重复），强化每次从 4 词条中随机一条 +1 层；初始 4 词条盘 20%（成长 5 次）、3 词条盘 80%（首次强化补第 4 词条、之后成长 4 次）；456 号位主词条按出现概率加权。</p>
     <div class="tgrid sim-grid">
-      <div class="titem"><label>角色</label><select id="dpRoleSel" onchange="ZZZ.dpSetRole(this.value)">${roles
-        .map((r) => `<option value="${escapeHtml(r)}"${r === dpRole ? ' selected' : ''}>${escapeHtml(r)}</option>`)
-        .join('')}</select></div>
+      <div class="titem"><label>角色</label><select id="dpRoleSel" onchange="ZZZ.dpSetRole(this.value)">${roleOptionsHtml(dpRole, roles)}</select></div>
       <div class="titem"><label>&nbsp;</label><button class="primary" onclick="ZZZ.dpCalc()">计算概率</button></div>
     </div>
     <h4 class="dp-slots-title">当前驱动盘（默认 = 该角色已装备，可调整；定向词条默认不定向）</h4>
@@ -285,6 +281,8 @@ export function dpCalc() {
     rest: 1, // 同盘副词条不重复（库存固定 1，不再提供编辑）
     specialWeight: DISC_SUBSTAT_SPECIAL_WEIGHTS[i],
   }));
+  // 点击计算：把当前权重输入保存到 user-config（下次选中该角色自动加载）
+  saveDiscWeights(dpRole, pool.map((t) => t.score));
   let tot1 = 0;
   let tot2 = 0;
   const rows = [];
