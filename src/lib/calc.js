@@ -14,6 +14,9 @@ import {
   VALID_STAT_OPTIONS,
   isDamageBonus as isDamageBonusName,
 } from './constants.js';
+// 驱动盘领域规则（成长表/形态判定/成长次数/有效命中/价值分）权威在 discRules.js，此处引入并再导出保持既有 import 链
+import { substatGrowthTable, substatType, discGrowth, discHits, discScore } from './discRules.js';
+export { substatGrowthTable, substatType, discGrowth, discHits, discScore };
 
 // ---------- 数据上下文（由调用方注入） ----------
 // ctx = { library, charIndex, wengineIndex, discIndex, readCharTarget, readValidStats }
@@ -47,67 +50,16 @@ export const targetPercents = TARGET_PERCENTS;
 export const targetUnits = TARGET_UNITS;
 
 // ---------- 副词条成长与命中 ----------
-// 数据来源：bilibili wiki。S级副词条初始值=成长值，每强化一次 +成长值；等级每 +3 触发一次成长。
-export const substatGrowthTable = {
-  S: {
-    穿透值: 9,
-    异常精通: 9,
-    防御力: 15,
-    攻击力: 19,
-    生命值: 112,
-    暴击率: 0.024,
-    '生命值%': 0.03,
-    '攻击力%': 0.03,
-    暴击伤害: 0.048,
-    '防御力%': 0.048,
-  },
-  A: {
-    穿透值: 6,
-    异常精通: 6,
-    防御力: 10,
-    攻击力: 13,
-    生命值: 75,
-    暴击率: 0.016,
-    '生命值%': 0.02,
-    '攻击力%': 0.02,
-    暴击伤害: 0.032,
-    '防御力%': 0.032,
-  },
-  B: {
-    穿透值: 3,
-    异常精通: 3,
-    防御力: 5,
-    攻击力: 6,
-    生命值: 0,
-    暴击率: 0.008,
-    '生命值%': 0.01,
-    '攻击力%': 0.01,
-    暴击伤害: 0.016,
-    '防御力%': 0.016,
-  },
-};
+// ⚠️ substatGrowthTable / substatType / discGrowth / discHits / discScore 已在 discRules.js（规则 A3/A4/C1/C2/C3），顶部 import 后 re-export。
 export const validStatOptions = VALID_STAT_OPTIONS;
-/** 副词条成长类型：暴击/暴伤恒为%；其余按数值大小（≤1 视为百分比） */
-export function substatType(name, value) {
-  return [STAT.CR, STAT.CD].includes(name) ? name : value <= 1 ? name + '%' : name;
-}
-/** 单个驱动盘：各副词条的成长（强化）次数 = 当前值/成长值 - 1 */
-export function discGrowth(disc, rarity) {
-  const table = substatGrowthTable[rarity] || substatGrowthTable.S;
-  return statEntries(disc.subStats).map((t) => {
-    const type = substatType(t.name, t.value);
-    const growth = table[type];
-    return { ...t, type, growthCount: growth ? Math.max(0, Math.round(t.value / growth - 1)) : 0 };
-  });
-}
 /** 角色副词条命中：落在有效属性上的词条次数（每个词条本身算 1，每强化一次再 +1）；未设有效属性返回 null */
 export function hitCount(character) {
   const valid = new Set(ctx.readValidStats(character.name));
   if (!valid.size) return null;
   let hits = 0;
   for (const d of character.discs || []) {
-    // Disc 实例在构造时已缓存 growth，无需按盘重算
-    for (const g of d.growth || discGrowth(d, d.rarity)) if (valid.has(g.type)) hits += 1 + g.growthCount;
+    // Disc 实例在构造时已缓存 growth，无需按盘重算；单盘命中走 discRules C3（discHits）
+    hits += discHits(d.growth || discGrowth(d, d.rarity), valid) ?? 0;
   }
   return hits;
 }

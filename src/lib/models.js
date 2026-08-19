@@ -1,6 +1,7 @@
 // src/lib/models.js —— 领域模型：Character / Wengine / Disc 基类
 // 构造时归一化基础数据（characters.json 账号数据 / library.json wiki 数据）、自动算派生属性（如副词条成长次数）、组合音擎+驱动盘
 import { calculateCharacter, hitCount, statProgress, discGrowth, ctxVersion } from './calc.js';
+import { discHits } from './discRules.js';
 import { normalizeStatKeys } from './util.js';
 
 /** 驱动盘基类：名称/位置/等级/稀有度/主词条/副词条 + 各副词条成长次数 */
@@ -32,8 +33,8 @@ export class Disc {
 
   /** 该盘落在有效词条上的命中次数（每个词条本身 1 + 成长次数）；未设有效属性返回 null */
   getHitCount(validSet) {
-    if (!validSet || !validSet.size) return null;
-    return this.growth.filter((g) => validSet.has(g.type)).reduce((s, g) => s + 1 + g.growthCount, 0);
+    // 权威实现 discRules.js C3（discHits）
+    return discHits(this.growth, validSet);
   }
 }
 

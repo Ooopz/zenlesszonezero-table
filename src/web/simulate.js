@@ -1,5 +1,5 @@
 // src/web/simulate.js —— 模拟视图（两个二级子面板）：①成长模拟（帕累托有效前沿） ②驱动盘模拟（练度提升概率，ZZZ-DDC 移植）
-import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget } from './data.js';
+import { library, charIndex, wengineIndex, discIndex, myCharacters, plansByName, readCharTarget, sortRoleNames } from './data.js';
 import { PANEL_ORDER, MAIN_STAT_OPTIONS, TARGET_KEYS } from '../lib/constants.js';
 import { simulateFrontier3D, simulateFrontierLevels, simulateFixedPanel, axisAvailable, axisSubstatTypes, axisRollCap } from '../lib/simCalc.js';
 import { escapeHtml, formatValue } from '../lib/util.js';
@@ -93,7 +93,7 @@ function applyRoleDefaults(roleName) {
 
 function ensureState() {
   if (state.charName) return;
-  const charNames = sortedNames(library.characters);
+  const charNames = sortRoleNames();
   const myName = (myCharacters || []).map((c) => c.name).find((n) => library.characters[n]);
   applyRoleDefaults(myName || charNames[0] || '');
 }
@@ -487,7 +487,7 @@ export function renderSimulate() {
 function renderFrontierPanel() {
   ensureState();
   clearCharts();
-  const charOptions = sortedNames(library.characters);
+  const charOptions = sortRoleNames();
   const wengineOptions = sortedNames(library.wengines);
   const discOptions = sortedNames(library.discs);
   const config =
