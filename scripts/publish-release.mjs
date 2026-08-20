@@ -175,15 +175,17 @@ async function main() {
   }
 
   // ② 打版本号：日期标签；同一天重复发布则加序号
+  // ⚠️ execSync 用 stdio:'inherit'（不用 'pipe'）：受限环境（沙箱/CI 管道）下 pipe 捕获子进程输出会失败，
+  //    导致 gh release view 永远"检测失败"而误判 tag 不存在（曾致同日重复发布时 create 撞已有 tag）。
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   let tag = 'v' + date;
   try {
-    execSync('gh release view ' + tag + ' --json tagName', { stdio: 'pipe' });
+    execSync('gh release view ' + tag + ' --json tagName', { stdio: 'inherit' });
     let i = 2;
     while (true) {
       tag = 'v' + date + '-' + i;
       try {
-        execSync('gh release view ' + tag + ' --json tagName', { stdio: 'pipe' });
+        execSync('gh release view ' + tag + ' --json tagName', { stdio: 'inherit' });
         i++;
       } catch {
         break;
@@ -194,7 +196,7 @@ async function main() {
   console.log('② 发布 Release ' + tag + ' …');
   execSync(
     `gh release create ${tag} "${join(REL, 'index.html')}" "${join(REL, 'collect.js')}" ` +
-      `--title "配装面板 ${tag}" --notes "GitHub Pages 自动部署已触发（pages-from-release workflow）。"`,
+      `--title "配装面板 ${tag}" --notes "${tag}"`,
     { cwd: ROOT, stdio: 'inherit' }
   );
 
