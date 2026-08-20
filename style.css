@@ -1600,6 +1600,27 @@ main {
   padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--line);
 }
+/* 说明按钮（图表标题右方）：点击弹出详细说明（data-hint，render.js 委托） */
+.chart-hint {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto; /* 靠右对齐 */
+  border: 1px solid var(--hazard);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--hazard);
+  font-family: var(--font-disp);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.chart-hint:hover {
+  background: var(--hazard);
+  color: #0a0a0a;
+}
 /* 黄条标签 */
 .chart-card h3::before {
   content: '';
@@ -2388,18 +2409,15 @@ main {
   gap: var(--sp-4);
 }
 .sim-config h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
   margin: 0 0 var(--sp-2);
   font-family: var(--font-disp);
   font-size: 20px;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--txt);
-}
-.sim-desc {
-  margin: 0 0 var(--sp-3);
-  color: var(--dim);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
 }
 .sim-grid {
   margin-bottom: var(--sp-3);

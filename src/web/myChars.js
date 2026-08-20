@@ -177,7 +177,7 @@ export function characterCard(character) {
     // 面板数值金色突出由「配置的有效副词条」决定：有效副词条 → 对应面板属性（如配了攻击力% 则攻击力金色）
     const core = highlighted ? '1' : '';
     mergedRows.push(
-      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val" data-core="${core}"${mismatch ? ` style="color:var(--red)"` : ''}${valTip ? ` data-detail="${escapeHtml(valTip)}" title="悬浮查看实测/推算对比"` : ''}>${formatValue(name, displayFinal)}${split}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
+      `<tr class="${highlighted ? 'hl' : ''}"><td class="cs-name"${mismatch ? ` style="color:var(--red)"` : ''}>${name}</td><td class="cs-val" data-core="${core}"${mismatch ? ` style="color:var(--red)"` : ''}${valTip ? ` data-detail="${escapeHtml(valTip)}"` : ''}>${formatValue(name, displayFinal)}${split}</td><td class="cs-rate">${prog ? progressCell(prog.rate) : ''}</td></tr>`
     );
     displayed.add(name);
   };
@@ -207,7 +207,7 @@ export function characterCard(character) {
   // 右上角达成率大字 + 图章（取代面板标题里的「总 X%」）
   const stamp =
     totalProgress != null
-      ? `<div class="stamp-wrap" title="总体达成率（各属性达成率均值）"><span class="rate">${totalProgress}<small>%</small></span><span class="stamp ${totalProgress >= 97 ? 'green' : totalProgress < 60 ? 'red' : ''}">${
+      ? `<div class="stamp-wrap" data-detail="总体达成率（各属性达成率均值）"><span class="rate">${totalProgress}<small>%</small></span><span class="stamp ${totalProgress >= 97 ? 'green' : totalProgress < 60 ? 'red' : ''}">${
           totalProgress >= 97 ? '已毕业' : totalProgress >= 60 ? '达成' : '缺口'
         }</span></div>`
       : '';
@@ -282,10 +282,10 @@ export function characterCard(character) {
     <div class="upper">
       <div class="upper-left${tachie ? ' has-tachie' : ''}">
         <div class="basic">
-          ${portrait ? `<img class="portrait${tachie ? ' portrait-lg' : ''}" src="${portrait}" alt="" loading="lazy" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')" onerror="this.style.display='none'">` : ''}
+          ${portrait ? `<img class="portrait${tachie ? ' portrait-lg' : ''}" src="${portrait}" alt="" loading="lazy" data-detail="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')" onerror="this.style.display='none'">` : ''}
           <div class="who">
             <div class="name">${character.name || ''}
-              <button class="mini" title="设置/编辑该角色的目标属性与有效副词条" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button>
+              <button class="mini" data-detail="设置/编辑该角色的目标属性与有效副词条" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button>
             </div>
             ${readNote(character.name) ? `<div class="note">${escapeHtml(readNote(character.name))}</div>` : ''}
             <div class="tags">
@@ -309,7 +309,7 @@ export function characterCard(character) {
         <div class="block">
           <div class="col-title"><b>音擎</b></div>
           <div class="wengine">
-            ${wengineIcon ? `<img src="${wengineIcon}" alt="" onerror="this.style.display='none'"${wengineEffect ? ` data-detail="${escapeHtml(wengineEffect)}" title="悬浮查看音擎特效"` : ''}>` : ''}
+            ${wengineIcon ? `<img src="${wengineIcon}" alt="" onerror="this.style.display='none'"${wengineEffect ? ` data-detail="${escapeHtml(wengineEffect)}"` : ''}>` : ''}
             <div class="wmain">
               <div class="wname">${wengine.name || '未佩戴'}<span style="color:var(--acc)">${'★'.repeat(wengine.refinement || 0)}</span></div>
               <div class="wmeta">${wengineBaseAtk != null ? `基础攻击 ${formatValue(STAT.ATK, wengineBaseAtk)}` : ''}${wengineSubStats.length ? `　${wengineSubStats.map((t) => `${t.name} ${formatValue(t.name, t.value)}`).join('　')}` : ''}</div>
@@ -323,7 +323,7 @@ export function characterCard(character) {
       </div>
     </div>
     <div class="lower">
-      <div class="col-title"><b>驱动盘</b>${hits != null ? (hitTip ? `<span class="d-hit" data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口">命中 ${hits}</span>` : `<span>命中 ${hits}</span>`) : ''}</div>
+      <div class="col-title"><b>驱动盘</b>${hits != null ? (hitTip ? `<span class="d-hit" data-detail="${escapeHtml(hitTip)}">命中 ${hits}</span>` : `<span>命中 ${hits}</span>`) : ''}</div>
       <div class="discs-vert wide">${discsHtml}</div>
     </div>
   `;
@@ -381,7 +381,7 @@ function cellStats(R, target, s) {
     targetVal == null || !Number(targetVal)
       ? null
       : current / (targetPercents.has(s) ? Number(targetVal) / 100 : Number(targetVal));
-  const tip = ` data-detail="${escapeHtml(statDetailHtml(R, s, current, targetVal, rate))}" title="悬浮查看计算详情"`;
+  const tip = ` data-detail="${escapeHtml(statDetailHtml(R, s, current, targetVal, rate))}"`;
   if (rate == null)
     return `<td class="tstat"${tip}><span class="tv">${formatValue(s, current)}</span><div class="tbar tbar-empty"></div></td>`;
   const width = Math.min(100, rate * 100).toFixed(0);
@@ -409,7 +409,7 @@ export function renderTable(list, container) {
     .map((c) => {
       const sortable = SORTABLE_COLS.has(c);
       const on = tableSort.key === c;
-      return `<th draggable="true" title="拖动可排序" data-col="${c}"${sortable ? ` data-sort="${c}"${on ? ' class="sorted"' : ''}` : ''}>${c}${on ? (tableSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
+      return `<th draggable="true" data-detail="拖动可排序" data-col="${c}"${sortable ? ` data-sort="${c}"${on ? ' class="sorted"' : ''}` : ''}>${c}${on ? (tableSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`;
     })
     .join('')}</tr>`;
 
@@ -431,7 +431,7 @@ export function renderTable(list, container) {
     const charNote = readNote(character.name);
     const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
     cell['角色'] =
-      `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" loading="lazy" data-detail="${escapeHtml(charDetail)}" title="点击添加备注" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
+      `<td class="tchar"><span class="t-char-cell">${charIcon ? `<img class="t-ico" src="${charIcon}" loading="lazy" data-detail="${escapeHtml(charDetail)}" onclick="openNote('${escapeJsAttr(character.name)}')">` : escapeHtml(character.name)}<span class="t-actions"><button class="mini" onclick="openTargetSettings('${escapeJsAttr(character.name)}')">目标</button></span></span></td>`;
 
     const wengineDetail =
       `<b>${wengine.name || '未佩戴'}</b>${wengine.refinement ? ` ★${wengine.refinement}` : ''}` +
@@ -462,7 +462,7 @@ export function renderTable(list, container) {
     const hitTip = gapAdviceHtml(character, R);
     cell['副词条命中'] = `<td class="thit">${
       hits != null
-        ? `<span class="tv"${hitTip ? ` data-detail="${escapeHtml(hitTip)}" title="悬浮查看目标副词条缺口"` : ''}>${hits}</span>`
+        ? `<span class="tv"${hitTip ? ` data-detail="${escapeHtml(hitTip)}"` : ''}>${hits}</span>`
         : '—'
     }</td>`;
 

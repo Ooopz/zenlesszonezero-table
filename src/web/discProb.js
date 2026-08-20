@@ -94,8 +94,8 @@ function slotHtml(pos, main, subs, growth) {
       return (
         `<div class="dp-row dp-sub-row">` +
         `<select class="dp-slot-sub" data-pos="${pos}" data-sub="${k}" onchange="ZZZ.dpSubChange(this, ${pos}, ${k})">${subOptions(name)}</select>` +
-        `<input class="dp-hit-sub" data-pos="${pos}" data-sub="${k}" type="number" min="0" step="1" value="${hit}" oninput="ZZZ.dpHitChange(this, ${pos}, ${k})" title="该词条命中次数（1 + 强化次数）">` +
-        `<span class="dp-sub-val" data-pos="${pos}" data-sub="${k}" title="基础值 × 命中次数">${val}</span></div>`
+        `<input class="dp-hit-sub" data-pos="${pos}" data-sub="${k}" type="number" min="0" step="1" value="${hit}" oninput="ZZZ.dpHitChange(this, ${pos}, ${k})" data-detail="该词条命中次数（1 + 强化次数）">` +
+        `<span class="dp-sub-val" data-pos="${pos}" data-sub="${k}" data-detail="基础值 × 命中次数">${val}</span></div>`
       );
     })
     .join('');
@@ -106,11 +106,11 @@ function slotHtml(pos, main, subs, growth) {
       : `<option value="" selected>—（不限）</option>${(MAIN_STAT_OPTIONS[pos] || [])
           .map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`)
           .join('')}`;
-  const dirMain = `<div class="dp-row"><label>定向主词条</label><select class="dp-dir-main" data-pos="${pos}" onchange="ZZZ.dpDirChange(this, ${pos})" title="消耗道具：指定位置且主词条必出">${dirMainOpts}</select></div>`;
+  const dirMain = `<div class="dp-row"><label>定向主词条</label><select class="dp-dir-main" data-pos="${pos}" onchange="ZZZ.dpDirChange(this, ${pos})" data-detail="消耗道具：指定位置且主词条必出">${dirMainOpts}</select></div>`;
   const dirSubs = [0, 1]
     .map(
       (k) =>
-        `<div class="dp-row"><label>定向副词条${k + 1}</label><select class="dp-dir-sub" data-pos="${pos}" data-k="${k}" onchange="ZZZ.dpDirChange(this, ${pos})" title="需先定向主词条"><option value="" selected>—（不限）</option>${DP_SUB_ORDER.map(
+        `<div class="dp-row"><label>定向副词条${k + 1}</label><select class="dp-dir-sub" data-pos="${pos}" data-k="${k}" onchange="ZZZ.dpDirChange(this, ${pos})" data-detail="需先定向主词条"><option value="" selected>—（不限）</option>${DP_SUB_ORDER.map(
           (i) => `<option value="${escapeHtml(DISC_SUBSTATS[i])}">${escapeHtml(DISC_SUBSTATS[i])}</option>`
         ).join('')}</select></div>`
     )
@@ -181,7 +181,7 @@ export function renderProbPanel() {
   const weights = weightsFor(dpRole);
   const entryHtml = (i) =>
     `<div class="dp-entry"><span class="dp-ename">${DISC_SUBSTATS[i]}</span>` +
-    `<label>价值</label><input class="dp-w" data-idx="${i}" type="number" step="0.05" min="0" value="${weights[i]}" title="该词条对本角色的价值权重（0 = 无效词条）"></div>`;
+    `<label>价值</label><input class="dp-w" data-idx="${i}" type="number" step="0.05" min="0" value="${weights[i]}" data-detail="该词条对本角色的价值权重（0 = 无效词条）"></div>`;
   const rows = DP_ROW_PAIRS.map((pair) => pair.map(entryHtml).join('')).join('');
   const discs = roleDiscs(dpRole);
   const slots = discs
@@ -191,20 +191,20 @@ export function renderProbPanel() {
     })
     .join('');
   return `<div class="dp-wrap chart-card" style="grid-column:1/-1">
-    <h3>驱动盘模拟</h3>
-    <p class="sim-desc">按该角色的副词条价值权重（工坊默认流派口径），计算<b>刷到比当前驱动盘更好的盘的概率</b>：新盘随机掉落 + 强化后，副词条价值分超过当前盘该位置的分数。<b>概率越低 = 当前盘越接近极限、越难提升</b>。<br>目标主词条（456，默认 = 当前主词条）限定比较的主词条；<b>定向主词条</b> = 消耗道具使位置与主词条必出（消除 1/6 与主词条概率）；定向副词条需先定向主词条。
-    模型：首 4 副词条按抽取权重枚举（同盘不重复），强化每次从 4 词条中随机一条 +1 层；初始 4 词条盘 20%（成长 5 次）、3 词条盘 80%（首次强化补第 4 词条、之后成长 4 次）；456 号位主词条按出现概率加权。</p>
+    <h3>驱动盘模拟 <button class="chart-hint" data-hint="${escapeHtml(
+      '按该角色的副词条价值权重，计算<b>刷到比当前驱动盘更好的盘的概率</b>：新盘随机掉落 + 强化后，副词条价值分超过当前盘该位置的分数。<b>概率越低 = 当前盘越接近极限、越难提升</b>。<br>目标主词条（456，默认 = 当前主词条）限定比较的主词条；<b>定向主词条</b> = 消耗道具使位置与主词条必出（消除每位置 1/6 概率以及主词条出现概率）；定向副词条需先定向主词条。<br>模型：首 4 副词条按抽取权重枚举（同盘不重复），强化每次从 4 词条中随机一条 +1 层；初始 4 词条盘占 20%（成长 5 次）、3 词条盘占 80%（首次强化补第 4 词条、之后成长 4 次）；456 号位主词条按出现概率加权。'
+    )}">?</button></h3>
     <div class="tgrid sim-grid">
       <div class="titem"><label>角色</label><select id="dpRoleSel" onchange="ZZZ.dpSetRole(this.value)">${roleOptionsHtml(dpRole, roles)}</select></div>
       <div class="titem"><label>&nbsp;</label><button class="primary" onclick="ZZZ.dpCalc()">计算概率</button></div>
     </div>
-    <h4 class="dp-slots-title">当前驱动盘（默认 = 该角色已装备，可调整；定向词条默认不定向）</h4>
+    <h4 class="dp-slots-title">驱动盘设置</h4>
     <div class="dp-body">
       <div class="dp-body-left">
         <div class="dp-slots dp-slots-3">${slots}</div>
       </div>
       <div class="dp-body-right">
-        <h4>副词条池 · 价值权重</h4>
+        <h4>副词条权重</h4>
         <div class="dp-entries">${rows}</div>
         <div id="dpResult" class="dp-result"></div>
       </div>
@@ -329,7 +329,7 @@ export function dpCalc() {
   const tip =
     '<b>结果说明</b><br><span style="color:var(--dim)">每位置两个概率：<br>① 超过：新掉落驱动盘（随机掉落 + 强化）副词条价值分<b>超过当前盘</b>的概率；<br>② 保词条：新盘<b>包含当前盘全部权重>0 的副词条（按类型匹配，槽位顺序无关）且各自命中数不低</b>、同时总分超过的概率（更严格，通常更低）。<br>未定向时已含<b>位置随机 1/6</b> 与 456 目标主词条概率加权；<b>定向主词条</b>（道具）= 位置与主词条必出，两者消除；定向副词条需先定向主词条。<br><b>中间输出</b>：抽中号位主词条（未定向；定向 = 100%）；初始 4/3 词条升满超过为<b>纯条件概率</b>（不含抽中号位主词条、不含分支占比），总概率 = 抽中号位主词条 × (0.2×4词条 + 0.8×3词条)。</span>';
   document.getElementById('dpResult').innerHTML =
-    `<h4 data-detail="${escapeHtml(tip)}">各位置刷到更好盘的概率</h4>` +
+    `<h4>各位置刷到更好盘的概率 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h4>` +
     `<div class="dp-result-table"><table class="rec-table"><thead><tr><th>位置</th><th>当前分</th><th>超过</th><th>保词条超过</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>` +
     `<h4 class="dp-detail-title">中间输出（4/3 词条为纯条件概率，不含抽中号位主词条与分支占比）</h4>` +
     `<div class="dp-result-table"><table class="rec-table"><thead><tr><th>位置</th><th>抽中号位主词条</th><th>初始4词条升满超过</th><th>初始3词条升满超过</th></tr></thead><tbody>${detailRows.join('')}</tbody></table></div>` +

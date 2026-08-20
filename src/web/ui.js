@@ -185,7 +185,7 @@ function renderPlanTable(name) {
         .join('、') || '—';
     const cells = [
       `<td><button class="mini apply-btn" onclick="window.ZZZ.applyPlan('${escapeJsAttr(name)}', ${planIndex.get(p)})">应用</button></td>`,
-      `<td class="pname" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</td>`,
+      `<td class="pname" data-detail="${escapeHtml(p.name)}">${escapeHtml(p.name)}</td>`,
       `<td>${released}</td>`,
       ...statNames.map((n) => {
         const a = statMap[n];

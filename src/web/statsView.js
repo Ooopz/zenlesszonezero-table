@@ -232,13 +232,13 @@ function gradBenchHtml(name) {
       const libW = findLibraryWengine(w.name); // 工坊源音擎名解析为 wiki 规范名（ASCII 罗马数字/括号差异）
       const wname = libW?.name || romanNumeralUnicode(w.name);
       const icon = libW?.icon || w.icon;
-      return `<span class="ws-item" data-detail="${escapeHtml(wengineTip(wname))}" title="悬浮查看音擎详情">${icon ? `<img class="ws-ico" src="${icon}" alt="">` : ''}<span>${escapeHtml(wname)}</span>${gradPct(w.percent)}</span>`;
+      return `<span class="ws-item" data-detail="${escapeHtml(wengineTip(wname))}">${icon ? `<img class="ws-ico" src="${icon}" alt="">` : ''}<span>${escapeHtml(wname)}</span>${gradPct(w.percent)}</span>`;
     })
     .join('<br>');
   const relics = normRelics
     .map(
       (x) =>
-        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}" title="悬浮查看套装效果"><span class="ws-sets">${(
+        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}"><span class="ws-sets">${(
           x.sets || []
         )
           .map((s) => (s.icon ? `<img class="ws-ico" src="${s.icon}" alt="">` : ''))
@@ -255,7 +255,7 @@ function gradBenchHtml(name) {
   const planRelics = normPlanRelics
     .map(
       (x) =>
-        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}" title="悬浮查看套装效果"><span class="ws-sets">${(x.sets || []).map((s) => (library.discs?.[s.name]?.icon ? `<img class="ws-ico" src="${library.discs[s.name].icon}" alt="">` : '')).join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
+        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}"><span class="ws-sets">${(x.sets || []).map((s) => (library.discs?.[s.name]?.icon ? `<img class="ws-ico" src="${library.discs[s.name].icon}" alt="">` : '')).join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
     )
     .join('<br>');
   // 差异分析：方案 Top1 vs 实况 Top1（工坊跳过「其他」，名字解析为 wiki 规范名再比较）
@@ -360,7 +360,7 @@ function attainmentCardHtml(name, wsPanel, tiers) {
   if (!rows.length) return '';
   registerChart('detail-attainment', attainmentOption(rows));
   const tip = `<b>${escapeHtml(name)} · 方案目标达成率</b><br><span style="color:var(--dim)">按玩家真实面板分布近似计算：达到该角色方案低/中/高档目标的样本比例。这里的“玩家”是工坊高练度标杆池，不是全体玩家；比例来自压缩直方图，适合比较属性之间的门槛难度。</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">方案目标达成率</h3>${chartBox('detail-attainment', Math.max(320, rows.length * 38))}</div>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>方案目标达成率 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${chartBox('detail-attainment', Math.max(320, rows.length * 38))}</div>`;
 }
 
 /** 角色槽位短板：玩家池有效强化次数均值 + 当前账号对应六个槽位。 */
@@ -387,7 +387,7 @@ function slotEfficiencyCardHtml(name) {
   registerChart('detail-slot-efficiency', slotEfficiencyOption(rows));
   const weakest = rows.reduce((a, b) => (b.population < a.population ? b : a));
   const tip = `<b>${escapeHtml(name)} · 驱动盘槽位短板</b><br><span style="color:var(--dim)">柱 = 该角色玩家池每个槽位的有效强化次数均值；金色点 = 我的盘（有账号数据时）。有效词条按工坊角色默认权重判定。当前玩家池最低均值为 <b>${weakest.name}</b>，先检查该槽通常比盲目追总评分更有信息。</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">驱动盘槽位短板</h3>${chartBox('detail-slot-efficiency', 330)}</div>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>驱动盘槽位短板 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${chartBox('detail-slot-efficiency', 330)}</div>`;
 }
 
 /** 样本口径卡：把“高练度标杆池”从隐含前提变成可见数据。 */
@@ -412,7 +412,7 @@ function sampleCoverageCardHtml() {
     )
     .join('');
   const tip = `<b>样本口径</b><br><span style="color:var(--dim)">工坊数据只包含已达到抓取门槛的高练度角色。条目数是角色配装样本，UID 是去重玩家数；mys / 2025 是两个面板来源。不同角色样本量不完全相等，比较小样本角色时应结合这里的分母。</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">样本口径</h3>
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>样本口径 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>
     <div class="stats-kpis">
       <div><span>角色</span><b>${rows.length}</b></div>
       <div><span>配装条目</span><b>${Number(entryCount || 0).toLocaleString()}</b></div>
@@ -425,7 +425,7 @@ function sampleCoverageCardHtml() {
 }
 
 function pctCell(value, title = '') {
-  return value == null ? '<td class="ds-dim">—</td>' : `<td title="${escapeHtml(title)}">${(value * 100).toFixed(1)}%</td>`;
+  return value == null ? '<td class="ds-dim">—</td>' : `<td data-detail="${escapeHtml(title)}">${(value * 100).toFixed(1)}%</td>`;
 }
 
 /** 配装选择集中度：Top1 覆盖率 + HHI 等效选择数，避免只看 Top 名称。 */
@@ -450,7 +450,7 @@ function concentrationCardHtml() {
     )
     .join('');
   const tip = `<b>配装选择集中度</b><br><span style="color:var(--dim)">Top1 = 该角色最常见选择的覆盖率。悬浮单元格可看 HHI 与等效选择数（1/HHI）；等效选择数越小，玩家共识越强。套装按整套 6 件盘的组合统计，主词条按槽位统计。</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">配装选择集中度</h3><div class="coverage-table-wrap"><table class="rec-table"><thead><tr><th>角色</th><th>样本</th><th>音擎 Top1</th><th>套装组合 Top1</th><th>4号位</th><th>5号位</th><th>6号位</th></tr></thead><tbody>${tableRows}</tbody></table></div></div>`;
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>配装选择集中度 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3><div class="coverage-table-wrap"><table class="rec-table"><thead><tr><th>角色</th><th>样本</th><th>音擎 Top1</th><th>套装组合 Top1</th><th>4号位</th><th>5号位</th><th>6号位</th></tr></thead><tbody>${tableRows}</tbody></table></div></div>`;
 }
 /** 密度散点卡片：每个属性对网格注册一张密度散点图（perRole 用，占整行；标题只留短名，说明放悬浮） */
 function scatterCardsHtml(prefix, grid, subtitle) {
@@ -459,7 +459,7 @@ function scatterCardsHtml(prefix, grid, subtitle) {
       const id = `${prefix}-${key}`;
       registerChart(id, densityScatterOption(g, `${g.xName} × ${g.yName}`));
       const tip = `<b>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</b><br><span style="color:var(--dim)">${escapeHtml(subtitle)}：2D 密度散点——颜色越亮密度越高（每点=一位玩家的该属性组合），悬浮数据点可看坐标</span>`;
-      return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">${escapeHtml(g.xName)} × ${escapeHtml(g.yName)}</h3>${chartBox(id, 420)}</div>`;
+      return `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(g.xName)} × ${escapeHtml(g.yName)} <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${chartBox(id, 420)}</div>`;
     })
     .join('');
 }
@@ -531,9 +531,9 @@ function renderOverview() {
 
   return `<div class="chart-grid">
     ${coverageCard}
-    ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(consensusTip)}">玩家分化 vs 攻略分歧</h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
-    ${srRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(srTip)}">评分 × 盘毕业度</h3>${chartBox('overview-score-relic', Math.max(320, srRows.length * 16))}</div>` : ''}
-    ${ownRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(ownTip)}">角色拥有率</h3>${chartBox('overview-ownership', Math.max(320, ownRows.length * 16))}</div>` : ''}
+    ${consensusGrid.length ? `<div class="chart-card" style="grid-column:1/-1"><h3>玩家分化 vs 攻略分歧 <button class="chart-hint" data-hint="${escapeHtml(consensusTip)}">?</button></h3>${chartBox('overview-consensus', Math.max(440, Math.ceil(consensusGrid.length / 4) * 270))}</div>` : ''}
+    ${srRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3>评分 × 盘毕业度 <button class="chart-hint" data-hint="${escapeHtml(srTip)}">?</button></h3>${chartBox('overview-score-relic', Math.max(320, srRows.length * 16))}</div>` : ''}
+    ${ownRows.length ? `<div class="chart-card" style="grid-column:1/-1"><h3>角色拥有率 <button class="chart-hint" data-hint="${escapeHtml(ownTip)}">?</button></h3>${chartBox('overview-ownership', Math.max(320, ownRows.length * 16))}</div>` : ''}
     ${concentrationCard}
     ${progressCardsHtml()}
   </div>`;
@@ -565,7 +565,7 @@ function styleCardHtml(name) {
   const shareBar = `<div class="style-share-bar">${style.styles
     .map(
       (st, i) =>
-        `<span style="flex:${(st.share * 100).toFixed(2)};background:${SHARE_COLORS[i % SHARE_COLORS.length]}" title="${escapeHtml(st.label)} · 占 ${(st.share * 100).toFixed(0)}%"></span>`
+        `<span style="flex:${(st.share * 100).toFixed(2)};background:${SHARE_COLORS[i % SHARE_COLORS.length]}" data-detail="${escapeHtml(st.label)} · 占 ${(st.share * 100).toFixed(0)}%"></span>`
     )
     .join('')}</div>`;
   const head = `<tr><th>属性</th>${style.styles
@@ -606,7 +606,7 @@ function styleCardHtml(name) {
     ? `<div class="style-mine-line">你的面板最贴近 <b class="style-best">${escapeHtml(match.best.label)}</b>（相对距离 ${match.best.dist.toFixed(3)}，越小越像）</div>`
     : '';
   const tip = `<b>流派分析</b><br><span style="color:var(--dim)">该角色玩家池（高练度标杆池）按面板（攻击/暴击率/暴伤/属性伤害）k-means 聚类出的配置取向流派——同一角色的面板资源零和，玩家在「堆攻击 / 堆双暴 / 堆精通」等取向间分化（4 号位主词条是强判别信号）。<br>典型面板 = 流派内玩家 mean/中位；456 主词条/套装/音擎 = 流派内 Top2 偏好。<br>「我的」列（有账号数据时）：按属性相对差平方和判定你的面板最贴近哪个流派。暴伤等百分比属性按 % 显示（如 1.65 = 165%）</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">流派分析</h3>
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>流派分析 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>
     ${myLine}
     ${shareBar}
     <div class="style-table-wrap"><table class="rec-table"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
@@ -685,12 +685,12 @@ function renderRoleDetail() {
   return `<div class="chart-grid">
     ${roleSelectHtml(name)}
     ${styleCardHtml(name)}
-    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(violinTip)}">玩家分布箱线</h3>${chartBox('detail-violin', violinH)}</div>
-    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tiersTip)}">推荐三档 × 玩家区间</h3>${chartBox('detail-tiers', tiersH)}</div>
+    <div class="chart-card" style="grid-column:1/-1"><h3>玩家分布箱线 <button class="chart-hint" data-hint="${escapeHtml(violinTip)}">?</button></h3>${chartBox('detail-violin', violinH)}</div>
+    <div class="chart-card" style="grid-column:1/-1"><h3>推荐三档 × 玩家区间 <button class="chart-hint" data-hint="${escapeHtml(tiersTip)}">?</button></h3>${chartBox('detail-tiers', tiersH)}</div>
     ${attainmentCard}
     ${slotEfficiencyCard}
-    <div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(skillTip)}">技能等级分布</h3>${skillBenchHtml(name)}</div>
-    ${gradBench ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(gradTip)}">角色配装对标</h3>${gradBench}</div>` : ''}
+    <div class="chart-card" style="grid-column:1/-1"><h3>技能等级分布 <button class="chart-hint" data-hint="${escapeHtml(skillTip)}">?</button></h3>${skillBenchHtml(name)}</div>
+    ${gradBench ? `<div class="chart-card" style="grid-column:1/-1"><h3>角色配装对标 <button class="chart-hint" data-hint="${escapeHtml(gradTip)}">?</button></h3>${gradBench}</div>` : ''}
     ${matesCard}
     ${scatterCards}
   </div>`;
@@ -724,7 +724,7 @@ function matesCardsHtml(name) {
   if (!partners.length && !planMates.length) return '';
   const cell = (items, fmt) => (items.length ? items.map(fmt).join('<br>') : '<span class="ds-dim">无数据</span>');
   const tip = `<b>配队亲和</b><br><span style="color:var(--dim)">玩家侧按同 UID 共现计算：条件概率 = 拥有该角色的玩家中同时拥有队友的比例；Lift = 条件概率 ÷ 队友全池拥有率。Lift > 1 表示该队友与本角色的共现高于其自身普及度，能排除“热门角色天然排前”的偏差。右侧仍是攻略方案中的出现次数。</span>`;
-  return `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">配队亲和</h3>${table(
+  return `<div class="chart-card" style="grid-column:1/-1"><h3>配队亲和 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${table(
     ['玩家实配队友（条件概率 / Lift）', '攻略配队（方案）'],
     [
       `<tr><td class="ds-main">${cell(partners, (x) => `${escapeHtml(x.pname)} <span class="ds-rolecnt">${x.conditional != null ? (x.conditional * 100).toFixed(1) + '%' : '—'} · Lift ${x.lift != null ? x.lift.toFixed(2) : '—'} · ${x.cnt} 人</span>`)}</td><td class="ds-main">${cell(
@@ -770,7 +770,7 @@ function panelCorrTableHtml() {
       const r = pairs[key];
       if (r == null || !Number.isFinite(r)) return `<td>—</td>`;
       const color = r > 0.2 ? 'var(--green)' : r < -0.2 ? 'var(--red)' : 'var(--dim)';
-      return `<td style="color:${color}" title="${label}">${r.toFixed(2)}</td>`;
+      return `<td style="color:${color}" data-detail="${label}">${r.toFixed(2)}</td>`;
     }).join('');
     rows.push(`<tr><td>${escapeHtml(name)}</td>${cells}</tr>`);
   }
@@ -809,7 +809,7 @@ function progressCardsHtml() {
     registerChart('prog-relic', relicBarOption(relicRows));
     const tip = `<b>装配评分分布</b><br><span style="color:var(--dim)">每角色一条箱线（工坊装配评分 relic_point）：盒 = P25-P75、线 = 中位、须 = IQR 1.5 规则（塌缩时退化为 P10/P90），悬浮看分位明细与离群数</span>`;
     cards.push(
-      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">装配评分分布</h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`
+      `<div class="chart-card" style="grid-column:1/-1"><h3>装配评分分布 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${chartBox('prog-relic', Math.max(320, relicRows.length * 18))}</div>`
     );
   }
 
@@ -829,7 +829,7 @@ function progressCardsHtml() {
     registerChart('prog-pyramid', rankPyramidOption(pyramidRows));
     const tip = `<b>影画档位金字塔</b><br><span style="color:var(--dim)">每角色一条堆叠横条：玩家池 0-6 影画占比（青→蓝→绿→金→橙→红，影画越高越醒目）；按 0 影占比升序排列</span>`;
     cards.push(
-      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">影画档位金字塔</h3>${chartBox('prog-pyramid', Math.max(380, pyramidRows.length * 20))}</div>`
+      `<div class="chart-card" style="grid-column:1/-1"><h3>影画档位金字塔 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${chartBox('prog-pyramid', Math.max(380, pyramidRows.length * 20))}</div>`
     );
   }
 
@@ -837,7 +837,7 @@ function progressCardsHtml() {
   if (Object.keys(R.panelCorr || {}).length) {
     const tip = `<b>面板属性相关</b><br><span style="color:var(--dim)">全服玩家面板属性对的皮尔逊相关：绿=正相关（同涨同跌）· 红=负相关（此消彼长）· 灰=无明显关系；悬浮看具体相关系数</span>`;
     cards.push(
-      `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(tip)}">面板属性相关</h3>${panelCorrTableHtml()}</div>`
+      `<div class="chart-card" style="grid-column:1/-1"><h3>面板属性相关 <button class="chart-hint" data-hint="${escapeHtml(tip)}">?</button></h3>${panelCorrTableHtml()}</div>`
     );
   }
 

@@ -253,7 +253,7 @@ function renderCharacters() {
         }
         // 仅该技能类型含每级数值数据（growth）时才可点击打开弹窗（核心技 A-F 档也算）
         const clickable = skill?.items?.some((it) => it.growth);
-        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(charKey)}','${escapeJsAttr(skill.type)}')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${skillIcon(key)}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
+        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(charKey)}','${escapeJsAttr(skill.type)}')"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${skillIcon(key)}" alt="${label}"><span class="s-lbl">${label}</span></span>`;
       })
       .join('');
     // 影画：一列横排 6 个圆点徽标，悬浮看详情
@@ -267,7 +267,7 @@ function renderCharacters() {
       .join('');
     return `<tr>
       <td class="wiki-tight">${c.icon ? `<img class="wiki-ico" src="${c.icon}" alt="">` : ''}</td>
-      <td class="wiki-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
+      <td class="wiki-name" data-detail="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
       <td class="wiki-tight">${escapeHtml(c.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(c.element)}</td>
       <td class="wiki-tight">${escapeHtml(c.trait)}</td>
@@ -296,7 +296,7 @@ function renderWengines() {
       .join('、');
     return `<tr>
       <td class="wiki-tight">${w.icon ? `<img class="wiki-ico" src="${w.icon}" alt="">` : ''}</td>
-      <td class="wiki-name wiki-tight" title="${escapeHtml(w.name)}">${escapeHtml(w.name)}</td>
+      <td class="wiki-name wiki-tight" data-detail="${escapeHtml(w.name)}">${escapeHtml(w.name)}</td>
       <td class="wiki-tight">${escapeHtml(w.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(w.trait)}</td>
       <td class="wiki-tight">${fmt(w.baseAtk)}</td>
@@ -313,7 +313,7 @@ function renderDiscs() {
     (d) => {
       return `<tr>
       <td class="wiki-tight">${d.icon ? `<img class="wiki-ico" src="${d.icon}" alt="">` : ''}</td>
-      <td class="wiki-name" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</td>
+      <td class="wiki-name" data-detail="${escapeHtml(d.name)}">${escapeHtml(d.name)}</td>
       <td class="wiki-sub">${d.set2Text ? renderRichText(d.set2Text) : ''}</td>
       <td class="wiki-long">${d.set4Text ? renderRichText(d.set4Text) : ''}</td>
     </tr>`;
@@ -351,12 +351,12 @@ function renderBangboos() {
         const s = (b.skills || []).find((x) => x.type === type);
         const clickable = s?.items?.some((it) => it.growth?.length);
         const tip = skillItemsHtml(s) || `<b>${label}</b>（无数据）`;
-        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(b.name)}','${escapeJsAttr(type)}','bangboo')" title="点击查看每级数值"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${type}"><span class="s-lbl">${label}</span></span>`;
+        return `<span class="wiki-icon${clickable ? ' has-skill' : ''}"${clickable ? ` onclick="ZZZ.skill('${escapeJsAttr(b.name)}','${escapeJsAttr(type)}','bangboo')"` : ''} data-detail="${escapeHtml(tip)}"><img class="s-ico" src="${icon}" alt="${type}"><span class="s-lbl">${label}</span></span>`;
       })
       .join('');
     return `<tr>
       <td class="wiki-tight">${b.icon ? `<img class="wiki-ico" src="${b.icon}" alt="">` : ''}</td>
-      <td class="wiki-name" title="${escapeHtml(b.name)}">${escapeHtml(b.name)}</td>
+      <td class="wiki-name" data-detail="${escapeHtml(b.name)}">${escapeHtml(b.name)}</td>
       <td class="wiki-tight">${escapeHtml(b.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(b.element || '—')}</td>
       <td class="wiki-icons">${skillsHtml}</td>

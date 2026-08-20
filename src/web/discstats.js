@@ -125,10 +125,10 @@ function chartCardsHtml(selectedDetail) {
   const crossTip = `<b>主词条 × 副词条协同</b><br><span style="color:var(--dim)">每槽（4/5/6 号位）一图：行=该槽主词条、列=副词条，色 = 条件频率（该主词条盘中带此副词条的占比）——如「4 号位暴击率 → 暴伤 42%」式配装规律；悬浮格子看具体值</span>`;
   return `<div class="chart-card" style="grid-column:1/-1"><h3>${escapeHtml(selectedDetail.name)} · 工坊真实穿戴（${selectedDetail.equips.toLocaleString()} 块盘）</h3>
     <div class="chart-grid">
-      <div class="chart-card"><h4>456 主词条占比（玩家实况）</h4>${chartBox(`${id}-main`, 260)}</div>
-      <div class="chart-card"><h4>副词条出现频率（带此词条的盘占比）</h4>${chartBox(`${id}-subs`, 300)}</div>
+      <div class="chart-card"><h4>主词条占比</h4>${chartBox(`${id}-main`, 260)}</div>
+      <div class="chart-card"><h4>副词条出现频率</h4>${chartBox(`${id}-subs`, 300)}</div>
       <div class="chart-card"><h4>词条组合 Top</h4>${chartBox(`${id}-combo`, 300)}</div>
-      ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3 data-detail="${escapeHtml(crossTip)}">主词条 × 副词条协同</h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
+      ${Object.keys(crossOpt).length ? `<div class="chart-card" style="grid-column:1/-1"><h3>主词条 × 副词条协同 <button class="chart-hint" data-hint="${escapeHtml(crossTip)}">?</button></h3>${chartBox(`${id}-cross`, 300)}</div>` : ''}
     </div>
   </div>`;
 }
@@ -152,13 +152,13 @@ function slotRowHtml(detail) {
       const p = vals[i];
       const dev = p - base;
       const cls = dev >= 3 ? 'up' : dev <= -3 ? 'down' : 'flat';
-      return `<div class="slot-bar ${cls}" style="--h:${y(p).toFixed(1)}%" title="${k}号 占 ${p.toFixed(1)}%（均匀基准 16.7%，${
+      return `<div class="slot-bar ${cls}" style="--h:${y(p).toFixed(1)}%" data-detail="${k}号 占 ${p.toFixed(1)}%（均匀基准 16.7%，${
         dev >= 0 ? '+' : '−'
       }${Math.abs(dev).toFixed(1)} 个百分点）"><div class="slot-bar-fill"></div><span class="slot-bar-val">${p.toFixed(1)}%</span><span class="slot-bar-label">${k}号</span></div>`;
     })
     .join('');
   return `<div class="ad-sec">
-    <h4>④ 槽位分布（基准线 16.7%；柱子按实际值域起画，差异更直观）</h4>
+    <h4>④ 槽位分布</h4>
     <div class="slot-bars" style="--base:${baseY.toFixed(1)}%">${bars}</div>
   </div>`;
 }
