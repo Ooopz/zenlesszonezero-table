@@ -15,6 +15,9 @@ concurrency:
 
 jobs:
   deploy:
+    # 绑定 github-pages environment：让主页 Environments 区块显示每次部署状态（成功/失败+URL）。
+    # ⚠️ 前提：仓库 Settings → Environments → github-pages → Deployment branches 放行 tags（选 All branches and tags
+    #    或添加 refs/tags/*）；否则 tag 触发的 run 会被环境保护规则拒绝（曾踩坑：默认仅放行默认分支）。
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
