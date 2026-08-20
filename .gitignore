@@ -1,5 +1,9 @@
 # 依赖
 node_modules/
+.npm-cache
+
+# GitHub Pages 构建产物（node scripts/publish-release.mjs 生成，作为 Release 附件部署，不入 git）
+release/
 
 # data/ 下所有文件均不入库（已提交的 characters.json / library.json 保留当前版本，
 # 后续同步生成的 raw-library.json / debug-response.json / user-config.json 等不再跟踪）

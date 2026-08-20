@@ -4,6 +4,8 @@
 import { CLIPBOARD_SCRIPT, escapeHtml } from '../lib/util.js';
 import { apiRequest, postJSON, notify } from './api.js';
 import { SYNC_KINDS } from '../lib/constants.js';
+import { isStatic, importCharacters, clearLocalChars, myCharacters } from './data.js';
+import { render } from './render.js';
 
 // ---------- 同步进度轮询 ----------
 /** 同步期间定时查询 /api/sync-progress，更新进度提示 */
@@ -217,6 +219,11 @@ function copyText(text, label) {
 
 /** 绑定同步中心弹窗按钮（ui.js 的 initUi 调用；syncModal 的 Esc 关闭由 ui.js 的全局 keydown 兜底） */
 export function initSync() {
+  // GitHub Pages 静态版：无后端，「同步数据」按钮改为打开「我的角色·数据导入」弹窗
+  if (isStatic()) {
+    initStaticImport();
+    return;
+  }
   document.getElementById('syncBtn').addEventListener('click', openSyncCenter);
   document.getElementById('syncRun').addEventListener('click', runSelectedSyncs);
   document
@@ -226,4 +233,48 @@ export function initSync() {
     .getElementById('syncCopy')
     .addEventListener('click', () => copyText(document.getElementById('syncCookieSnippet').textContent, '脚本'));
   document.getElementById('syncCookieSave').addEventListener('click', saveCookie);
+}
+
+// ---------- GitHub Pages 静态版：数据导入 ----------
+function initStaticImport() {
+  const modal = document.getElementById('importModal');
+  const open = () => {
+    const el = document.getElementById('importInput');
+    el.value = '';
+    const n = myCharacters.length;
+    document.getElementById('importState').textContent = n ? `当前已缓存 ${n} 个角色` : '尚未导入角色数据';
+    modal.classList.add('show');
+    el.focus();
+  };
+  document.getElementById('syncBtn').addEventListener('click', open);
+  document
+    .getElementById('importClose')
+    .addEventListener('click', () => modal.classList.remove('show'));
+  document.getElementById('importSave').addEventListener('click', async () => {
+    try {
+      const n = await importCharacters(document.getElementById('importInput').value.trim());
+      modal.classList.remove('show');
+      render();
+      notify(`已导入 ${n} 个角色（保存在本浏览器 localStorage）`);
+    } catch (e) {
+      notify('导入失败：' + (e.message || '数据格式不正确') + '。请重新采集后粘贴', 8);
+    }
+  });
+  document.getElementById('importClear').addEventListener('click', async () => {
+    if (!myCharacters.length) return;
+    if (!confirm('确定清空本浏览器缓存的我的角色？')) return;
+    clearLocalChars();
+    modal.classList.remove('show');
+    render();
+    notify('已清空我的角色');
+  });
+  // 采集书签链接：注入 collect.js（部署 URL = 当前页面目录）
+  const a = document.getElementById('importBookmarklet');
+  if (a) {
+    const base = location.href.split(/[?#]/)[0].replace(/[^/]*$/, '');
+    a.href =
+      "javascript:(function(){var s=document.createElement('script');s.src='" +
+      base +
+      "collect.js';document.body.appendChild(s)})()";
+  }
 }

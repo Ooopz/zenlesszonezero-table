@@ -58,8 +58,9 @@ function mainOf(d) {
   return entry ? mainStatName(entry.name) : '';
 }
 
-/** 盘副词条名列表（0-4 个，已区分 % 与固定值：账号原始名不带 %，按 value 量级经 substatType 归一为标准名） */
+/** 盘副词条名列表（0-4 个，已区分 % 与固定值：账号原始名不带 %，按 value 量级经 substatType 归一为标准名）；无盘返回空 */
 function subsOf(d) {
+  if (!d) return [];
   return (d.subStats || [])
     .filter((t) => t && t.name != null && t.value != null)
     .map((t) => substatType(t.name, t.value));

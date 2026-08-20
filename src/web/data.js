@@ -1,6 +1,6 @@
 // src/web/data.js —— 数据层：由 main.js 注入数据（不再从 DOM 内嵌块读取），维护索引/配置/过滤
 import { statEntries, escapeHtml } from '../lib/util.js';
-import { buildNameIndex, CATEGORY } from '../lib/names.js';
+import { buildNameIndex, canonicalize, CATEGORY } from '../lib/names.js';
 import { Character, Wengine, Disc, toInstances } from '../lib/models.js';
 import { SUBSTAT_TYPE_SET, TARGET_KEYS } from '../lib/constants.js';
 import { apiRequest, postJSON, notify } from './api.js';
@@ -12,6 +12,71 @@ export let myCharacters = [];
 /** 角色名 → Character（供 readValidStats 默认路径 O(1) 查找，随 setData 重建） */
 let myCharByName = new Map();
 export const grid = document.getElementById('grid');
+
+// ---------- GitHub Pages 单文件模式 ----------
+// 构建（scripts/publish-release.mjs --no-publish 或发布时）在 release/index.html 注入 window.__STATIC__=true + window.__STATIC_DATA__（全量数据内联）。
+// 静态模式下：数据全内联、characters/user-config 存 localStorage，不走本地服务器。
+export const isStatic = () => typeof window !== 'undefined' && window.__STATIC__ === true;
+const LS = {
+  chars: 'zzz.characters',
+  config: 'zzz.userConfig',
+};
+const readLS = (k) => {
+  try {
+    const v = localStorage.getItem(k);
+    return v ? JSON.parse(v) : null;
+  } catch {
+    return null;
+  }
+};
+const writeLS = (k, v) => {
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+  } catch {
+    /* 隐私模式等场景忽略 */
+  }
+};
+/** 静态模式（单文件版）：读构建时内联的 window.__STATIC_DATA__（release/index.html），characters 从 localStorage 读 */
+export async function loadStaticData() {
+  const inline = typeof window !== 'undefined' ? window.__STATIC_DATA__ : null;
+  if (!inline) throw new Error('单文件版缺少内联数据（window.__STATIC_DATA__）');
+  return {
+    library: inline.library,
+    characters: readLS(LS.chars) || [],
+    plans: inline.plans,
+    workshopGrad: inline.workshopGrad,
+    workshopStats: inline.workshopStats,
+  };
+}
+/** 静态模式：导入采集的我的角色（粘贴 JSON），归一音擎/驱动盘名后保存 localStorage 并刷新数据层 */
+export async function importCharacters(jsonText) {
+  const chars = JSON.parse(jsonText || '[]');
+  if (!Array.isArray(chars)) throw new Error('数据格式不正确（应为角色数组）');
+  const wIdx = buildNameIndex(library.wengines || {}, CATEGORY.WENGINE);
+  const dIdx = buildNameIndex(library.discs || {}, CATEGORY.DISC);
+  const normalized = chars.map((c) => ({
+    ...c,
+    wengine:
+      c.wengine && c.wengine.name && c.wengine.name !== '未佩戴音擎'
+        ? { ...c.wengine, name: canonicalize(CATEGORY.WENGINE, wIdx, c.wengine.name, { fuzzy: false }).name }
+        : c.wengine,
+    discs: (c.discs || []).map((d) =>
+      d.set === '未佩戴驱动盘' || d.set === '未知' ? d : { ...d, set: canonicalize(CATEGORY.DISC, dIdx, d.set, { fuzzy: false }).name }
+    ),
+  }));
+  writeLS(LS.chars, normalized);
+  setData(library, normalized, plans, workshopGrad, workshopStats); // 刷新 myCharacters（数据其余部分不变）
+  return normalized.length;
+}
+/** 静态模式：清空本地缓存的我的角色 */
+export function clearLocalChars() {
+  try {
+    localStorage.removeItem(LS.chars);
+  } catch {
+    /* ignore */
+  }
+  setData(library, [], plans, workshopGrad, workshopStats);
+}
 
 /** 养成指南推荐方案：{ avatarId: { name, plans: [...] } }，按角色名另建索引供目标弹窗表格用 */
 export let plans = {};
@@ -148,12 +213,27 @@ export function roleOptionsHtml(current = '', names) {
 /** 保存用户配置到服务器。必须 await + 查 ok：postJSON 失败时返回 null 而不抛，
  *  原先不检查导致保存失败无提示、刷新后修改全部丢失。 */
 export async function saveUserConfig() {
+  if (isStatic()) {
+    writeLS(LS.config, userConfig); // 静态模式：存浏览器 localStorage
+    return true;
+  }
   const j = await postJSON('/api/config', { config: userConfig });
   if (j && j.ok) return true;
   notify('配置保存失败：' + ((j && j.error) || '无法连接本地服务器') + '（刷新后本次修改会丢失）', 10);
   return false;
 }
 export async function loadUserConfig() {
+  if (isStatic()) {
+    const c = readLS(LS.config);
+    if (c) {
+      Object.assign(
+        userConfig,
+        { charTargets: {}, validStats: {}, notes: {}, rowOrder: [], colOrder: [], view: 'mychars', discWeights: {} },
+        c
+      );
+    }
+    return;
+  }
   const j = await apiRequest('/api/config', { method: 'GET' });
   if (j && j.ok && j.config) {
     // 原地修改同一对象（render/ui 持有其引用），而不是重新赋值 let 变量
