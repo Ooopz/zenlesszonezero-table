@@ -134,6 +134,38 @@
       </div>
     </div>
 
+    <!-- GitHub Pages 静态版：我的角色数据导入（无后端，角色数据缓存在浏览器 localStorage） -->
+    <div class="modal" id="importModal">
+      <div class="modal-box modal-wide">
+        <div class="modal-scroll">
+        <button class="close" id="importClose">✕</button>
+        <h2>我的角色 · 数据导入</h2>
+        <p style="font-size: 14px; color: var(--dim)">
+          静态版没有后端服务器，浏览器无法直连米游社接口（CORS 拦截）。请用<b>采集书签</b>在米游社页面抓取你的角色数据，再粘贴到这里——
+          数据只保存在<b>本浏览器 localStorage</b>，不会上传。
+        </p>
+        <p style="font-size: 14px">
+          <b>① 安装采集书签（只需一次）：</b>把下面这个链接<b>拖到书签栏</b>：<br />
+          <a id="importBookmarklet" href="#" data-detail="拖到浏览器书签栏，以后一键采集">采集我的角色</a><br />
+          <span style="color: var(--dim); font-size: 13px">（书签内容是注入本站 <code>collect.js</code> 的小脚本，很短）</span>
+        </p>
+        <p style="font-size: 14px">
+          <b>② 采集：</b>打开 <code>user.mihoyo.com</code>（米游社网页版，需已登录），点书签「采集我的角色」→
+          脚本自动抓取你的全部角色并<b>复制到剪贴板</b>（弹出确认框）。
+        </p>
+        <p style="font-size: 14px">
+          <b>③ 粘贴并保存：</b>把剪贴板内容粘贴到下方，点「导入」。
+        </p>
+        <textarea id="importInput" rows="8" placeholder="在此粘贴采集脚本复制的角色数据…" style="width: 100%; box-sizing: border-box"></textarea>
+        <div style="display: flex; gap: 10px; margin-top: 12px; align-items: center">
+          <button id="importSave" class="primary">导入</button>
+          <button id="importClear" class="ghost">清空我的角色</button>
+          <span id="importState" style="color: var(--dim); font-size: 13px"></span>
+        </div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal" id="targetModal">
       <div class="modal-box modal-wide">
         <div class="modal-scroll">

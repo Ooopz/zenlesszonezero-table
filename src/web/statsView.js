@@ -232,7 +232,7 @@ function gradBenchHtml(name) {
       const libW = findLibraryWengine(w.name); // 工坊源音擎名解析为 wiki 规范名（ASCII 罗马数字/括号差异）
       const wname = libW?.name || romanNumeralUnicode(w.name);
       const icon = libW?.icon || w.icon;
-      return `<span class="ws-item" data-detail="${escapeHtml(wengineTip(wname))}">${icon ? `<img class="ws-ico" src="${icon}" alt="">` : ''}<span>${escapeHtml(wname)}</span>${gradPct(w.percent)}</span>`;
+      return `<span class="ws-item" data-detail="${escapeHtml(wengineTip(wname))}">${icon ? `<img class="ws-ico" src="${icon}" data-fallback="${libW?.iconUrl || ''}" alt="">` : ''}<span>${escapeHtml(wname)}</span>${gradPct(w.percent)}</span>`;
     })
     .join('<br>');
   const relics = normRelics
@@ -249,13 +249,13 @@ function gradBenchHtml(name) {
   const planWeapons = pb.wengines
     .map(
       (w) =>
-        `<span class="ws-item">${library.wengines?.[w.name]?.icon ? `<img class="ws-ico" src="${library.wengines[w.name].icon}" alt="">` : ''}<span>${escapeHtml(w.name)}</span>${gradPct(w.percent)}</span>`
+        `<span class="ws-item">${library.wengines?.[w.name]?.icon ? `<img class="ws-ico" src="${library.wengines[w.name].icon}" data-fallback="${library.wengines[w.name].iconUrl || ''}" alt="">` : ''}<span>${escapeHtml(w.name)}</span>${gradPct(w.percent)}</span>`
     )
     .join('<br>');
   const planRelics = normPlanRelics
     .map(
       (x) =>
-        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}"><span class="ws-sets">${(x.sets || []).map((s) => (library.discs?.[s.name]?.icon ? `<img class="ws-ico" src="${library.discs[s.name].icon}" alt="">` : '')).join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
+        `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}"><span class="ws-sets">${(x.sets || []).map((s) => (library.discs?.[s.name]?.icon ? `<img class="ws-ico" src="${library.discs[s.name].icon}" data-fallback="${library.discs[s.name].iconUrl || ''}" alt="">` : '')).join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
     )
     .join('<br>');
   // 差异分析：方案 Top1 vs 实况 Top1（工坊跳过「其他」，名字解析为 wiki 规范名再比较）

@@ -23,6 +23,12 @@ npm run rebuild:stats        # 只重算 workshop-stats.json（不重爬，~2-4 
 npm run rebuild:stats -- http://127.0.0.1:7890             # 带代理
 node scripts/rebuild-weights.mjs  # 单独重跑 workshop-weights 抽取（不爬配装）：拉 system_data → key 映射标准名 → 落盘 weights + 同步 stats.weightJson
 
+# GitHub Pages 部署（release/，构建产物不入 git）
+node scripts/publish-release.mjs              # 构建 release/（index.html+collect.js）并发布 GitHub Release → .github/workflows/pages-from-release.yml 自动部署 Pages（需 gh CLI + 仓库 Pages Source 选 GitHub Actions）
+node scripts/publish-release.mjs --no-publish # 只构建 release/（本地预览用），不发布
+node scripts/publish-release.mjs --no-build   # 跳过构建，只发布已存在的 release/
+# 构建期依赖（devDependencies，不影响运行时）：subset-font（字体子集化）、rollup（ESM→IIFE 打包）
+
 npm test                     # 全部单测（node:test）；缺 data/ 时打印 SKIP 横幅并跳过该文件
 REQUIRE_DATA=1 npm test      # 缺数据直接判失败（CI 用，防「静默全绿」）
 node --test test/calc.test.js   # 单个测试文件
@@ -40,7 +46,7 @@ npm run format               # Prettier
 src/sync/*  →  data/*.json  →  server.js /api/data  →  前端 fetch → setData() → render()
 ```
 
-账号接口 `api-takumi-record.mihoyo.com` 的 CORS 锁死为 `https://act.mihoyo.com`，浏览器无法直连——**这是所有同步必须经过本地服务器的根本原因**。
+账号接口 `api-takumi-record.mihoyo.com` 的 CORS 只放行米游社域来源（如 `act.mihoyo.com` / `user.mihoyo.com`，用户登录入口是 `user.mihoyo.com`），普通页面（如 GitHub Pages）fetch 会被拦截——**这是本地版所有同步必须经过本地服务器、静态版必须用采集书签（在已登录的米游社网页版里运行）的根本原因**。
 
 四个数据源，靠 `src/lib/names.js` 统一名称解析（以 library 标准名为准）合并。
 
@@ -287,7 +293,6 @@ canonical（`constants.js` 的 `SKILL_TYPES`）= 0普攻/1闪避/2支援/3特殊
 ## 已知技术债
 
 - ⚠️ **前端模块图无任何自动化护栏**（历史教训）：曾因模块拆分把 `myTab`/`setMyTab` 移到 `myChars.js` 而漏改 `ui.js`/`urlState.js` 的导入源，导致**整页白屏**。ESM 具名导入在**链接阶段**校验，一处对不上则整条模块图都不执行，`main.js` 的 try/catch 也救不了（异常在 import 解析期，不在 try 体内）；而 `npm test` 与 `npm run lint` **都抓不到**（前端模块不在测试覆盖内，ESLint 不做跨模块导出校验）。**移动前端模块的 export 后，务必手动验证链接**：`npm start` 后逐个 `curl` 或用 Node 动态 import 走一遍 `src/web/*.js`，看是否只剩 `document is not defined` 这类执行期错误
-- 遗留待清理文件：`src/lib/simCalc.js.bak`（与 `simCalc.js` 逐字节相同的副本）
 - **无 CSP**，而项目大量用 `innerHTML` 渲染 wiki 富文本（`renderRichText` 是有意的白名单富文本路径，会清除 `<script>` 与 `on*`）
 - **无限流**：`/api/data` 未命中缓存要重读解 33MB + gzip。回环场景可接受，部署场景值得加
 - `workshop-panel.js` 的 2025 源面板公式随游戏版本失准会**静默漂移**（原两源一致性审计已删除）。已有 `test/workshop-panel.test.js` 护栏（角色基础/武器/盘成长/套装 2 件套四段公式精确断言）；⚠️ 面板输出按 floor 显示，**亚单位级系数漂移可能被取整吸收而测试抓不到**

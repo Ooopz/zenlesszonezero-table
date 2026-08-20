@@ -1,6 +1,6 @@
 // src/web/render.js —— 渲染调度：全局悬浮提示 + 主视图分发
 // 「我的角色」卡片/汇总渲染与拖拽排序在 myChars.js（2026-11 拆出）；数据库/统计/模拟视图各归 wiki.js/statsView.js/simulate.js。
-import { grid, myCharacters, userConfig } from './data.js';
+import { grid, myCharacters, userConfig, isStatic } from './data.js';
 import { VIEWS, VIEW_VALUES } from '../lib/constants.js';
 import { renderWiki, toggleWikiSort } from './wiki.js';
 import { renderStatsView, toggleStatsSort, mountStatsCharts } from './statsView.js';
@@ -130,9 +130,11 @@ export function render() {
   }
   // 我的角色：卡片 / 汇总 二级子页面
   if (!myCharacters.length) {
-    grid.innerHTML = myCharsShell(
-      '<div class="empty">还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。</div>'
-    );
+    const empty =
+      isStatic()
+        ? '还没有「我的角色」数据。<br>GitHub Pages 静态版无后端：点右上角 <b>「同步数据」→ 数据导入</b>，按提示用采集书签在米游社页面抓取后粘贴（数据只存本浏览器）。'
+        : '还没有「我的角色」数据。<br>推荐：运行 <b>npm start</b> 后打开本页，点右上角 <b>更新我的角色</b> 一键拉取（需粘贴一次 cookie）。<br>或命令行运行 <b>npm run sync:characters</b>（效果相同）。';
+    grid.innerHTML = myCharsShell(`<div class="empty">${empty}</div>`);
     measureTabs();
     return;
   }

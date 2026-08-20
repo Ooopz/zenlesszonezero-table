@@ -260,25 +260,32 @@ export function initUi() {
   migrateViewState();
   // 从 URL 恢复子 tab/角色/盘状态（在首次 render 之前）
   applyUrlState();
-  // 图片加载失败统一隐藏破图（error 事件不冒泡，需捕获阶段）
+  // 图片加载失败：有 data-fallback 的先回退到备用地址（本地资源优先、缺图用远程链接），回退仍失败才隐藏破图（error 事件不冒泡，需捕获阶段）
   document.addEventListener(
     'error',
     (e) => {
       const t = e.target;
-      if (t && t.tagName === 'IMG') t.style.visibility = 'hidden';
+      if (t && t.tagName === 'IMG') {
+        if (t.dataset.fallback && t.src !== t.dataset.fallback) {
+          t.src = t.dataset.fallback;
+          delete t.dataset.fallback; // 防止回退又失败时死循环
+          return;
+        }
+        t.style.visibility = 'hidden';
+      }
     },
     true
   );
   // Esc 关闭当前弹窗
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal']) {
+    for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal', 'importModal']) {
       const el = document.getElementById(id);
       if (el) el.classList.remove('show');
     }
   });
   // 点击遮罩（modal 背景，非弹窗内容）关闭——与 Esc 等价的最常见习惯操作
-  for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal']) {
+  for (const id of ['targetModal', 'noteModal', 'helpModal', 'syncModal', 'skillModal', 'importModal']) {
     document.getElementById(id).addEventListener('click', (e) => {
       if (e.target === e.currentTarget) e.currentTarget.classList.remove('show');
     });

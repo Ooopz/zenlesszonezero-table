@@ -266,7 +266,7 @@ function renderCharacters() {
       })
       .join('');
     return `<tr>
-      <td class="wiki-tight">${c.icon ? `<img class="wiki-ico" src="${c.icon}" alt="">` : ''}</td>
+      <td class="wiki-tight">${c.icon ? `<img class="wiki-ico" src="${c.icon}" data-fallback="${c.iconUrl || ''}" alt="">` : ''}</td>
       <td class="wiki-name" data-detail="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td>
       <td class="wiki-tight">${escapeHtml(c.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(c.element)}</td>
@@ -295,7 +295,7 @@ function renderWengines() {
       .map((t) => `${t.name} ${formatValue(t.name, t.value)}`)
       .join('、');
     return `<tr>
-      <td class="wiki-tight">${w.icon ? `<img class="wiki-ico" src="${w.icon}" alt="">` : ''}</td>
+      <td class="wiki-tight">${w.icon ? `<img class="wiki-ico" src="${w.icon}" data-fallback="${w.iconUrl || ''}" alt="">` : ''}</td>
       <td class="wiki-name wiki-tight" data-detail="${escapeHtml(w.name)}">${escapeHtml(w.name)}</td>
       <td class="wiki-tight">${escapeHtml(w.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(w.trait)}</td>
@@ -312,7 +312,7 @@ function renderDiscs() {
   const rows = sortRows(Object.values(library.discs), (d, key) => (key === '名称' ? d.name : (d[key] ?? null))).map(
     (d) => {
       return `<tr>
-      <td class="wiki-tight">${d.icon ? `<img class="wiki-ico" src="${d.icon}" alt="">` : ''}</td>
+      <td class="wiki-tight">${d.icon ? `<img class="wiki-ico" src="${d.icon}" data-fallback="${d.iconUrl || ''}" alt="">` : ''}</td>
       <td class="wiki-name" data-detail="${escapeHtml(d.name)}">${escapeHtml(d.name)}</td>
       <td class="wiki-sub">${d.set2Text ? renderRichText(d.set2Text) : ''}</td>
       <td class="wiki-long">${d.set4Text ? renderRichText(d.set4Text) : ''}</td>
@@ -355,7 +355,7 @@ function renderBangboos() {
       })
       .join('');
     return `<tr>
-      <td class="wiki-tight">${b.icon ? `<img class="wiki-ico" src="${b.icon}" alt="">` : ''}</td>
+      <td class="wiki-tight">${b.icon ? `<img class="wiki-ico" src="${b.icon}" data-fallback="${b.iconUrl || ''}" alt="">` : ''}</td>
       <td class="wiki-name" data-detail="${escapeHtml(b.name)}">${escapeHtml(b.name)}</td>
       <td class="wiki-tight">${escapeHtml(b.rarity)}</td>
       <td class="wiki-tight">${escapeHtml(b.element || '—')}</td>
