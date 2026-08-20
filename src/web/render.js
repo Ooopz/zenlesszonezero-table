@@ -41,6 +41,21 @@ document.addEventListener('mouseout', (e) => {
 });
 // 触屏/点击：点 data-detail 切换显示（固定在元素下方，不随鼠标），点空白隐藏
 document.addEventListener('click', (e) => {
+  // 说明按钮（data-hint，统计图表标题右方的「?」）：点击弹出/收起详细说明（固定显示，不走 hover）
+  const h = e.target.closest ? e.target.closest('[data-hint]') : null;
+  if (h) {
+    if (tipAnchor === h && tipEl.style.display !== 'none') {
+      hideTip();
+    } else {
+      tipEl.innerHTML = h.dataset.hint;
+      tipEl.style.display = 'block';
+      tipPinned = true;
+      tipAnchor = h;
+      const r = h.getBoundingClientRect();
+      positionTip(r.left, r.bottom + 6);
+    }
+    return;
+  }
   const t = e.target.closest ? e.target.closest('[data-detail]') : null;
   if (t) {
     if (tipAnchor === t && tipEl.style.display !== 'none') {

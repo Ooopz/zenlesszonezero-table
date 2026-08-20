@@ -492,8 +492,7 @@ function renderFrontierPanel() {
   const discOptions = sortedNames(library.discs);
   const config =
     '<div class="sim-config chart-card">' +
-    '<h3>成长极限模拟</h3>' +
-    '<p class="sim-desc">每枚盘按 S 级满级、4 初始副词条 + 5 次强化计算；副词条不与本盘主词条重复。只把副词条强化次数分配到 X/Y（或 X/Y/Z）轴，其余槽位视为废词条；4 件套条件效果不计入面板。</p>' +
+    '<h3>成长极限模拟 <button class="chart-hint" data-hint="每枚盘按 S 级满级、4 初始副词条 + 5 次强化计算；副词条不与本盘主词条重复。只把副词条强化次数分配到 X/Y（或 X/Y/Z）轴，其余槽位视为废词条；4 件套条件效果不计入面板。">?</button></h3>' +
     '<div class="tgrid sim-grid">' +
     selectHtml('charName', '角色', state.charName, charOptions) +
     selectHtml('wengineName', '音擎', state.wengineName, wengineOptions) +
