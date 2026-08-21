@@ -18,10 +18,17 @@ npm run sync:library         # wiki 属性库 → data/library.json + data/img/�
 npm run sync:characters      # 账号角色 → data/characters.json（需 cookie，交互式粘贴）
 npm run sync:plans           # 养成指南推荐方案 → data/plans.json（需 cookie + e_nap_token）
 npm run sync:workshop        # 工坊全量爬取（数小时）→ workshop.json + grad/stats/weights
-node src/sync/workshop.js 57 300 6 http://127.0.0.1:7890   # 第 5 参 = 代理 URL（IP 被封时换 IP）
-npm run rebuild:stats        # 只重算 workshop-stats.json（不重爬，~2-4 分钟）；改聚合逻辑后用它验证
-npm run rebuild:stats -- http://127.0.0.1:7890             # 带代理
-node scripts/rebuild-weights.mjs  # 单独重跑 workshop-weights 抽取（不爬配装）：拉 system_data → key 映射标准名 → 落盘 weights + 同步 stats.weightJson
+node scripts/workshop-cli.mjs --proxy=http://127.0.0.1:7890   # 代理（防封 IP；全模式生效，仅 api.zzzmap.com 走代理）
+# 工坊更新四个数据源（--mode 单选；--concurrency 作用于 rank/chars，默认 6）：
+node scripts/workshop-cli.mjs --mode=rank            # 只更新 uid：全角色×7影画×300 排名收集 → data/workshop-uids.json（快）
+node scripts/workshop-cli.mjs --mode=chars           # 批量下载角色信息：读 workshop-uids.json → workshop.json（断点续爬；缺文件报错提示先跑 rank）
+node scripts/workshop-cli.mjs --mode=grad            # 只更新全角色配装统计（grad_stat 独立接口）→ workshop-grad.json
+node scripts/workshop-cli.mjs --mode=weights         # 只更新全角色默认副词条权重 → workshop-weights.json（并同步 stats.weightJson）
+node scripts/workshop-cli.mjs --mode=stats           # 只重算 workshop-stats.json（读现有 grad/weights，不爬取、不重跑 grad，~2-4 分钟；改聚合逻辑后验证用）
+node scripts/workshop-cli.mjs                        # full（默认）：grad → weights → rank → chars（chars 末尾自动重算 stats）
+# 说明：CLI 参数解析在 scripts/workshop-cli.mjs；src/sync/workshop.js 只导出函数（server.js 同步中心按钮与 CLI 共用）；
+# user_role/v3 一次返回该 uid 全部角色，无「只取指定角色」的接口；角色信息下载按 uid 集合批量、本地按毕业条件过滤（静默）；
+# 旧 rebuild-stats.mjs / rebuild-weights.mjs 已删除（分别并入 --mode=stats / --mode=weights）
 
 # GitHub Pages 部署（release/，构建产物不入 git）
 node scripts/publish-release.mjs              # 构建 release/（index.html+collect.js）并发布 GitHub Release → .github/workflows/pages-from-release.yml 自动部署 Pages（需 gh CLI + 仓库 Pages Source 选 GitHub Actions）
@@ -91,7 +98,7 @@ src/sync/*  →  data/*.json  →  server.js /api/data  →  前端 fetch → se
 - `workshop-api.js`：zzzmap 协议层（签名 `MD5(key+参数排序)`，无需 token；重试 2s→6s→18s→54s；**模块加载时自动装代理**）
 - `workshop-panel.js`：2025 源面板复算（复现工坊 `enka_attrs_mapping`），另导出 `propName`（`PropertyId → 属性名` 逆映射）
 - `workshop-static.js`：逆向提取的静态数据表（69KB 单行，**在 .prettierignore 里，勿格式化**）
-- `workshop-stats.js`：聚合侧。**不 import workshop.js**（反过来由 workshop.js re-export），这样 `rebuild-stats.mjs` 不必加载下载侧 + 69KB 静态表
+- `workshop-stats.js`：聚合侧。**不 import workshop.js**（反过来由 workshop.js re-export），这样 `workshop-cli --mode=stats` 不必加载下载侧 + 69KB 静态表
 - `proxy.js`：零依赖代理隧道（HTTP CONNECT / SOCKS5 + 认证）。仅目标主机匹配 `*.zzzmap.com` 走代理，米游社请求不受影响
 
 ### `src/web/` — 浏览器端 ESM，无构建
@@ -176,7 +183,7 @@ main.js → data.js → api.js（最底层，零依赖）
 | `workshop.json` | 173MB | **分块 gzip，不是普通 JSON**：第 0 行 `{meta, perChunk:20000, offsets}` + N 个独立 gzip 块。829,891 条。**必须用 `iterWorkshopFile()`/`readWorkshopHeader()`**，`readFileSync` 会超 V8 单字符串上限 |
 | `workshop-stats.json` | 1.66MB | 17 个聚合 key。**浏览器只加载这个，上限 ≤2MB，余量已不多**——新增聚合前先量体积 |
 | `workshop-grad.json` | 105KB | 全服累计占比。**是 `role_id → 角色名` 的唯一映射来源** |
-| `workshop-weights.json` | 14.7KB | 角色默认流派权重。**key 已是 CONSTANT 标准名**（抽取时经 `WS_KEY_TO_STAT` 映射：精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成等，全角色并集 12 key）；`scripts/rebuild-weights.mjs` 可单独重跑 |
+| `workshop-weights.json` | 14.7KB | 角色默认流派权重。**key 已是 CONSTANT 标准名**（抽取时经 `WS_KEY_TO_STAT` 映射：精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成等，全角色并集 12 key）；`workshop-cli --mode=weights` 可单独重跑 |
 | `user-config.json` | 780B | 唯一由前端写入的文件（`POST /api/config` 原子写） |
 | `.cookie.json` | 575B | **明文米游社登录态** |
 

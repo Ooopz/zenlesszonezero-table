@@ -2726,3 +2726,85 @@ main {
     display: none;
   }
 }
+
+/* ============================================================
+   移动端细化（≤760px：手机。900px 断点已覆盖主体布局——单列 main/卡片/盘网格/
+   tachie 上下布局等；这里只补 900px 没管的手机级细节：头部紧凑、弹窗贴边、
+   图表卡内宽表横滚（原 overflow:hidden 会裁切）、权重条目单列、表格字号）。
+   ============================================================ */
+@media (max-width: 760px) {
+  /* 头部紧凑 + 允许换行 */
+  header {
+    row-gap: var(--sp-2);
+  }
+  .head-row {
+    padding: var(--sp-2) var(--sp-3);
+    gap: var(--sp-3);
+    row-gap: var(--sp-2);
+  }
+  header h1 {
+    font-size: 19px;
+  }
+  header .sub {
+    letter-spacing: 2px;
+  }
+  .seg {
+    flex-wrap: wrap;
+  }
+  .seg .view-tab {
+    padding: 5px 13px 5px 17px;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+  .seg .view-tab .num {
+    left: 6px;
+  }
+  .head-actions {
+    gap: var(--sp-2);
+  }
+  button {
+    padding: 4px 12px;
+  }
+  .wiki-tab {
+    padding: 3px 12px;
+  }
+  /* 卡片 / 图表卡紧凑；图表卡内宽表改横滚而非被 overflow:hidden 裁切 */
+  .card {
+    padding: var(--sp-3);
+  }
+  .chart-card {
+    padding: var(--sp-3);
+    overflow-x: auto;
+  }
+  /* 弹窗贴边 */
+  .modal-box,
+  .modal-box.modal-wide {
+    width: 96vw;
+    padding: var(--sp-3);
+  }
+  .modal-scroll {
+    max-height: 82vh;
+  }
+  /* 驱动盘模拟：权重条目单列（1200px 断点只管槽位与左右堆叠，没管条目） */
+  .dp-entries {
+    grid-template-columns: 1fr;
+  }
+  /* 盘面首行允许换行（2 列网格下单盘变窄） */
+  .disc-top {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+  /* 宽表字号略缩（页面级横滚仍可用） */
+  .wiki-table,
+  .rec-table,
+  .plantable,
+  .skill-table {
+    font-size: var(--fs-sm);
+  }
+}
+@media (max-width: 420px) {
+  /* 更窄：KPI 单列（900px 断点给 2 列，超窄屏数字会被挤压） */
+  .stats-kpis {
+    grid-template-columns: 1fr;
+  }
+}

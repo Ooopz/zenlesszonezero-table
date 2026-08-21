@@ -268,6 +268,23 @@ function initStaticImport() {
     render();
     notify('已清空我的角色');
   });
+  // 手机端导入：电脑采集下载的 zzz-chars.json 文件（手机无法运行书签/控制台）
+  const fileInput = document.getElementById('importFile');
+  if (fileInput) {
+    fileInput.addEventListener('change', async () => {
+      const f = fileInput.files && fileInput.files[0];
+      fileInput.value = '';
+      if (!f) return;
+      try {
+        const n = await importCharacters((await f.text()).trim());
+        modal.classList.remove('show');
+        render();
+        notify(`已导入 ${n} 个角色（保存在本浏览器 localStorage）`);
+      } catch (e) {
+        notify('导入失败：' + (e.message || '文件格式不正确') + '。请确认是采集脚本导出的 JSON 文件', 8);
+      }
+    });
+  }
   // 采集书签链接：注入 collect.js（部署 URL = 当前页面目录）
   const a = document.getElementById('importBookmarklet');
   if (a) {

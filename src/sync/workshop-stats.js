@@ -7,7 +7,7 @@ import { computeAllWorkshopStats } from '../lib/workshopAgg.js';
 import { orderComboSets4First } from '../lib/plansStats.js';
 import { romanNumeralUnicode } from '../lib/util.js';
 import { buildNameIndex, resolveEntry, canonicalName, CATEGORY } from '../lib/names.js';
-import { iterWorkshopFile, DATA_DIR, pool, writeJsonAtomic } from '../lib/node.js';
+import { iterWorkshopFile, readWorkshopHeader, DATA_DIR, pool, writeJsonAtomic } from '../lib/node.js';
 import { apiGet } from './workshop-api.js';
 import { loadNameIndexes, resolveWengineName } from './name-index.js';
 
@@ -88,6 +88,24 @@ export function buildWorkshopStats(roleNameMap, weightJson, totalEntries) {
   if (weightJson && Object.keys(weightJson).length) data.weightJson = weightJson;
   writeJsonAtomic(STATS_FILE, data);
   return data;
+}
+
+/** 只重算 workshop-stats.json（不爬取、不重跑 grad；--mode=stats 与改聚合代码后验证用）：
+ *  读现有 workshop-grad.json 建 roleNameMap → 读 workshop-weights.json 取 weightJson →
+ *  从 workshop.json 头部读 entryCount → 流式重算（约 2-4 分钟）。放本模块（聚合侧）：不加载 workshop.js 下载侧与静态表。 */
+export function rebuildWorkshopStats() {
+  const grad = JSON.parse(fs.readFileSync(GRAD_FILE, 'utf8'));
+  const roleNameMap = new Map((grad.roles || []).map((r) => [String(r.item_id), r.name]));
+  let weightJson = null;
+  try {
+    weightJson = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'workshop-weights.json'), 'utf8')).weights || null;
+  } catch { /* 缺失时聚合层退化为全部合法副词条 */ }
+  let entryCount = -1;
+  try {
+    const h = readWorkshopHeader(OUT_FILE);
+    if (h && h.meta && h.meta.entryCount != null) entryCount = Number(h.meta.entryCount);
+  } catch { /* 读不到则 meta.entries 写 -1 */ }
+  return buildWorkshopStats(roleNameMap, weightJson, entryCount);
 }
 
 // ---------- 全服配装统计：每角色最常用音擎 + 驱动盘套装（workshop-grad.json） ----------

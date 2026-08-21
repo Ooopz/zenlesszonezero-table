@@ -88,9 +88,13 @@ export async function apiPost(path, data) {
   });
 }
 
-// ---------- 代理（可选）：第 5 参 > HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量 ----------
+// ---------- 代理（可选）：--proxy=URL 或第 5 参 > HTTPS_PROXY/ALL_PROXY/HTTP_PROXY 环境变量 ----------
 // IP 被风控时用代理换 IP；模块加载时启用（server.js 复用同样生效），仅 api.zzzmap.com 走代理（见 proxy.js）。
-const proxyUrl = resolveProxyUrl(process.argv[5]);
+const argVal = (k) => {
+  const a = process.argv.find((x) => x.startsWith('--' + k + '='));
+  return a ? a.split('=')[1] : undefined;
+};
+const proxyUrl = resolveProxyUrl(argVal('proxy') || process.argv[5]);
 if (proxyUrl) {
   installProxyFetch(proxyUrl);
   console.log(`🌐 工坊请求走代理: ${maskProxyUrl(proxyUrl)}（仅 api.zzzmap.com，其余请求不受影响）`);

@@ -125,7 +125,7 @@
   };
   const copy = (text) => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => done(text.length)).catch(() => fallback(text));
+      navigator.clipboard.writeText(text).then(() => done(text)).catch(() => fallback(text));
     } else fallback(text);
   };
   const fallback = (text) => {
@@ -137,14 +137,52 @@
     ta.select();
     try { document.execCommand('copy'); } catch { /* ignore */ }
     ta.remove();
-    done(text.length);
+    done(text);
   };
-  const done = (len) => {
-    alert('已复制角色数据（约 ' + (len / 1024).toFixed(1) + ' KB）到剪贴板。\n请到配装面板 GitHub Pages 版 →「数据导入」→ 粘贴保存。');
+  const done = (text) => {
+    const len = text.length;
+    alert(
+      '已抓取 ' + (len / 1024).toFixed(1) + ' KB 角色数据：已复制到剪贴板，并下载了 zzz-chars.json。\n' +
+        '电脑：到配装面板「数据导入」直接粘贴。\n' +
+        '手机：把 zzz-chars.json 传到手机（微信文件助手等），用「数据导入 → 选择 JSON 文件」导入。'
+    );
+    try {
+      // 自动下载 JSON 文件（手机端导入的入口：手机无法运行书签/控制台）
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'zzz-chars.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+    } catch { /* 下载被拦则仅剪贴板可用 */ }
+  };
+  // 进度浮层：注入米游社页面的固定提示条（内联样式避开站点样式干扰），展示当前步骤与抓取计数
+  let progressEl = null;
+  const progress = (msg) => {
+    if (!progressEl) {
+      progressEl = document.createElement('div');
+      progressEl.style.cssText =
+        'position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:2147483647;' +
+        'background:rgba(0,0,0,0.88);color:#ffd400;padding:12px 22px;border-radius:10px;' +
+        'font:700 15px/1.7 sans-serif;max-width:82vw;box-shadow:0 6px 28px rgba(0,0,0,0.55);' +
+        'text-align:center;white-space:pre-line;border:1px solid rgba(255,212,0,0.4);';
+      document.body.appendChild(progressEl);
+    }
+    progressEl.textContent = msg;
+  };
+  const hideProgress = () => {
+    if (progressEl) {
+      progressEl.remove();
+      progressEl = null;
+    }
   };
   (async () => {
     try {
       // 1. uid
+      progress('正在获取米游社账号信息…');
       const uidJ = await fetch('https://api-takumi.mihoyo.com/binding/api/getUserGameRolesByCookie?game_biz=nap_cn', {
         credentials: 'include',
         headers: HDR,
@@ -158,8 +196,10 @@
       ).then((r) => r.json());
       const list = (listJ && listJ.data && listJ.data.avatar_list) || [];
       if (!list.length) throw new Error('角色列表为空');
+      progress('账号已确认（' + uid + '）\n找到 ' + list.length + ' 个角色，正在抓取详情…');
       // 3. 详情（并发 3，防风控）
       const chars = [];
+      let got = 0;
       for (let i = 0; i < list.length; i += 3) {
         const batch = await Promise.all(
           list.slice(i, i + 3).map(async (x) => {
@@ -184,11 +224,16 @@
             }
           })
         );
-        chars.push(...batch.filter(Boolean));
+        const ok = batch.filter(Boolean);
+        chars.push(...ok);
+        got += ok.length;
+        progress('正在抓取角色详情… ' + got + ' / ' + list.length);
       }
       if (!chars.length) throw new Error('一个角色都没拉到（cookie 可能过期）');
+      hideProgress();
       copy(JSON.stringify(chars));
     } catch (e) {
+      hideProgress();
       alert('采集失败：' + e.message + '\n请确认当前页面是米游社网页版（user.mihoyo.com），且已登录。');
     }
   })();

@@ -1,5 +1,6 @@
 // src/sync/workshop.js —— 爬取「绝区零工坊」全角色排名+玩家配装（下载/提取侧）：api.zzzmap.com，签名=MD5(key+参数排序)，无需 token
-// 用法：node src/sync/workshop.js [角色数=57] [每影画条数=300] [v3并发=6] [代理URL]（IP 被封时换 IP；亦可用 HTTPS_PROXY/ALL_PROXY 环境变量，仅 api.zzzmap.com 走代理）
+// 本模块只导出**函数**（供 server.js 同步中心「网页按钮」与 scripts/workshop-cli.mjs 调用），不含 CLI 参数解析；
+// 命令行入口见 scripts/workshop-cli.mjs（--mode=rank|chars|grad|weights|full / --concurrency / --proxy）。
 // 断点续爬以 workshop.json 实际内容为准（文件里没有的 uid 一律重爬，写文件原子 tmp+rename，不再用进度文件）；聚合/API/静态表/2025 源面板拆在 workshop-stats.js 等模块
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,7 +11,6 @@ import {
   readLines,
   writeWorkshopFile,
   DATA_DIR,
-  isMain,
   pool,
   writeJsonAtomic,
 } from '../lib/node.js';
@@ -34,12 +34,11 @@ const {
   wengine: buildNameIndex({}, CATEGORY.WENGINE),
   disc: buildNameIndex({}, CATEGORY.DISC),
 };
-// ---------- 参数 ----------
-const MAX_ROLES = Number(process.argv[2] || 57); // 爬几个角色（全量模式）
-// 每影画排行榜上限 ≈298 去重 uid（offset≥300 返回空），故 300 = 榜单全量（旧默认 100 只拿 1/3）；扩大 uid 集合的其他路径均实测无效
-const PER_RANK = Number(process.argv[3] || 300);
-// v3 配装请求并发（默认 6）：排名收集阶段每角色 7 影画组内并行，不占此并发；调高加速但响应大吃带宽，注意工坊 API 限流
-const CONCURRENCY = Number(process.argv[4] || 6);
+
+// 每影画排行榜上限 ≈298 去重 uid（offset≥300 返回空），故 300 = 榜单全量；rank 固定全角色 × 300，不设额外参数
+const PER_RANK = 300;
+// v3 配装请求默认并发（调用方可传 concurrency 覆盖）：排名收集阶段每角色 7 影画组内并行，不占此并发；调高加速但响应大吃带宽，注意工坊 API 限流
+const DEFAULT_CONCURRENCY = 6;
 
 // ---------- 断点续爬：以文件实际内容为准（不再用进度文件） ----------
 // 曾用 .workshop-progress.json 缓存「已爬 uid」，进度先于写文件 → 中断后跳过大量 uid 且残缺 entries 覆盖旧文件
@@ -218,8 +217,9 @@ export function extractBuild(v3Data, roleId, ctx) {
 }
 
 // ---------- 主流程 ----------
-/** 构建字典 ctx（音擎/驱动盘/装备表，供 2025 源配装映射）+ 角色列表（一次请求返回） */
-async function buildCtx() {
+/** 构建字典 ctx（音擎/驱动盘/装备表，供 2025 源配装映射）+ 角色列表（一次请求返回）。
+ *  供 CLI（scripts/workshop-cli.mjs）与 fetchWorkshopData 复用。 */
+export async function buildCtx() {
   const sys = await apiGet('/api/v1/system_data/public', {});
   return {
     ctx: {
@@ -254,22 +254,22 @@ async function fetchRankRows(itemId, rank) {
   return rows;
 }
 
-/** 全量更新：排名 + 配装（workshop.json）+ 全服统计（workshop-grad.json）+ 汇总（workshop-stats.json）+ 权重（workshop-weights.json）。
- *  onProgress({step, done, total}) 供 server 进度轮询。 */
-export async function fetchWorkshopData(onProgress) {
+/** 排名收集：全角色（system_data 全部，随版本自动增长）× 7 影画 × PER_RANK → 去重 uid 集合。
+ *  concurrency = 角色级并发（默认 6）；onProgress({step, done, total}) 供 server 进度轮询。 */
+export async function collectRankings(onProgress, concurrency = DEFAULT_CONCURRENCY) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   console.log(
-    `开始爬取：前 ${MAX_ROLES} 角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘且全 R5）\n`
+    `开始爬取：全角色 × 7 影画 × 每影画 ${PER_RANK} 条收集 uid，随后爬取每个 uid 下所有练满角色（≥60级 / 音擎≥60 / 6×15级盘且全 R5）\n`
   );
   const { ctx, roles } = await buildCtx();
-  const targets = roles.slice(0, MAX_ROLES);
-  console.log(`角色总数 ${roles.length}，本次爬 ${targets.length} 个\n`);
+  const targets = roles; // 全角色（不截断；system_data 新增角色自动纳入）
+  console.log(`角色总数 ${roles.length}，本次收集全部\n`);
 
   // 收集排名（角色级并发；每角色 7 影画组内并行翻页——排名请求轻量，串行往返改一轮并行）
   const uidMap = new Map(); // uid -> [{role_id, rank}]
   let rankFetch = 0,
     roleDone = 0;
-  await pool(targets, CONCURRENCY, async (t) => {
+  await pool(targets, concurrency, async (t) => {
     const { item_id } = t;
     const pages = await Promise.all(Array.from({ length: 7 }, (_, rank) => fetchRankRows(item_id, rank)));
     let fetched = 0;
@@ -286,8 +286,13 @@ export async function fetchWorkshopData(onProgress) {
     onProgress?.({ step: 'rank', done: roleDone, total: targets.length });
   });
   console.log(`\n排名条目 ${rankFetch}，去重 uid ${uidMap.size}\n`);
+  return { ctx, roles, uidMap };
+}
 
-  // 每个 uid 拉完整配装（并发）；内存安全：恢复只收集 fileUids，本次新增分批落盘 PART（90 万+ 条全量进数组 ≈ 7GB 会 OOM）
+/** 角色信息下载：uidList → workshop.json（断点续爬：文件已有的 uid 跳过）+ 权重 + stats。
+ *  concurrency = v3 请求并发（默认 6）。 */
+export async function fetchBuilds(ctx, roles, uidList, onProgress, concurrency = DEFAULT_CONCURRENCY) {
+  // 内存安全：恢复只收集 fileUids，本次新增分批落盘 PART（90 万+ 条全量进数组 ≈ 7GB 会 OOM）
   fs.rmSync(PART_FILE, { force: true }); // 清残留：上次崩溃的 PART 丢弃（缺失 uid 由自愈机制重爬）
   const fileUids = new Set(); // 旧文件实际覆盖的 uid（跳过判断唯一依据：文件里没有的 uid 一律重爬，自愈进度领先）
   let oldEntryCount = 0;
@@ -297,12 +302,12 @@ export async function fetchWorkshopData(onProgress) {
       if (e && e.uid) fileUids.add(e.uid);
     }
   }
-  const newUids = [...uidMap.keys()].filter((u) => !fileUids.has(u));
-  const skippedCount = uidMap.size - newUids.length;
+  const newUids = [...new Set(uidList)].filter((u) => !fileUids.has(u));
+  const skippedCount = uidList.length - newUids.length;
   console.log(
-    `断点续爬：${uidMap.size} 个目标 uid 中 ${skippedCount} 个已存在于 workshop.json（跳过），` +
+    `断点续爬：${uidList.length} 个目标 uid 中 ${skippedCount} 个已存在于 workshop.json（跳过），` +
       `本次实际爬取 ${newUids.length} 个` +
-      (newUids.length ? '' : '；如需全量重爬请删除 data/workshop.json')
+      (newUids.length ? '' : '；全部已缓存（如需重爬请删除 data/workshop.json）')
   );
   onProgress?.({ step: 'fetch', done: 0, skipped: skippedCount, total: newUids.length }); // 初始进度：前端从第一秒就显示跳过数
   let fail = 0,
@@ -310,7 +315,7 @@ export async function fetchWorkshopData(onProgress) {
     consecutiveFail = 0; // 连续失败计数（防加剧风控：连续失败过多时暂停 60s）
   let entries = []; // 内存中未落盘的本次新增条目（达到 PART_FLUSH 即写入 PART）
   let partCount = 0;
-  await pool(newUids, CONCURRENCY, async (uid) => {
+  await pool(newUids, concurrency, async (uid) => {
     try {
       const j = await apiPost('/api/v1/user_role/v3', { uid, refresh: false, type: 'ranking' });
       const nick = j.data && j.data.nick_name;
@@ -350,18 +355,36 @@ export async function fetchWorkshopData(onProgress) {
   const totalCount = oldEntryCount + partCount;
   const outMeta = {
     scrapedAt: new Date().toISOString(),
-    roles: targets.length,
+    roles: roles.length,
     ranks: 7,
     perRank: PER_RANK,
-    uidCount: uidMap.size,
+    uidCount: uidList.length,
     entryCount: totalCount,
   };
   mergeWorkshopFile({ meta: outMeta, oldFile: OUT_FILE, partFile: PART_FILE, partCount, outFile: OUT_FILE });
   fs.rmSync(PART_FILE, { force: true }); // 合并完成，清理暂存
 
-  // 角色默认流派权重（system_data 的 weight_json）独立落盘 + 并入 stats（供有效词条/评分口径复现）。
-  // ⚠️ 落盘前把工坊 key 映射为 CONSTANT 标准名（暴击→暴击率、精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成…），
-  // 消费端（discProb 等）直接按标准名匹配，不做 workshop 适配层。
+  // 角色默认流派权重 + 汇总：chars 更新后自动重算（--mode=weights 可单独跑，见 buildWeights）
+  const weightJson = buildWeights(roles);
+  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails 输出角色名）
+  const roleNameMap = new Map(
+    roles.map((r) => [
+      String(r.item_id),
+      canonicalName(CATEGORY.CHAR, libChars, r.nick_name, { fuzzy: true }) || r.nick_name,
+    ])
+  );
+  buildWorkshopStats(roleNameMap, weightJson, totalCount); // 配装数据更新后自动生成汇总（含 weightJson，流式遍历防 OOM）
+  console.log(
+    `\n完成：本次新爬 ${done} 个 uid（跳过 ${skippedCount} 个已缓存，失败 ${fail}），` +
+      `配装条目共 ${totalCount} 条写入 ${OUT_FILE}`
+  );
+  return { stats: { entries: totalCount } };
+}
+
+/** 全角色默认副词条权重（system_data 的 weight_json）独立落盘 + 返回（供 --mode=weights 单独跑，或 chars/full 复用）。
+ *  ⚠️ 落盘前把工坊 key 映射为 CONSTANT 标准名（暴击→暴击率、精通→异常精通、掌控→异常掌控、生命→生命值、防御→防御力、加伤→伤害加成…），
+ *  消费端（discProb 等）直接按标准名匹配，不做 workshop 适配层。 */
+export function buildWeights(roles) {
   const weightJson = {};
   for (const r of roles) {
     const wj = r && r.weight_json;
@@ -378,32 +401,34 @@ export async function fetchWorkshopData(onProgress) {
     meta: { scrapedAt: new Date().toISOString(), roles: Object.keys(weightJson).length },
     weights: weightJson,
   });
+  return weightJson;
+}
 
-  // 角色 id → 规范名（grad 名已对齐 plans；供 discDetails 输出角色名）
-  const roleNameMap = new Map(
-    roles.map((r) => [
-      String(r.item_id),
-      canonicalName(CATEGORY.CHAR, libChars, r.nick_name, { fuzzy: true }) || r.nick_name,
-    ])
-  );
-  buildWorkshopStats(roleNameMap, weightJson, totalCount); // 配装数据更新后自动生成汇总（含 weightJson，流式遍历防 OOM）
-  // grad 是收尾步骤：此时配装与 stats 都已落盘，且本函数的 roleNameMap 来自 system_data 而非 grad——失败只告警不抛，避免数小时爬取整体报失败
-  let gradRoles = null;
+/** 同步 workshop-stats.json 的 weightJson 字段（前端经 /api/data 读它；仅 --mode=weights 单独跑时用，
+ *  chars/full 流程由 buildWorkshopStats 直接并入，无需此步）。stats 缺失时仅告警（先跑全量或 rebuild:stats）。 */
+export function syncStatsWeightJson(weightJson) {
+  const statsFile = path.join(DATA_DIR, 'workshop-stats.json');
+  if (!fs.existsSync(statsFile)) {
+    console.warn('⚠️ 未找到 workshop-stats.json（前端暂不读新权重，需先跑 --mode=chars/full 或 rebuild:stats）');
+    return;
+  }
+  const stats = JSON.parse(fs.readFileSync(statsFile, 'utf8'));
+  stats.weightJson = weightJson;
+  writeJsonAtomic(statsFile, stats);
+  console.log('✅ workshop-stats.json 的 weightJson 已同步');
+}
+
+/** 全量更新（server.js 同步中心「工坊数据」按钮调用）：grad → weights → rank → chars（chars 末尾自动重算 stats）。
+ *  onProgress({step, done, total}) 供 server 进度轮询；opts.concurrency 覆盖默认并发（rank/chars 生效，grad 用默认 6）。 */
+export async function fetchWorkshopData(onProgress, opts = {}) {
+  const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
   try {
-    const g = await fetchWorkshopGrad(onProgress, CONCURRENCY); // 同时更新全服配装统计（workshop-grad.json）
-    gradRoles = g.stats.roles;
+    await fetchWorkshopGrad(onProgress, 6); // ① 全角色配装统计（grad_stat 独立接口；失败只告警不抛）
   } catch (e) {
     console.warn(`[工坊全服统计] 更新失败（保留现有 workshop-grad.json）: ${e.message}`);
   }
-  console.log(
-    `\n完成：本次新爬 ${done} 个 uid（跳过 ${skippedCount} 个已缓存，失败 ${fail}），` +
-      `配装条目共 ${totalCount} 条写入 ${OUT_FILE}`
-  );
-  return { stats: { entries: totalCount, roles: gradRoles } };
+  const { ctx, roles, uidMap } = await collectRankings(onProgress, concurrency); // ③ 排名收集 uid
+  buildWeights(roles); // ② 默认副词条权重（权重与排名/配装独立，任何时机可跑；放在 rank 前拿到 roles 即可）
+  return fetchBuilds(ctx, roles, [...uidMap.keys()], onProgress, concurrency); // ④ 角色信息下载 + 汇总
 }
 
-async function main() {
-  await fetchWorkshopData();
-}
-
-isMain(import.meta, () => main());
