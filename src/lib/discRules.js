@@ -1,5 +1,5 @@
 // src/lib/discRules.js —— 驱动盘领域规则「唯一权威」模块（Node 与浏览器共用）
-// ⚠️ 新增/修改任何驱动盘相关规则前先查这里；每条规则带编号注释，对应 docs/disc-rules-audit.md（A-H 审阅稿）。
+// ⚠️ 新增/修改任何驱动盘相关规则前先查这里；每条规则带编号注释（A-H 审阅稿编号）。
 // 依赖：constants.js（叶子）+ util.js（叶子），禁止反向 import；本模块被 calc.js / discProb.js / workshopAgg.js / web/* 引用。
 // 规则编号：A=词条体系 · B=生成模型(ZZZ-DDC) · C=分数与命中 · D=权重来源 · E=保词条比较 · F=套装 · G=工坊口径 · H=显示
 // （F 套装规则与 G 工坊口径依赖各自上下文，保留在原模块，此处只收录 A/B/C/D/E/H 的可复用纯规则）

@@ -1,6 +1,6 @@
 // src/web/discProb.js —— 模拟视图 · 「驱动盘模拟」二级子面板
 // 驱动盘练度提升概率计算（移植 ZZZ-DDC）：按角色副词条价值权重，计算随机掉落+强化达到目标分的概率。
-// 计算逻辑在 src/lib/discRules.js（双端共享纯函数，规则 A-H 编号见 docs/disc-rules-audit.md）；本文件只做表单与结果渲染。
+// 计算逻辑在 src/lib/discRules.js（双端共享纯函数，规则 A-H 编号见其顶部注释）；本文件只做表单与结果渲染。
 // 角色价值权重 = workshop-weights（经 workshop-grad 对齐 wiki 角色名）；词条/主词条名称与 constants 统一。
 import { myCharacters, workshopGrad, workshopStats, sortRoleNames, roleOptionsHtml, readDiscWeights, saveDiscWeights } from './data.js';
 import {

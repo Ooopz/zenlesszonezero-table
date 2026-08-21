@@ -1,7 +1,7 @@
 // src/lib/discProb.js —— 驱动盘练度提升概率计算（双端共享纯逻辑，Node 与浏览器共用）
 // 移植自 qfmyqqx.github.io/ZZZ-DDC（绝区零驱动盘练度提升概率计算器）。
 // ⚠️ 自 2026-12 起：生成模型（B 组：首 4 词条枚举/强化成长/4-3 词条占比/主词条加权/位置系数/定向）、
-// 权重来源（D 组）、保词条比较（E 组）的权威实现已收敛到 discRules.js（docs/disc-rules-audit.md 的 A-H 编号）。
+// 权重来源（D 组）、保词条比较（E 组）的权威实现已收敛到 discRules.js（规则 A-H 编号见其顶部注释）。
 // 本文件保留：练度评级（GRADE_TABLE/gradeOf，ZZZ-DDC 阈值口径）与历史别名导出（ENTRY_NAMES 等），
 // 其余全部 re-export 自 discRules.js，保持既有 import 链（web/discProb.js、test/discProb.test.js）不变。
 
