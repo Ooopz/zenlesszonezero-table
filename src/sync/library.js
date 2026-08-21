@@ -39,7 +39,7 @@ async function img(url, base) {
     return url;
   }
 }
-/** 图片本地化（保留原始 URL）：先把 http(s) 原始 URL 存到 `字段名+Url`（如 iconUrl/portraitUrl，供 GitHub Pages 静态版用原始链接），
+/** 图片本地化（保留原始 URL）：先把 http(s) 原始 URL 存到 `字段名+Url`（如 iconUrl，供 GitHub Pages 静态版用原始链接），
  *  再下载到 data/img/ 并把原字段替换为本地路径（离线/本地版行为不变）。已是本地路径则不动。 */
 async function localize(obj, key, base) {
   const v = obj[key];
@@ -55,7 +55,6 @@ export async function localizeDataFiles() {
   if (fs.existsSync(libFile)) {
     const lib = JSON.parse(fs.readFileSync(libFile, 'utf8'));
     for (const [name, c] of Object.entries(lib.characters || {})) {
-      await localize(c, 'portrait', `char-${safe(name)}-portrait`);
       await localize(c, 'icon', `char-${safe(name)}`);
       await localize(c, 'tachie', `char-${safe(name)}-tachie`);
     }
@@ -76,7 +75,6 @@ export async function localizeDataFiles() {
     const chars = JSON.parse(fs.readFileSync(charsFile, 'utf8'));
     for (const c of chars || []) {
       const nm = safe(c?.name);
-      await localize(c, 'portrait', `char-${nm}-portrait`);
       await localize(c, 'icon', `char-${nm}`);
       await localize(c, 'tachie', `char-${nm}-tachie`);
       if (c.wengine?.icon) await localize(c.wengine, 'icon', `wengine-${safe(c.wengine.name)}`);
@@ -739,10 +737,6 @@ export async function fetchLibrary(onProgress, { strict = false } = {}) {
         key: x.key,
         id: x.id,
         icon: page.icon_url,
-        portrait: (() => {
-          const d = findModule(page, (d) => d.tachie_pc);
-          return d?.tachie_pc || null;
-        })(),
         tags: fetchCharacterTags(page),
         baseStats: fetchCharacterBaseStats(page),
         ...fetchCharacterExtended(page),

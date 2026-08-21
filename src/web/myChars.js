@@ -48,7 +48,7 @@ function wengineInfo(character, R) {
   return {
     wengine,
     libWengine,
-    icon: wengine.icon || libWengine?.icon || '',
+    icon: libWengine?.icon || wengine.icon || '', // library 图优先（静态版已内联，离线可用）；采集远程图兜底
     baseAtk: mainStats.find((t) => t.name === '基础攻击力')?.value ?? libWengine?.baseAtk ?? null,
     subStats: subStats.length ? subStats : statEntries(libWengine?.subStats),
     specialEffect: (wengine.specialEffect || libWengine?.specialEffect || '').replace(/<[^>]*>/g, ''),
@@ -93,7 +93,7 @@ function discTooltipFull(d, validSet) {
 /** 单个驱动盘盘面：左上图标 + 套装名/槽位 + 右上命中 + 主词条 + 纵向副词条(> 表示有效词条数) */
 function discTile(d, validSet) {
   const { discLib, main, subs, discHits } = discDetail(d, validSet);
-  const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
+  const icon = discLib?.roundIcon || discLib?.icon || d.icon || ''; // library 优先（已内联），采集远程图兜底
   const sub = subs.map((s) => `<div class="${s.hit ? 'hit' : ''}">${s.content}</div>`).join('');
   return `<div class="disc" data-detail="${escapeHtml(discTooltip(d))}">
     <div class="disc-top">${icon ? `<img class="d-ico" src="${icon}" alt="">` : ''}<div class="disc-head"><div class="dset">${d.set}</div><div class="dslot">${d.slot}号${d.level ? ' · +' + d.level : ''}</div></div><div class="dmain">${main}</div>${discHits != null ? `<span class="d-hit">命中 ${discHits}</span>` : ''}</div>
@@ -128,9 +128,9 @@ function gapAdviceHtml(character, R) {
 export function characterCard(character) {
   const R = character.calculate();
   const libCharacter = R.libCharacter;
-  // 卡片左上角头像：优先立绘大图（wiki tachie），其次小图标/立绘
-  const tachie = character.tachie || libCharacter.tachie || '';
-  const portrait = tachie || character.icon || libCharacter.icon || character.portrait || libCharacter.portrait || '';
+  // 卡片左上角头像：优先 library 立绘大图（已内联，离线可用），其次采集数据自带图
+  const tachie = libCharacter.tachie || character.tachie || '';
+  const portrait = libCharacter?.tachie || libCharacter?.icon || character.icon || '';
   const rarity = character.rarity || libCharacter.rarity || '';
   const element = libCharacter.element || '';
   const trait = libCharacter.trait || '';
@@ -427,7 +427,7 @@ export function renderTable(list, container) {
     const charValidSet = new Set(readValidStats(character.name));
     const cell = {};
 
-    const charIcon = character.icon || libCharacter?.icon || libCharacter?.portrait || '';
+    const charIcon = libCharacter?.icon || character.icon || ''; // library 优先（已内联）
     const charNote = readNote(character.name);
     const charDetail = `<b>${character.name}</b>${character.level ? `<br><span style="color:var(--dim)">Lv.${character.level}</span>` : ''}<br>${[libCharacter?.rarity || '', libCharacter?.element || '', libCharacter?.trait || '', character.faction || libCharacter?.faction || ''].filter(Boolean).join(' · ')}${charNote ? `<br><span style="color:var(--acc)">备注：${charNote}</span>` : ''}`;
     cell['角色'] =
@@ -451,7 +451,7 @@ export function renderTable(list, container) {
       .slice(0, 6)
       .map((d) => {
         const discLib = resolveEntry(CATEGORY.DISC, discIndex, d.set);
-        const icon = discLib?.roundIcon || d.icon || discLib?.icon || '';
+        const icon = discLib?.roundIcon || discLib?.icon || d.icon || ''; // library 优先（已内联）
         if (!icon) return '<span class="d-ico" style="border-color:#444"></span>';
         return `<img class="d-ico" src="${icon}" data-detail="${escapeHtml(discTooltipFull(d, charValidSet))}">`;
       })

@@ -27,7 +27,7 @@ node scripts/rebuild-weights.mjs  # 单独重跑 workshop-weights 抽取（不�
 node scripts/publish-release.mjs              # 构建 release/（index.html+collect.js）并发布 GitHub Release → .github/workflows/pages-from-release.yml 自动部署 Pages（需 gh CLI + 仓库 Pages Source 选 GitHub Actions）
 node scripts/publish-release.mjs --no-publish # 只构建 release/（本地预览用），不发布
 node scripts/publish-release.mjs --no-build   # 跳过构建，只发布已存在的 release/
-# 构建期依赖（devDependencies，不影响运行时）：subset-font（字体子集化）、rollup（ESM→IIFE 打包）
+# 构建期依赖（devDependencies，不影响运行时）：subset-font（字体子集化）、rollup（ESM→IIFE 打包）、jimp（library 图片压缩内联进单文件）
 
 npm test                     # 全部单测（node:test）；缺 data/ 时打印 SKIP 横幅并跳过该文件
 REQUIRE_DATA=1 npm test      # 缺数据直接判失败（CI 用，防「静默全绿」）

@@ -241,7 +241,7 @@ function gradBenchHtml(name) {
         `<span class="ws-item" data-detail="${escapeHtml(relicTip(x.sets))}"><span class="ws-sets">${(
           x.sets || []
         )
-          .map((s) => (s.icon ? `<img class="ws-ico" src="${s.icon}" alt="">` : ''))
+          .map((s) => (s.icon ? `<img class="ws-ico" src="${s.icon}" data-fallback="${library.discs?.[s.name]?.icon || ''}" alt="">` : ''))
           .join('')}</span><span>${escapeHtml(x.name)}</span>${gradPct(x.percent)}</span>`
     )
     .join('<br>');

@@ -129,10 +129,10 @@ export async function fetchWorkshopGrad(onProgress, concurrency = 6) {
       const ws = d.weapon_stat || [];
       const rs = d.relic_stat || [];
 
-      // 角色名解析为 wiki 标准名（维琳娜→维琳娜·艾嘉德等）；图标取解析到的标准条目（portrait 优先）
+      // 角色名解析为 wiki 标准名（维琳娜→维琳娜·艾嘉德等）；图标取解析到的标准条目
       const roleName = canonicalName(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true }) || nick_name;
       const libChar = resolveEntry(CATEGORY.CHAR, libChars, nick_name, { fuzzy: true });
-      const roleIcon = libChar?.portrait || libChar?.icon || '';
+      const roleIcon = libChar?.icon || '';
 
       // 音擎图标：wiki 源
       const wTotal = ws.reduce((a, x) => a + Number(x.weapon_count || 0), 0);

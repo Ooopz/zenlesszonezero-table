@@ -16,7 +16,6 @@ const AVATAR_INFO = {
         full_name_mi18n: '测试角色',
         level: 60,
         role_square_url: 'https://example.com/icon.png',
-        role_vertical_painting_url: 'https://example.com/portrait.png',
         rarity: 'S',
         camp_name_mi18n: '测试阵营',
         element_type: 1,

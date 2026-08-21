@@ -37,8 +37,53 @@ async function buildRelease() {
     workshopGrad: JSON.parse(readFileSync(join(DATA, 'workshop-grad.json'), 'utf8')),
     workshopStats: JSON.parse(readFileSync(join(DATA, 'workshop-stats.json'), 'utf8')),
   };
-  const dataJs = 'window.__STATIC_DATA__=' + JSON.stringify(data).replace(/</g, '\\u003c') + ';';
   console.log('  数据: library', Object.keys(data.library.characters || {}).length, '角色 / plans', Object.keys(data.plans || {}).length, '角色');
+
+  // 1.5 图片压缩内联：library 的本地图片字段 → resize + base64 data URL（静态版离线可用，
+  //     不依赖 data/ 路径与远程防盗链；iconUrl 保留供非内联场景回退）。
+  //     ⚠️ dataJs 必须在本步之后生成，否则内联修改进不了产物（曾致 html 体积不变）。
+  let inlineCount = 0;
+  let inlineBytes = 0;
+  {
+    const { Jimp, JimpMime } = await import('jimp');
+    const IMG_DIR = join(DATA, 'img');
+    const cache = new Map();
+    const inline = async (path, maxW) => {
+      if (typeof path !== 'string') return path;
+      if (!/^\/?data\/img\/[^/]+$/.test(path)) return path; // 非本地路径（https/data: 等）不动
+      const name = path.split('/').pop();
+      if (cache.has(name)) return cache.get(name);
+      let out = path;
+      const fp = join(IMG_DIR, name);
+      if (existsSync(fp)) {
+        try {
+          const img = await Jimp.read(readFileSync(fp));
+          if (img.width > maxW) img.resize({ w: maxW, h: Math.round(img.height * (maxW / img.width)) });
+          const buf = await img.getBuffer(JimpMime.png);
+          out = 'data:image/png;base64,' + buf.toString('base64');
+          inlineCount++;
+          inlineBytes += buf.length;
+        } catch { /* 单张失败保留原路径 */ }
+      }
+      cache.set(name, out);
+      return out;
+    };
+    const L = data.library;
+    for (const c of Object.values(L.characters || {})) {
+      c.icon = await inline(c.icon, 128);
+      c.tachie = await inline(c.tachie, 320);
+    }
+    for (const w of Object.values(L.wengines || {})) w.icon = await inline(w.icon, 128);
+    for (const d of Object.values(L.discs || {})) {
+      d.icon = await inline(d.icon, 128);
+      d.roundIcon = await inline(d.roundIcon, 128);
+    }
+    for (const b of Object.values(L.bangboos || {})) b.icon = await inline(b.icon, 128);
+    // ⚠️ workshopGrad 的图**不要**内联：roles/weapons/relics 引用同一批文件，
+    //    JSON 文本里每处引用都会完整展开 data URL（曾 +29MB）；其视图已有 data-fallback 走远程。
+    console.log('  图片内联:', inlineCount, '张,', (inlineBytes / 1048576).toFixed(1), 'MB');
+  }
+  const dataJs = 'window.__STATIC_DATA__=' + JSON.stringify(data).replace(/</g, '\\u003c') + ';';
 
   // 2. 字体子集化（Noto Sans SC → 仅项目出现的字符；Barlow 拉丁字重小保留原样）
   const collectChars = () => {
@@ -177,7 +222,13 @@ async function main() {
   // ② 打版本号：日期标签；同一天重复发布则加序号
   // ⚠️ execSync 用 stdio:'inherit'（不用 'pipe'）：受限环境（沙箱/CI 管道）下 pipe 捕获子进程输出会失败，
   //    导致 gh release view 永远"检测失败"而误判 tag 不存在（曾致同日重复发布时 create 撞已有 tag）。
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  // 版本日期用**本地时区**（曾用 toISOString() 取 UTC 日期：东八区 21 号凌晨时 UTC 仍是 20 号，版本号滞后一天）
+  const now = new Date();
+  const date = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('');
   let tag = 'v' + date;
   try {
     execSync('gh release view ' + tag + ' --json tagName', { stdio: 'inherit' });

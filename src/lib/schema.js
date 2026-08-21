@@ -10,7 +10,6 @@ export const KEYS = Object.freeze({
   ICON: 'icon',
   LEVEL: 'level',
   // 角色（账号接口 / characters.json）
-  PORTRAIT: 'portrait',
   RARITY: 'rarity',
   FACTION: 'faction',
   PANEL: 'panel',

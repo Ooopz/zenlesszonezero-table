@@ -71,7 +71,6 @@ export class Character {
     this.id = data.id ?? null;
     this.level = data.level ?? null;
     this.icon = data.icon || '';
-    this.portrait = data.portrait || '';
     this.rarity = data.rarity || '';
     this.faction = data.faction || '';
     this.panel = data.panel || {};

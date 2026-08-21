@@ -184,7 +184,6 @@ export function extractCharacter(response) {
     id: String(a.id),
     level: a.level ?? null,
     icon: a.role_square_url || a.group_icon_path || a.hollow_icon_path || a.icon || '',
-    portrait: a.role_vertical_painting_url || '',
     rarity: a.rarity || '',
     faction: a.camp_name_mi18n || '',
     panel,
@@ -199,7 +198,6 @@ export function extractCharacter(response) {
     skins: (a.skin_list || []).map((s) => ({
       id: s.skin_id,
       name: s.skin_name || '',
-      portrait: s.skin_vertical_painting_url || '',
       square: s.skin_square_url || '',
       icon: s.skin_hollow_icon_path || '',
       color: s.skin_vertical_painting_color || '',
